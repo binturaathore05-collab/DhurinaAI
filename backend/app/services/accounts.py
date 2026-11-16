@@ -85,7 +85,7 @@ def read_token(token: str, secret: str) -> tuple[int, str]:
     return int(data["sub"]), data["tid"]
 
 
-# ---------- access: demo quota + subscription ----------
+# ---------- access: demo → active → (renew soon) → grace → expired ----------
 
 def active_subscription(db: Database, student_id: int, now: float | None = None):
     now = now or time.time()
@@ -93,22 +93,50 @@ def active_subscription(db: Database, student_id: int, now: float | None = None)
                   "ORDER BY ends_at DESC LIMIT 1", (student_id, now, now))
 
 
-def access_status(db: Database, student_id: int, demo_limit: int) -> dict:
-    sub = active_subscription(db, student_id)
+def _latest_end(db: Database, student_id: int) -> float | None:
+    """When the student's paid time runs out (including plans bought in advance)."""
+    row = db.one("SELECT MAX(ends_at) AS e FROM subscriptions WHERE student_id = ?", (student_id,))
+    return row["e"] if row else None
+
+
+def _questions_since(db: Database, student_id: int, since: float) -> int:
+    row = db.one("SELECT COUNT(*) AS n FROM qa_history WHERE student_id = ? "
+                 "AND created_at >= datetime(?, 'unixepoch')", (student_id, since))
+    return row["n"]
+
+
+def access_status(db: Database, student_id: int, demo_limit: int, grace_days: int = 0, grace_questions: int = 0,
+                  reminder_days: int = 3, now: float | None = None) -> dict:
+    """Everything the app needs to decide what to show:
+    state = demo | active | grace | expired, plus days left, renew reminder, and questions left."""
+    now = now or time.time()
     used = db.one("SELECT demo_questions_used FROM students WHERE id = ?", (student_id,))["demo_questions_used"]
-    return {
-        "subscribed": sub is not None,
-        "subscription_ends_at": sub["ends_at"] if sub else None,
-        "demo_questions_left": max(demo_limit - used, 0),
-        "can_ask": sub is not None or used < demo_limit,
-    }
+    end = _latest_end(db, student_id)
+    info = {"state": "demo", "subscribed": False, "subscription_ends_at": end, "days_left": None,
+            "renew_soon": False, "plan_ended_at": None, "grace_questions_left": 0,
+            "demo_questions_left": max(demo_limit - used, 0)}
+    if end and active_subscription(db, student_id, now):
+        days_left = int((end - now) // 86400)
+        info.update(state="active", subscribed=True, days_left=days_left, renew_soon=days_left < reminder_days)
+    elif end:  # had a plan, it has run out
+        grace_left = 0
+        if now < end + grace_days * 86400:
+            grace_left = max(grace_questions - _questions_since(db, student_id, end), 0)
+        info.update(state="grace" if grace_left > 0 else "expired", plan_ended_at=end,
+                    grace_questions_left=grace_left, demo_questions_left=0)
+    info["can_ask"] = (info["state"] in ("active", "grace")) or (info["state"] == "demo" and info["demo_questions_left"] > 0)
+    return info
 
 
-def consume_question(db: Database, student_id: int, demo_limit: int) -> bool:
-    """Count one question. Subscribers are unlimited; demo users use up their free questions.
-    Returns False if the student may not ask (demo over and no subscription)."""
-    if active_subscription(db, student_id):
-        return True
+def consume_question(db: Database, student_id: int, demo_limit: int, grace_days: int = 0,
+                     grace_questions: int = 0) -> bool:
+    """Count one question. Subscribers are unlimited; demo users use free questions; a student whose plan
+    just ended gets a few grace questions. Returns False when the student must pay first."""
+    status = access_status(db, student_id, demo_limit, grace_days, grace_questions)
+    if status["state"] in ("active", "grace"):
+        return True  # grace questions are counted from the question history itself
+    if status["state"] == "expired":
+        return False
     cur = db.execute("UPDATE students SET demo_questions_used = demo_questions_used + 1 "
                      "WHERE id = ? AND demo_questions_used < ?", (student_id, demo_limit))
     return cur.rowcount == 1

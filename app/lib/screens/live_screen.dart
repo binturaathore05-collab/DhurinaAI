@@ -71,8 +71,49 @@ class _LiveScreenState extends State<LiveScreen> {
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _openPlans() async {
-    final paid = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const PayScreen()));
+    final paid = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => PayScreen(access: _access)));
     if (paid == true) _refreshAccess();
+  }
+
+  /// Top-right pill: demo questions left, renew reminder, grace questions, or plan ended.
+  Widget? _statusPill(Access? a) {
+    if (a == null) return null;
+    final accent = AppScope.of(context).cfg.accent;
+    const warn = Color(0xFFF59E0B);
+    String text;
+    Color color;
+    switch (a.state) {
+      case 'demo':
+        text = a.demoLeft == 1 ? 'Demo · 1 question left' : 'Demo · ${a.demoLeft} questions left';
+        color = accent;
+        break;
+      case 'active':
+        if (!a.renewSoon) return null;
+        text = a.daysLeft == 0 ? 'Plan ends today · Renew' : 'Plan ends in ${a.daysLeft} days · Renew';
+        color = warn;
+        break;
+      case 'grace':
+        text = 'Plan ended · ${a.graceLeft} free left · Renew';
+        color = warn;
+        break;
+      default:
+        text = 'Plan ended · Renew';
+        color = LT.danger;
+    }
+    return InkWell(
+      onTap: _openPlans,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: LT.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color, width: 1.5),
+        ),
+        child: Text(text, style: TextStyle(color: color == accent ? LT.accentText : color, fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
+    );
   }
 
   Future<void> _send() async {
@@ -141,28 +182,21 @@ class _LiveScreenState extends State<LiveScreen> {
                     background: LT.surface, onPressed: _openLibrary),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(cfg.teacherName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                    Text('${cfg.subject} · $_elapsed', style: const TextStyle(fontSize: 12, color: LT.muted)),
-                  ]),
-                ),
-                if (access != null && !access.subscribed)
-                  InkWell(
-                    onTap: _openPlans,
-                    borderRadius: BorderRadius.circular(999),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: LT.surface,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: cfg.accent, width: 1.5),
-                      ),
-                      child: Text(
-                        access.demoLeft == 1 ? 'Demo · 1 question left' : 'Demo · ${access.demoLeft} questions left',
-                        style: const TextStyle(color: LT.accentText, fontSize: 12, fontWeight: FontWeight.w700),
-                      ),
-                    ),
+                  child: GestureDetector(
+                    onLongPress: scope.api is DemoApi
+                        ? () {
+                            final a = (scope.api as DemoApi).simulateNext();
+                            setState(() => _access = a);
+                            _toast('Demo preview: plan state → ${a.state}${a.renewSoon ? ' (renew soon)' : ''}');
+                          }
+                        : null,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(cfg.teacherName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      Text('${cfg.subject} · $_elapsed', style: const TextStyle(fontSize: 12, color: LT.muted)),
+                    ]),
                   ),
+                ),
+                if (_statusPill(access) != null) _statusPill(access)!,
               ]),
             ),
             // ---- teacher video (Phase 2: live avatar video replaces the photo) ----
@@ -208,7 +242,7 @@ class _LiveScreenState extends State<LiveScreen> {
                     background: cfg.accent, foreground: LT.onAccent,
                     onPressed: () => _toast('Voice is coming in the next update — tap the keyboard to type for now')),
                 RoundIconButton(icon: Icons.call_end_rounded, tooltip: 'End class', background: LT.danger,
-                    onPressed: () => (access != null && !access.subscribed) ? _openPlans() : _openLibrary()),
+                    onPressed: () => (access != null && access.state != 'active') ? _openPlans() : _openLibrary()),
               ]),
             ),
           ],

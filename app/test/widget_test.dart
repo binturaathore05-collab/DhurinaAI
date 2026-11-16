@@ -34,4 +34,17 @@ void main() {
     await api.confirmPayment('o', 'p', 's');
     expect((await api.access()).subscribed, true);
   });
+
+  test('demo api: plan ending, grace questions, then expired until renewal', () async {
+    final api = DemoApi(cfg);
+    expect(api.simulateNext().renewSoon, true);
+    expect(api.simulateNext().state, 'grace');
+    await api.ask('Q1');
+    await api.ask('Q2');
+    await api.ask('Q3');
+    expect((await api.access()).state, 'expired');
+    await expectLater(api.ask('Q4'), throwsA(isA<ApiException>()));
+    await api.confirmPayment('o', 'p', 's');
+    expect((await api.access()).state, 'active');
+  });
 }

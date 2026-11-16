@@ -51,6 +51,7 @@ def test_full_flow(client):
     client.post("/class/ask", json={"question": "Q3"})
     over = client.post("/class/ask", json={"question": "Q4"})
     assert over.status_code == 402 and "Subscribe" in over.json()["detail"]
+    assert client.get("/me/access").json()["state"] == "demo"
 
 
 def test_wrong_otp_and_no_token(client):

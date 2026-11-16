@@ -100,12 +100,17 @@ def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_h
         raise HTTPException(400, str(exc))
     student_id = accounts.get_or_create_student(db, teacher.id, phone)
     token = accounts.issue_token(student_id, teacher.id, settings.jwt_secret, settings.jwt_days)
-    return {"token": token, **accounts.access_status(db, student_id, settings.demo_question_limit)}
+    return {"token": token, **_access(student_id)}
+
+
+def _access(student_id: int) -> dict:
+    return accounts.access_status(db, student_id, settings.demo_question_limit, settings.grace_days,
+                                  settings.grace_questions, settings.renew_reminder_days)
 
 
 @app.get("/me/access")
 def my_access(student=Depends(current_student)):
-    return accounts.access_status(db, student["id"], settings.demo_question_limit)
+    return _access(student["id"])
 
 
 # ---------- live class ----------
@@ -120,11 +125,12 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     if body.last_qa_id and is_save_command(body.question):
         note = notes_pdf.save_note(db, student["id"], body.last_qa_id, teacher.name, settings.notes_dir)
         return {"type": "note_saved", "note": note}
-    if not accounts.consume_question(db, student["id"], settings.demo_question_limit):
-        raise HTTPException(402, t("demo_over", "en", teacher=teacher.name))
+    if not accounts.consume_question(db, student["id"], settings.demo_question_limit,
+                                     settings.grace_days, settings.grace_questions):
+        ended = _access(student["id"])["state"] == "expired"
+        raise HTTPException(402, t("plan_ended" if ended else "demo_over", "en", teacher=teacher.name))
     result = tutor.answer(student["id"], teacher, body.question)
-    return {"type": "answer", **result.__dict__,
-            **accounts.access_status(db, student["id"], settings.demo_question_limit)}
+    return {"type": "answer", **result.__dict__, **_access(student["id"])}
 
 
 @app.post("/notes/{qa_id}")

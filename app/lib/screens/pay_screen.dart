@@ -9,7 +9,9 @@ import 'success_screen.dart';
 /// Screen 5 · Pay Now: plans, what's included, one "Pay Now" button that opens Razorpay.
 /// Pops with `true` when the student has paid.
 class PayScreen extends StatefulWidget {
-  const PayScreen({super.key});
+  /// Current access, so the screen can say "demo ended", "plan ended" or "renew early".
+  final Access? access;
+  const PayScreen({super.key, this.access});
   @override
   State<PayScreen> createState() => _PayScreenState();
 }
@@ -40,6 +42,25 @@ class _PayScreenState extends State<PayScreen> {
       _plans = plans;
       _selected = plans.isNotEmpty ? plans.last.id : null; // longest plan pre-selected
     });
+  }
+
+  bool get _renewing => widget.access?.hadPlan ?? false;
+
+  String get _title {
+    final a = widget.access;
+    if (a == null || a.state == 'demo') return 'Your demo call has ended';
+    if (a.state == 'active') return a.daysLeft == 0 ? 'Your plan ends today' : 'Your plan ends in ${a.daysLeft} days';
+    return 'Your plan has ended';
+  }
+
+  String _subtitle(String teacher) {
+    final a = widget.access;
+    final ended = a?.planEndedAt;
+    if (a == null || a.state == 'demo') return 'Continue learning with $teacher — no limits.';
+    if (a.state == 'active') return 'Renew now — the new plan starts after your current one, no days lost.';
+    final when = ended == null ? '' : ' on ${ended.day}/${ended.month}/${ended.year}';
+    final grace = a.state == 'grace' ? ' You have ${a.graceLeft} free questions left.' : '';
+    return 'Your plan ended$when. Renew to continue with $teacher. Your notes and history are safe.$grace';
   }
 
   void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -125,9 +146,9 @@ class _PayScreenState extends State<PayScreen> {
             decoration: const BoxDecoration(color: LT.surface2, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
             transform: Matrix4.translationValues(0, -28, 0),
             child: ListView(padding: const EdgeInsets.fromLTRB(22, 26, 22, 24), children: [
-              const Text('Your demo call has ended', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+              Text(_title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              Text('Continue learning with ${cfg.teacherName} — no limits.', style: const TextStyle(color: LT.muted)),
+              Text(_subtitle(cfg.teacherName), style: const TextStyle(color: LT.muted)),
               const SizedBox(height: 16),
               for (final f in const [
                 'Unlimited questions — voice, text or photo',
@@ -174,7 +195,7 @@ class _PayScreenState extends State<PayScreen> {
                     ),
                   ),
               const SizedBox(height: 8),
-              PrimaryButton(label: 'Pay Now', busy: _busy, onPressed: _selected == null ? null : _payNow),
+              PrimaryButton(label: _renewing ? 'Renew Now' : 'Pay Now', busy: _busy, onPressed: _selected == null ? null : _payNow),
               const SizedBox(height: 10),
               const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.lock_outline, size: 14, color: LT.muted),

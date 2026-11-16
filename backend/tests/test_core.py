@@ -252,3 +252,49 @@ def test_model_can_correct_detected_language(db):
     sid = student(db)  # Marathi uses the same script as Hindi; the model knows better and says so
     llm = FakeLLM([{"query": "x"}, {"answer": "हल्दीघाटीची लढाई १५७६ मध्ये झाली.", "found_in_notes": False, "language": "mr"}])
     assert Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "हल्दीघाटीची लढाई कधी झाली?").language == "mr"
+
+
+def test_plan_lifecycle_reminder_grace_expired_renew(db):
+    import time as _t
+    sid = student(db)
+    now = _t.time()
+    for _ in range(3):
+        accounts.consume_question(db, sid, 3)
+    # plan ending in 2 days -> active, renew reminder on
+    db.execute("INSERT INTO subscriptions (student_id, plan_id, starts_at, ends_at) VALUES (?, 'y', ?, ?)",
+               (sid, now - 28 * 86400, now + 2 * 86400 + 60))
+    st = accounts.access_status(db, sid, 3, grace_days=2, grace_questions=3, reminder_days=3)
+    assert st["state"] == "active" and st["days_left"] == 2 and st["renew_soon"]
+
+    # plan ended 1 hour ago -> grace: 3 questions
+    db.execute("UPDATE subscriptions SET ends_at = ? WHERE student_id = ?", (now - 3600, sid))
+    st = accounts.access_status(db, sid, 3, grace_days=2, grace_questions=3)
+    assert st["state"] == "grace" and st["grace_questions_left"] == 3 and st["can_ask"]
+    for i in range(3):
+        assert accounts.consume_question(db, sid, 3, 2, 3)
+        db.execute("INSERT INTO qa_history (student_id, question, answer, origin, language) VALUES (?, ?, 'a', 'x', 'en')",
+                   (sid, f"q{i}"))
+    st = accounts.access_status(db, sid, 3, grace_days=2, grace_questions=3)
+    assert st["state"] == "expired" and not st["can_ask"] and st["plan_ended_at"]
+    assert not accounts.consume_question(db, sid, 3, 2, 3)
+
+    # no grace configured -> straight to expired
+    assert accounts.access_status(db, sid, 3)["state"] == "expired"
+
+    # renewing activates again; library/history untouched
+    db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise) VALUES (?, 'y', 'order_r', 99900)", (sid,))
+    payments.mark_paid(db, "order_r", "pay_r")
+    st = accounts.access_status(db, sid, 3, grace_days=2, grace_questions=3)
+    assert st["state"] == "active" and st["days_left"] >= 364
+    assert len(db.all("SELECT * FROM qa_history WHERE student_id = ?", (sid,))) == 3
+
+
+def test_early_renewal_adds_days_after_current_plan(db):
+    import time as _t
+    sid = student(db)
+    now = _t.time()
+    db.execute("INSERT INTO subscriptions (student_id, plan_id, starts_at, ends_at) VALUES (?, 'y', ?, ?)",
+               (sid, now - 86400, now + 10 * 86400))
+    db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise) VALUES (?, 'y', 'order_e', 99900)", (sid,))
+    payments.mark_paid(db, "order_e", "pay_e", now=now)
+    assert accounts.access_status(db, sid, 3)["days_left"] >= 374

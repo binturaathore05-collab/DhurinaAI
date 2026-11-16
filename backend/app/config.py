@@ -13,6 +13,10 @@ class Settings:
     jwt_secret: str = field(default_factory=lambda: _env("JWT_SECRET", "change-me"))
     jwt_days: int = field(default_factory=lambda: int(_env("JWT_DAYS", "30")))
     demo_question_limit: int = field(default_factory=lambda: int(_env("DEMO_QUESTION_LIMIT", "3")))
+    # After a plan ends: a short grace period so studies don't stop mid-way (set either to 0 to disable)
+    grace_days: int = field(default_factory=lambda: int(_env("GRACE_DAYS", "2")))
+    grace_questions: int = field(default_factory=lambda: int(_env("GRACE_QUESTIONS", "3")))
+    renew_reminder_days: int = field(default_factory=lambda: int(_env("RENEW_REMINDER_DAYS", "3")))
 
     # AI model (any OpenAI-compatible chat + embeddings API)
     llm_base_url: str = field(default_factory=lambda: _env("LLM_BASE_URL", "https://api.openai.com/v1"))

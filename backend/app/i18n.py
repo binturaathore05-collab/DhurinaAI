@@ -32,6 +32,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "आपके मुफ़्त डेमो सवाल खत्म हो गए। {teacher} के साथ पढ़ाई जारी रखने के लिए सब्सक्राइब करें।",
         "pa": "ਤੁਹਾਡੇ ਮੁਫ਼ਤ ਡੈਮੋ ਸਵਾਲ ਖ਼ਤਮ ਹੋ ਗਏ। {teacher} ਨਾਲ ਪੜ੍ਹਾਈ ਜਾਰੀ ਰੱਖਣ ਲਈ ਸਬਸਕ੍ਰਾਈਬ ਕਰੋ।",
     },
+    "plan_ended": {
+        "en": "Your plan has ended. Renew to continue learning with {teacher}.",
+    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},

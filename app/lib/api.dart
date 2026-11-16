@@ -25,12 +25,30 @@ class Plan {
   String get price => amountPaise > 0 ? '₹${(amountPaise / 100).toStringAsFixed(0)}' : '₹—';
 }
 
+/// Where the student stands: demo → active (renew reminder near the end) → grace → expired.
 class Access {
-  final bool subscribed;
+  final String state; // demo | active | grace | expired
   final int demoLeft;
-  Access(this.subscribed, this.demoLeft);
-  factory Access.fromJson(Map<String, dynamic> j) =>
-      Access(j['subscribed'] == true, (j['demo_questions_left'] as num? ?? 0).toInt());
+  final int? daysLeft;
+  final bool renewSoon;
+  final DateTime? planEndedAt;
+  final int graceLeft;
+  Access(this.state, this.demoLeft, {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0});
+
+  bool get subscribed => state == 'active';
+  bool get hadPlan => state == 'grace' || state == 'expired' || state == 'active';
+
+  factory Access.fromJson(Map<String, dynamic> j) {
+    final ended = j['plan_ended_at'] as num?;
+    return Access(
+      j['state'] as String? ?? (j['subscribed'] == true ? 'active' : 'demo'),
+      (j['demo_questions_left'] as num? ?? 0).toInt(),
+      daysLeft: (j['days_left'] as num?)?.toInt(),
+      renewSoon: j['renew_soon'] == true,
+      planEndedAt: ended == null ? null : DateTime.fromMillisecondsSinceEpoch((ended * 1000).toInt()),
+      graceLeft: (j['grace_questions_left'] as num? ?? 0).toInt(),
+    );
+  }
 }
 
 class Answer {
@@ -230,6 +248,8 @@ class DemoApi implements Api {
 
   int _demoUsed = 0;
   bool _subscribed = false;
+  String? _simulated; // demo-only: preview renew-soon / grace / expired screens
+  int _graceUsed = 0;
   bool _loggedIn = false;
   int _nextId = 1;
   final List<HistoryItem> _history = [];
@@ -238,7 +258,28 @@ class DemoApi implements Api {
   @override
   bool get isDemo => true;
 
-  Access get _access => Access(_subscribed, _subscribed ? 0 : 3 - _demoUsed);
+  Access get _access {
+    final ended = DateTime.now().subtract(const Duration(hours: 1));
+    switch (_simulated) {
+      case 'renew':
+        return Access('active', 0, daysLeft: 2, renewSoon: true);
+      case 'grace':
+        return 3 - _graceUsed > 0
+            ? Access('grace', 0, planEndedAt: ended, graceLeft: 3 - _graceUsed)
+            : Access('expired', 0, planEndedAt: ended);
+      case 'expired':
+        return Access('expired', 0, planEndedAt: ended);
+    }
+    return _subscribed ? Access('active', 0, daysLeft: 364) : Access('demo', 3 - _demoUsed);
+  }
+
+  /// Demo mode only: long-press the class timer to preview what happens when a plan runs out.
+  Access simulateNext() {
+    const order = [null, 'renew', 'grace', 'expired'];
+    _simulated = order[(order.indexOf(_simulated) + 1) % order.length];
+    _graceUsed = 0;
+    return _access;
+  }
 
   @override
   Future<List<Plan>> plans() async =>
@@ -265,7 +306,12 @@ class DemoApi implements Api {
   @override
   Future<Answer> ask(String question) async {
     await Future.delayed(const Duration(milliseconds: 900));
-    if (!_subscribed) {
+    final st = _access.state;
+    if (st == 'expired') {
+      throw ApiException(402, 'Your plan has ended. Renew to continue learning with ${cfg.teacherName}.');
+    } else if (st == 'grace') {
+      _graceUsed++;
+    } else if (st == 'demo') {
       if (_demoUsed >= 3) {
         throw ApiException(402, 'Your free demo questions are over. Subscribe to keep learning with ${cfg.teacherName}.');
       }
@@ -305,6 +351,7 @@ class DemoApi implements Api {
   @override
   Future<Receipt> confirmPayment(String orderId, String paymentId, String signature) async {
     _subscribed = true;
+    _simulated = null;
     return Receipt('Yearly', 0, DateTime.now().add(const Duration(days: 365)), paymentId);
   }
 
