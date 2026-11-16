@@ -23,7 +23,8 @@ class Settings:
     llm_api_key: str = field(default_factory=lambda: _env("LLM_API_KEY"))
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL"))
 
-    # Razorpay (keys of the teacher's merchant account; Durina is a Route linked account)
+    # Razorpay defaults. Each teacher's own keys and commission split are stored per teacher (admin panel);
+    # these are only used for a teacher who has none set.
     razorpay_key_id: str = field(default_factory=lambda: _env("RAZORPAY_KEY_ID"))
     razorpay_key_secret: str = field(default_factory=lambda: _env("RAZORPAY_KEY_SECRET"))
     razorpay_webhook_secret: str = field(default_factory=lambda: _env("RAZORPAY_WEBHOOK_SECRET"))

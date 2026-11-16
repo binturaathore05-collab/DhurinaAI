@@ -181,16 +181,22 @@ def checkout(body: Checkout, student=Depends(current_student)):
 
 @app.post("/pay/confirm")
 def confirm(body: PaymentDone, student=Depends(current_student)):
+    secret = payments.teacher_payment_settings(db, student["teacher_id"], settings)["key_secret"]
     if not payments.verify_payment_signature(body.razorpay_order_id, body.razorpay_payment_id,
-                                             body.razorpay_signature, settings.razorpay_key_secret):
+                                             body.razorpay_signature, secret):
         raise HTTPException(400, "Payment could not be verified")
     return payments.mark_paid(db, body.razorpay_order_id, body.razorpay_payment_id)
 
 
-@app.post("/pay/webhook")
-async def razorpay_webhook(request: Request, x_razorpay_signature: str = Header(...)):
+@app.post("/pay/webhook/{teacher_id}")
+async def razorpay_webhook(teacher_id: str, request: Request, x_razorpay_signature: str = Header(...)):
+    """Each teacher's Razorpay account points its webhook at /pay/webhook/<teacher id>."""
     raw = await request.body()
-    if not payments.verify_webhook_signature(raw, x_razorpay_signature, settings.razorpay_webhook_secret):
+    try:
+        secret = payments.teacher_payment_settings(db, teacher_id, settings)["webhook_secret"]
+    except KeyError:
+        raise HTTPException(404, "Unknown teacher")
+    if not payments.verify_webhook_signature(raw, x_razorpay_signature, secret):
         raise HTTPException(400, "Bad signature")
     event = await request.json()
     if event.get("event") in ("payment.captured", "order.paid"):

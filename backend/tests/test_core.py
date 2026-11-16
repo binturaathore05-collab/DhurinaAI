@@ -220,22 +220,22 @@ def test_signatures():
     assert payments.verify_webhook_signature(body, wsig, "wh")
 
 
+class S:
+    platform_linked_account, platform_commission_percent = "acc_durina", 20
+    razorpay_key_id, razorpay_key_secret, razorpay_webhook_secret = "rzp_default", "sec", "wh"
+
+
 def test_start_checkout_records_order(db):
     sid = student(db)
-
-    class S:
-        platform_linked_account, platform_commission_percent = "acc_durina", 20
-        razorpay_key_id, razorpay_key_secret = "rzp_test", "sec"
-
     seen = {}
 
     def fake_order(key_id, key_secret, payload):
-        seen.update(payload)
+        seen.update(payload, key_id=key_id)
         return {"id": "order_X"}
 
     out = payments.start_checkout(db, sid, "y", S, order_creator=fake_order)
     assert out["order_id"] == "order_X" and out["amount"] == 99900
-    assert seen["transfers"][0]["amount"] == 19980
+    assert seen["transfers"][0]["amount"] == 19980  # no split set for this teacher -> default 20%
     assert db.one("SELECT status FROM payments WHERE razorpay_order_id = 'order_X'")["status"] == "created"
 
 
@@ -313,3 +313,41 @@ def test_library_pages_many_notes(db, tmp_path):
     page = notes_pdf.list_notes(db, sid, offset=240, limit=20)
     assert len(page["items"]) == 10
     assert notes_pdf.library(db, sid, q="Chambal")["history_total"] == 125
+
+
+def test_commission_split_is_set_per_teacher(db):
+    db.execute("UPDATE teachers SET platform_commission_percent = 25, razorpay_key_id = 'rzp_subhash', "
+               "razorpay_key_secret = 'sec_subhash' WHERE id = 'subhash'")
+    db.execute("INSERT INTO teachers (id, name, platform_commission_percent) VALUES ('meena', 'Meena Ma’am', 30)")
+    db.execute("INSERT INTO plans (id, teacher_id, name, amount_paise, duration_days) VALUES ('m', 'meena', 'Monthly', 50000, 30)")
+    sid = student(db)
+    sid2 = accounts.get_or_create_student(db, "meena", "+919876500000")
+    seen = []
+
+    def fake_order(key_id, key_secret, payload):
+        seen.append((key_id, key_secret, payload))
+        return {"id": f"order_{len(seen)}"}
+
+    payments.start_checkout(db, sid, "y", S, order_creator=fake_order)
+    payments.start_checkout(db, sid2, "m", S, order_creator=fake_order)
+    (k1, s1, p1), (k2, s2, p2) = seen
+    assert (k1, s1) == ("rzp_subhash", "sec_subhash") and p1["transfers"][0]["amount"] == 24975   # 25% of 999
+    assert k2 == "rzp_default" and p2["transfers"][0]["amount"] == 15000                         # 30% of 500
+    assert "teacher 70% / platform 30%" in p2["notes"]["split"]
+    ps = payments.teacher_payment_settings(db, "subhash", S)
+    assert ps["teacher_percent"] == 75 and ps["platform_percent"] == 25
+    db.execute("UPDATE teachers SET platform_commission_percent = 0 WHERE id = 'meena'")
+    payments.start_checkout(db, sid2, "m", S, order_creator=fake_order)
+    assert "transfers" not in seen[-1][2]  # 0% commission -> no transfer at all
+
+
+def test_old_database_gets_new_columns(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "old.db")
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE teachers (id TEXT PRIMARY KEY, name TEXT NOT NULL, subject TEXT, avatar_url TEXT, "
+                "brand_color TEXT, razorpay_key_id TEXT, created_at TEXT)")
+    con.commit(); con.close()
+    d = Database(path)
+    cols = {r["name"] for r in d.all("PRAGMA table_info(teachers)")}
+    assert {"platform_commission_percent", "razorpay_key_secret", "razorpay_webhook_secret"} <= cols

@@ -1,7 +1,9 @@
 """Razorpay payments with automatic commission split (Razorpay Route).
 
-The teacher's Razorpay account receives the payment; on each order a Route transfer sends the
-platform commission (default 20%) to Durina's linked account automatically.
+The teacher's Razorpay account receives the payment; on each order a Route transfer sends Durina's
+commission to Durina's linked account automatically. The split is set PER TEACHER (in the admin
+panel): e.g. one teacher 80/20, another 75/25. PLATFORM_COMMISSION_PERCENT is only the default for
+teachers without their own value.
 A subscription is activated only after the payment signature (or webhook) is verified, and only once.
 """
 import base64
@@ -51,17 +53,37 @@ def verify_webhook_signature(raw_body: bytes, signature: str, webhook_secret: st
     return hmac.compare_digest(expected, signature)
 
 
-def start_checkout(db: Database, student_id: int, plan_id: str, settings, order_creator=create_razorpay_order,
-                   key_id: str | None = None, key_secret: str | None = None) -> dict:
+def teacher_payment_settings(db: Database, teacher_id: str, settings) -> dict:
+    """The teacher's own Razorpay keys and commission split, falling back to the defaults in .env."""
+    t = db.one("SELECT * FROM teachers WHERE id = ?", (teacher_id,))
+    if t is None:
+        raise KeyError(teacher_id)
+    percent = t["platform_commission_percent"]
+    if percent is None:
+        percent = settings.platform_commission_percent
+    if not 0 <= percent <= 100:
+        raise ValueError("Commission must be between 0 and 100")
+    return {
+        "key_id": t["razorpay_key_id"] or settings.razorpay_key_id,
+        "key_secret": t["razorpay_key_secret"] or settings.razorpay_key_secret,
+        "webhook_secret": t["razorpay_webhook_secret"] or settings.razorpay_webhook_secret,
+        "platform_percent": float(percent),
+        "teacher_percent": 100 - float(percent),
+    }
+
+
+def start_checkout(db: Database, student_id: int, plan_id: str, settings, order_creator=create_razorpay_order) -> dict:
     plan = db.one("SELECT * FROM plans WHERE id = ? AND active = 1", (plan_id,))
     if plan is None:
         raise KeyError(plan_id)
+    pay = teacher_payment_settings(db, plan["teacher_id"], settings)
     receipt = f"s{student_id}-{plan_id}-{int(time.time())}"
     payload = build_order_payload(plan["amount_paise"], receipt, settings.platform_linked_account,
-                                  settings.platform_commission_percent,
-                                  {"student_id": str(student_id), "plan_id": plan_id})
-    key_id = key_id or settings.razorpay_key_id
-    order = order_creator(key_id, key_secret or settings.razorpay_key_secret, payload)
+                                  pay["platform_percent"],
+                                  {"student_id": str(student_id), "plan_id": plan_id,
+                                   "split": f"teacher {pay['teacher_percent']:g}% / platform {pay['platform_percent']:g}%"})
+    key_id = pay["key_id"]
+    order = order_creator(key_id, pay["key_secret"], payload)
     db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise) VALUES (?, ?, ?, ?)",
                (student_id, plan_id, order["id"], plan["amount_paise"]))
     # Everything the app needs to open Razorpay Checkout

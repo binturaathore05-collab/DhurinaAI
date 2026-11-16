@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS teachers (
     avatar_url TEXT,
     brand_color TEXT,
     razorpay_key_id TEXT,
+    razorpay_key_secret TEXT,
+    razorpay_webhook_secret TEXT,
+    platform_commission_percent REAL,   -- Durina's share for THIS teacher; teacher gets the rest
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS students (
@@ -107,6 +110,16 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._lock = threading.Lock()
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a database was first created."""
+        have = {r["name"] for r in self._conn.execute("PRAGMA table_info(teachers)")}
+        for col, typ in [("razorpay_key_secret", "TEXT"), ("razorpay_webhook_secret", "TEXT"),
+                         ("platform_commission_percent", "REAL")]:
+            if col not in have:
+                self._conn.execute(f"ALTER TABLE teachers ADD COLUMN {col} {typ}")
+        self._conn.commit()
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:

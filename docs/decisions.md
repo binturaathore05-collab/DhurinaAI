@@ -7,8 +7,9 @@
 - **Saving notes:** never a separate screen. During the live call a popup offers "Save", or the student says
   "Sir, save this" (any language). The answer becomes a PDF in My Library.
 - **My Library:** saved notes box + full question history.
-- **Payment:** single "Pay Now" button → Razorpay. Teacher's merchant account; Durina's commission (20%)
-  split automatically with Razorpay Route.
+- **Payment:** single "Pay Now" button → Razorpay. Teacher's merchant account; Durina's commission
+  split automatically with Razorpay Route. **The split is NOT fixed:** it is chosen per teacher when the
+  teacher is added in the admin panel (e.g. 80/20, 75/25, 70/30) and can be changed later.
 - **Answer accuracy:** verified answers → teacher's notes → general AI (flagged for teacher review).
 - **Tech:** Flutter app, Python FastAPI backend, phases: Phase 1 = chat + teacher voice; Phase 2 = video avatar.
 

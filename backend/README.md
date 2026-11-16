@@ -29,7 +29,7 @@ language is saved with each answer and used for its voice and its PDF note (righ
 | POST | `/class/ask` | Live class: answer + follow-up question; "Sir, save this" saves the last answer |
 | POST | `/notes/{qa_id}` | Save button on the popup |
 | GET | `/library`, `/notes/{id}/pdf` | My Library: saved notes + question history |
-| POST | `/pay/checkout`, `/pay/confirm`, `/pay/webhook` | Pay Now → Razorpay → Payment successful |
+| POST | `/pay/checkout`, `/pay/confirm`, `/pay/webhook/{teacher_id}` | Pay Now → Razorpay → Payment successful |
 | POST/GET | `/teacher/documents`, `/teacher/review`, `/teacher/review/{id}/approve` | Teacher dashboard (`X-Teacher-Key`) |
 
 ## How an answer is chosen
@@ -40,4 +40,7 @@ language is saved with each answer and used for its voice and its PDF note (righ
 
 ## Payments
 The teacher's Razorpay account receives the money; each order carries a Razorpay Route transfer that
-sends `PLATFORM_COMMISSION_PERCENT` (default 20%) to Durina's linked account automatically.
+sends Durina's commission to Durina's linked account automatically. **The split is set separately for
+every teacher** (admin panel → teacher → Durina %; the teacher gets the rest), along with that
+teacher's own Razorpay keys. `PLATFORM_COMMISSION_PERCENT` in `.env` is only a default for a teacher
+with no split set. Each teacher's Razorpay webhook points to `/pay/webhook/<teacher id>`.
