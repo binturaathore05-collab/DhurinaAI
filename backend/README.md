@@ -14,17 +14,18 @@ pytest -q                            # tests
 On the server also install Noto fonts (`sudo apt install fonts-noto`) so PDFs render every Indian script.
 
 ## Languages
-Every supported language is in `app/languages.py` (English, Hindi, Hinglish, Punjabi, Bengali, Gujarati,
-Marathi, Tamil, Telugu, Kannada, Malayalam, Odia, Assamese, Urdu). The student's language decides
-UI strings, the language the AI teacher answers in, the voice, and the PDF font. Server messages are in
-`app/i18n.py` (English fallback for untranslated ones).
+The app's screens are always in English. There is no language picker: the AI teacher replies in whatever
+language the student asks in — Hindi question → Hindi answer, Punjabi → Punjabi, English → English,
+Hinglish → Hinglish — and can switch from one question to the next. `app/languages.py` detects the
+question's script; the model also reports the language it replied in (e.g. Marathi vs Hindi). That
+language is saved with each answer and used for its voice and its PDF note (right font, right direction).
 
 ## API (every call sends `X-Teacher-Id`; student calls also send `Authorization: Bearer <token>`)
 | Method | Path | Screen |
 |---|---|---|
-| GET | `/teacher`, `/languages` | app start: teacher name, photo, colour, plans |
+| GET | `/teacher` | app start: teacher name, photo, colour, plans |
 | POST | `/auth/otp`, `/auth/verify` | Login → OTP |
-| GET | `/me/access` · PUT `/me/language` | demo questions left / subscribed |
+| GET | `/me/access` | demo questions left / subscribed |
 | POST | `/class/ask` | Live class: answer + follow-up question; "Sir, save this" saves the last answer |
 | POST | `/notes/{qa_id}` | Save button on the popup |
 | GET | `/library`, `/notes/{id}/pdf` | My Library: saved notes + question history |

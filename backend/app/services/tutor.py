@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from ..db import Database
 from ..i18n import t
-from ..languages import get_language
+from ..languages import LANGUAGES, detect_language, get_language
 from .knowledge import Hit, KnowledgeBase
 from .llm import LLM
 
@@ -49,13 +49,15 @@ class TutorAnswer:
 def _system_prompt(teacher: TeacherProfile, language_name: str) -> str:
     return f"""You are the AI avatar of {teacher.name}, a teacher{f' of {teacher.subject}' if teacher.subject else ''} in India.
 Speak like {teacher.name} talking to one student on a video call: warm, clear, simple sentences, short enough to say aloud.
-Always reply in {language_name}, whatever language the question was in. Keep names and dates accurate.
+Reply in exactly the same language and script the student used (it looks like {language_name}).
+If they wrote Hindi in Roman letters (Hinglish), reply in Hinglish. Keep names and dates accurate.
 Rules:
 - Only help with studies. Politely decline anything unrelated to learning.
 - Never invent facts. If you are not sure, say so honestly.
 - For maths or calculations, work step by step and double-check the result.
 - End with ONE short question to check the student understood (the "follow_up").
-Return JSON: {{"answer": str, "follow_up": str, "found_in_notes": bool, "used_sources": [int]}}"""
+Return JSON: {{"answer": str, "follow_up": str, "found_in_notes": bool, "used_sources": [int],
+"language": the BCP-47 code of the language you replied in, e.g. "hi", "pa", "en", "hi-Latn"}}"""
 
 
 def _notes_prompt(question: str, hits: list[Hit], verified: str | None) -> str:
@@ -85,8 +87,8 @@ class Tutor:
         except Exception:
             return [question]
 
-    def answer(self, student_id: int, teacher: TeacherProfile, question: str, language: str) -> TutorAnswer:
-        lang = get_language(language)
+    def answer(self, student_id: int, teacher: TeacherProfile, question: str) -> TutorAnswer:
+        lang = get_language(detect_language(question))
         system = _system_prompt(teacher, lang.english_name)
 
         verified = self.kb.find_verified(teacher.id, question)
@@ -109,6 +111,13 @@ class Tutor:
                                                "This is not in the teacher's notes; answer from general knowledge.")
             sources = [{"title": t("source_general_ai", lang.code), "ref": None}]
 
+        reported = str(reply.get("language", "")).strip()
+        if reported in LANGUAGES:  # trust the model when it names a language we know (e.g. Marathi vs Hindi)
+            lang = LANGUAGES[reported]
+            if origin == "general_ai":
+                sources = [{"title": t("source_general_ai", lang.code), "ref": None}]
+            elif origin == "verified":
+                sources = [{"title": t("source_teacher_notes", lang.code), "ref": "verified"}]
         needs_review = origin == "general_ai"
         cur = self.db.execute(
             "INSERT INTO qa_history (student_id, question, answer, follow_up, origin, sources, language, needs_review) "

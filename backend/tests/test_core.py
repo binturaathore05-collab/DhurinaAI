@@ -8,7 +8,7 @@ import pytest
 
 from app.db import Database
 from app.i18n import t
-from app.languages import get_language
+from app.languages import detect_language, get_language
 from app.services import accounts, notes_pdf, payments
 from app.services.knowledge import KnowledgeBase, chunk_text, tokenize
 from app.services.llm import FakeLLM
@@ -29,8 +29,8 @@ def db(tmp_path):
     return d
 
 
-def student(db, phone="+919876543210", lang="hi"):
-    return accounts.get_or_create_student(db, "subhash", phone, lang)
+def student(db, phone="+919876543210"):
+    return accounts.get_or_create_student(db, "subhash", phone)
 
 
 # ---------- languages ----------
@@ -40,6 +40,15 @@ def test_language_fallbacks():
     assert get_language("pa-IN").code == "pa"
     assert get_language("xx").code == "hi"
     assert get_language("ur").rtl
+
+
+def test_detects_language_of_question():
+    assert detect_language("Explain the Battle of Haldighati") == "en"
+    assert detect_language("हल्दीघाटी का युद्ध कब हुआ?") == "hi"
+    assert detect_language("ਮਹਾਰਾਣਾ ਪ੍ਰਤਾਪ ਕੌਣ ਸੀ?") == "pa"
+    assert detect_language("மகாராணா பிரதாப் யார்?") == "ta"
+    assert detect_language("Sir Haldighati ka yuddh kab hua tha?") == "hi-Latn"
+    assert detect_language("Sir, Akbar ka general kaun tha? Man Singh?") == "hi-Latn"
 
 
 def test_messages_in_each_language_with_english_fallback():
@@ -53,15 +62,15 @@ def test_messages_in_each_language_with_english_fallback():
 def test_otp_flow(db):
     sent = []
     svc = accounts.OtpService(db, "secret", lambda phone, msg: sent.append((phone, msg)))
-    svc.send("subhash", "Subhash Sir", "98765 43210", "hi")
+    svc.send("subhash", "Subhash Sir", "98765 43210")
     phone, msg = sent[0]
-    assert phone == "+919876543210"
+    assert phone == "+919876543210" and "LiveTeach code" in msg  # app is in English
     code = re.search(r"\d{6}", msg).group()
     with pytest.raises(accounts.AuthError):
-        svc.verify("subhash", phone, "000000" if code != "000000" else "111111", "en")
-    assert svc.verify("subhash", phone, code, "en") == phone
+        svc.verify("subhash", phone, "000000" if code != "000000" else "111111")
+    assert svc.verify("subhash", phone, code) == phone
     with pytest.raises(accounts.AuthError):  # a code works only once
-        svc.verify("subhash", phone, code, "en")
+        svc.verify("subhash", phone, code)
 
 
 def test_phone_validation():
@@ -119,21 +128,23 @@ def test_answer_from_teacher_notes_in_hindi(db):
     kb.add_document("subhash", "Chapter 6", NOTES, "ch6", "en")
     llm = FakeLLM([
         {"query": "Haldighati battle"},  # keyword rewrite of the Hindi question
-        {"answer": "हल्दीघाटी का युद्ध 1576 में हुआ।", "follow_up": "चेतक कौन था?", "found_in_notes": True, "used_sources": [1]},
+        {"answer": "हल्दीघाटी का युद्ध 1576 में हुआ।", "follow_up": "चेतक कौन था?", "found_in_notes": True, "used_sources": [1], "language": "hi"},
     ])
     sid = student(db)
-    ans = Tutor(db, kb, llm).answer(sid, TEACHER, "हल्दीघाटी का युद्ध कब हुआ?", "hi")
+    ans = Tutor(db, kb, llm).answer(sid, TEACHER, "हल्दीघाटी का युद्ध कब हुआ?")
     assert ans.origin == "teacher_notes" and not ans.needs_review
     assert ans.sources[0]["title"] == "Chapter 6"
-    assert "Hindi" in llm.calls[-1][0]  # model told to answer in Hindi
+    assert ans.language == "hi"
+    assert "Hindi" in llm.calls[-1][0]  # model told the student wrote in Hindi
     assert "Haldighati" in llm.calls[-1][1]  # notes were given to the model
 
 
 def test_answer_in_punjabi_falls_back_to_general_ai_and_review(db):
     llm = FakeLLM([{"query": "photosynthesis"},
                    {"answer": "ਪ੍ਰਕਾਸ਼ ਸੰਸ਼ਲੇਸ਼ਣ…", "follow_up": "", "found_in_notes": False}])
-    sid = student(db, lang="pa")
-    ans = Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "ਪ੍ਰਕਾਸ਼ ਸੰਸ਼ਲੇਸ਼ਣ ਕੀ ਹੈ?", "pa")
+    sid = student(db)
+    ans = Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "ਪ੍ਰਕਾਸ਼ ਸੰਸ਼ਲੇਸ਼ਣ ਕੀ ਹੈ?")
+    assert ans.language == "pa"
     assert ans.origin == "general_ai" and ans.needs_review
     assert "Punjabi" in llm.calls[-1][0]
     assert ans.sources[0]["title"] == t("source_general_ai", "pa")
@@ -143,7 +154,7 @@ def test_answer_in_punjabi_falls_back_to_general_ai_and_review(db):
     approve_answer(db, "subhash", ans.qa_id, "Corrected answer by Sir")
     assert review_queue(db, "subhash") == []
     llm2 = FakeLLM([{"answer": "ok", "follow_up": "", "found_in_notes": True}])
-    again = Tutor(db, KnowledgeBase(db), llm2).answer(sid, TEACHER, "ਪ੍ਰਕਾਸ਼ ਸੰਸ਼ਲੇਸ਼ਣ ਕੀ ਹੈ?", "pa")
+    again = Tutor(db, KnowledgeBase(db), llm2).answer(sid, TEACHER, "ਪ੍ਰਕਾਸ਼ ਸੰਸ਼ਲੇਸ਼ਣ ਕੀ ਹੈ?")
     assert again.origin == "verified"
     assert "Corrected answer by Sir" in llm2.calls[-1][1]
 
@@ -159,7 +170,7 @@ def test_save_commands_in_many_languages():
 def test_save_note_and_library(db, tmp_path):
     sid = student(db)
     llm = FakeLLM([{"query": "x"}, {"answer": "उत्तर\nदूसरी पंक्ति", "follow_up": "", "found_in_notes": False}])
-    ans = Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "महाराणा प्रताप कौन थे?", "hi")
+    ans = Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "महाराणा प्रताप कौन थे?")
     rendered = {}
 
     def fake_render(html_text, path):
@@ -226,3 +237,18 @@ def test_start_checkout_records_order(db):
     assert out["order_id"] == "order_X" and out["amount"] == 99900
     assert seen["transfers"][0]["amount"] == 19980
     assert db.one("SELECT status FROM payments WHERE razorpay_order_id = 'order_X'")["status"] == "created"
+
+
+def test_same_student_switches_language_per_question(db):
+    sid = student(db)
+    llm = FakeLLM([{"query": "x"}, {"answer": "Akbar's general was Man Singh.", "found_in_notes": False},
+                   {"query": "x"}, {"answer": "ਅਕਬਰ ਦਾ ਸੈਨਾਪਤੀ ਮਾਨ ਸਿੰਘ ਸੀ।", "found_in_notes": False}])
+    tutor = Tutor(db, KnowledgeBase(db), llm)
+    assert tutor.answer(sid, TEACHER, "Who was Akbar's general at Haldighati?").language == "en"
+    assert tutor.answer(sid, TEACHER, "ਹਲਦੀਘਾਟੀ ਵਿੱਚ ਅਕਬਰ ਦਾ ਸੈਨਾਪਤੀ ਕੌਣ ਸੀ?").language == "pa"
+
+
+def test_model_can_correct_detected_language(db):
+    sid = student(db)  # Marathi uses the same script as Hindi; the model knows better and says so
+    llm = FakeLLM([{"query": "x"}, {"answer": "हल्दीघाटीची लढाई १५७६ मध्ये झाली.", "found_in_notes": False, "language": "mr"}])
+    assert Tutor(db, KnowledgeBase(db), llm).answer(sid, TEACHER, "हल्दीघाटीची लढाई कधी झाली?").language == "mr"

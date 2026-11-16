@@ -9,7 +9,6 @@ import jwt
 
 from ..db import Database
 from ..i18n import t
-from ..languages import get_language
 
 OTP_TTL_SECONDS = 300
 OTP_MAX_ATTEMPTS = 5
@@ -38,7 +37,7 @@ class OtpService:
     secret: str
     sms_sender: "callable"  # (phone, message) -> None
 
-    def send(self, teacher_id: str, teacher_name: str, phone: str, language: str) -> None:
+    def send(self, teacher_id: str, teacher_name: str, phone: str) -> None:
         phone = normalize_phone(phone)
         code = f"{secrets.randbelow(10**6):06d}"
         self.db.execute("UPDATE otp_codes SET used = 1 WHERE teacher_id = ? AND phone = ? AND used = 0",
@@ -46,29 +45,28 @@ class OtpService:
         self.db.execute(
             "INSERT INTO otp_codes (teacher_id, phone, code_hash, expires_at) VALUES (?, ?, ?, ?)",
             (teacher_id, phone, _hash_code(phone, code, self.secret), time.time() + OTP_TTL_SECONDS))
-        self.sms_sender(phone, t("otp_sms", language, code=code, teacher=teacher_name))
+        self.sms_sender(phone, t("otp_sms", "en", code=code, teacher=teacher_name))
 
-    def verify(self, teacher_id: str, phone: str, code: str, language: str) -> str:
+    def verify(self, teacher_id: str, phone: str, code: str) -> str:
         """Check the code; return the normalized phone, or raise AuthError."""
         phone = normalize_phone(phone)
         row = self.db.one(
             "SELECT * FROM otp_codes WHERE teacher_id = ? AND phone = ? AND used = 0 ORDER BY id DESC LIMIT 1",
             (teacher_id, phone))
         if row is None or row["expires_at"] < time.time():
-            raise AuthError(t("otp_expired", language))
+            raise AuthError(t("otp_expired", "en"))
         if row["attempts"] >= OTP_MAX_ATTEMPTS:
-            raise AuthError(t("otp_too_many", language))
+            raise AuthError(t("otp_too_many", "en"))
         if not hmac.compare_digest(row["code_hash"], _hash_code(phone, code.strip(), self.secret)):
             self.db.execute("UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", (row["id"],))
-            raise AuthError(t("otp_invalid", language))
+            raise AuthError(t("otp_invalid", "en"))
         self.db.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
         return phone
 
 
-def get_or_create_student(db: Database, teacher_id: str, phone: str, language: str) -> int:
-    lang = get_language(language).code
-    db.execute("INSERT OR IGNORE INTO students (teacher_id, phone, language) VALUES (?, ?, ?)",
-               (teacher_id, phone, lang))
+def get_or_create_student(db: Database, teacher_id: str, phone: str) -> int:
+    db.execute("INSERT OR IGNORE INTO students (teacher_id, phone, language) VALUES (?, ?, 'en')",
+               (teacher_id, phone))
     row = db.one("SELECT id FROM students WHERE teacher_id = ? AND phone = ?", (teacher_id, phone))
     return row["id"]
 

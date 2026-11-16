@@ -1,5 +1,5 @@
-"""LiveTeach API (FastAPI). Every request names the teacher app it comes from (X-Teacher-Id header),
-and every student request carries the student's language (X-Language header or saved preference).
+"""LiveTeach API (FastAPI). Every request names the teacher app it comes from (X-Teacher-Id header).
+The app's screens are in English; the AI teacher answers in whatever language the student asks in.
 
 Run:  uvicorn app.main:app --reload
 """
@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from .config import settings
 from .db import Database
 from .i18n import t
-from .languages import LANGUAGES, get_language
 from .services import accounts, notes_pdf, payments
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
@@ -44,7 +43,7 @@ def teacher_from_header(x_teacher_id: str = Header(...)) -> TeacherProfile:
     return TeacherProfile(row["id"], row["name"], row["subject"] or "")
 
 
-def current_student(authorization: str = Header(...), x_language: str | None = Header(None)):
+def current_student(authorization: str = Header(...)):
     try:
         student_id, teacher_id = accounts.read_token(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
     except accounts.AuthError as exc:
@@ -52,8 +51,7 @@ def current_student(authorization: str = Header(...), x_language: str | None = H
     row = db.one("SELECT * FROM students WHERE id = ?", (student_id,))
     if row is None:
         raise HTTPException(401, "Unknown student")
-    lang = get_language(x_language or row["language"]).code
-    return {"id": student_id, "teacher_id": teacher_id, "language": lang}
+    return {"id": student_id, "teacher_id": teacher_id}
 
 
 def teacher_admin(x_teacher_id: str = Header(...), x_teacher_key: str = Header(...)) -> str:
@@ -64,12 +62,6 @@ def teacher_admin(x_teacher_id: str = Header(...), x_teacher_key: str = Header(.
 
 
 # ---------- app config & languages ----------
-
-@app.get("/languages")
-def list_languages():
-    return [{"code": l.code, "name": l.native_name, "english_name": l.english_name, "rtl": l.rtl}
-            for l in LANGUAGES.values()]
-
 
 @app.get("/teacher")
 def teacher_info(teacher: TeacherProfile = Depends(teacher_from_header)):
@@ -84,19 +76,17 @@ def teacher_info(teacher: TeacherProfile = Depends(teacher_from_header)):
 
 class OtpRequest(BaseModel):
     phone: str
-    language: str = "hi"
 
 
 class OtpVerify(BaseModel):
     phone: str
     code: str
-    language: str = "hi"
 
 
 @app.post("/auth/otp")
 def send_otp(body: OtpRequest, teacher: TeacherProfile = Depends(teacher_from_header)):
     try:
-        otp.send(teacher.id, teacher.name, body.phone, body.language)
+        otp.send(teacher.id, teacher.name, body.phone)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return {"sent": True}
@@ -105,23 +95,12 @@ def send_otp(body: OtpRequest, teacher: TeacherProfile = Depends(teacher_from_he
 @app.post("/auth/verify")
 def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_header)):
     try:
-        phone = otp.verify(teacher.id, body.phone, body.code, body.language)
+        phone = otp.verify(teacher.id, body.phone, body.code)
     except (accounts.AuthError, ValueError) as exc:
         raise HTTPException(400, str(exc))
-    student_id = accounts.get_or_create_student(db, teacher.id, phone, body.language)
+    student_id = accounts.get_or_create_student(db, teacher.id, phone)
     token = accounts.issue_token(student_id, teacher.id, settings.jwt_secret, settings.jwt_days)
     return {"token": token, **accounts.access_status(db, student_id, settings.demo_question_limit)}
-
-
-class LanguageChange(BaseModel):
-    language: str
-
-
-@app.put("/me/language")
-def change_language(body: LanguageChange, student=Depends(current_student)):
-    code = get_language(body.language).code
-    db.execute("UPDATE students SET language = ? WHERE id = ?", (code, student["id"]))
-    return {"language": code}
 
 
 @app.get("/me/access")
@@ -142,8 +121,8 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
         note = notes_pdf.save_note(db, student["id"], body.last_qa_id, teacher.name, settings.notes_dir)
         return {"type": "note_saved", "note": note}
     if not accounts.consume_question(db, student["id"], settings.demo_question_limit):
-        raise HTTPException(402, t("demo_over", student["language"], teacher=teacher.name))
-    result = tutor.answer(student["id"], teacher, body.question, student["language"])
+        raise HTTPException(402, t("demo_over", "en", teacher=teacher.name))
+    result = tutor.answer(student["id"], teacher, body.question)
     return {"type": "answer", **result.__dict__,
             **accounts.access_status(db, student["id"], settings.demo_question_limit)}
 

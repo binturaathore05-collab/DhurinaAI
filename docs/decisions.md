@@ -2,8 +2,8 @@
 
 - **Brand:** LiveTeach. Each teacher gets a white-label app published on the teacher's own Play Console.
 - **Final UI:** "Video Call" design, 6 screens: Login → OTP → Live Class → My Library → Pay Now → Payment Successful.
-- **Languages:** the app must work in every language — Hindi, English, Punjabi and other Indian languages.
-  The student picks a language; screens, AI answers, voice and PDF notes follow it.
+- **Languages:** app screens stay in English, with no language picker. The teacher automatically answers in
+  the language the student speaks or types (Hindi, English, Punjabi, Hinglish, any Indian language).
 - **Saving notes:** never a separate screen. During the live call a popup offers "Save", or the student says
   "Sir, save this" (any language). The answer becomes a PDF in My Library.
 - **My Library:** saved notes box + full question history.

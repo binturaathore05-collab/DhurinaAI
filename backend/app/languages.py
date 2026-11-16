@@ -53,3 +53,42 @@ def get_language(code: str | None) -> Language:
         if base in LANGUAGES:
             return LANGUAGES[base]
     return LANGUAGES[DEFAULT_LANGUAGE]
+
+
+# ---------- automatic detection: answer in whatever language the student used ----------
+
+_SCRIPT_RANGES = [
+    ("Deva", 0x0900, 0x097F), ("Beng", 0x0980, 0x09FF), ("Guru", 0x0A00, 0x0A7F), ("Gujr", 0x0A80, 0x0AFF),
+    ("Orya", 0x0B00, 0x0B7F), ("Taml", 0x0B80, 0x0BFF), ("Telu", 0x0C00, 0x0C7F), ("Knda", 0x0C80, 0x0CFF),
+    ("Mlym", 0x0D00, 0x0D7F), ("Arab", 0x0600, 0x06FF),
+]
+_SCRIPT_TO_LANG = {"Deva": "hi", "Beng": "bn", "Guru": "pa", "Gujr": "gu", "Orya": "or", "Taml": "ta",
+                   "Telu": "te", "Knda": "kn", "Mlym": "ml", "Arab": "ur"}
+# Common Hindi words typed in Roman letters ("Sir Haldighati ka yuddh kab hua tha?")
+_HINGLISH = {"hai", "hain", "kya", "kaun", "kab", "kahan", "kyun", "kaise", "tha", "thi", "the", "ka", "ki",
+             "ke", "ko", "mein", "me", "se", "aur", "batao", "bataiye", "samjhao", "samjhaiye", "hua", "kiya",
+             "yeh", "ye", "woh", "matlab", "nahi", "acha", "accha", "kitne", "kitna", "bhi", "hota", "hoti"}
+
+
+def detect_language(text: str) -> str:
+    """Best guess of the language a question is written in, from its script (and Hinglish words).
+    Marathi and Hindi share a script, so Devanagari counts as Hindi here; the AI model still replies in
+    the exact language it sees and reports it back."""
+    counts: dict[str, int] = {}
+    latin = 0
+    for ch in text:
+        cp = ord(ch)
+        if ch.isascii() and ch.isalpha():
+            latin += 1
+            continue
+        for script, lo, hi in _SCRIPT_RANGES:
+            if lo <= cp <= hi:
+                counts[script] = counts.get(script, 0) + 1
+                break
+    if counts and max(counts.values()) >= latin / 2:
+        return _SCRIPT_TO_LANG[max(counts, key=counts.get)]
+    words = {w.strip(".,?!").lower() for w in text.split()}
+    the_english = {"the", "is", "was", "what", "who", "how", "why", "of"}
+    if len(words & _HINGLISH) >= 2 and len(words & _HINGLISH) > len(words & the_english):
+        return "hi-Latn"
+    return "en"
