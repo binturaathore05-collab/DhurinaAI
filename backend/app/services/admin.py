@@ -89,9 +89,14 @@ def save_teacher(db: Database, data: dict, creating: bool) -> dict:
     def keep(field, new):  # blank secret = keep the stored one
         return seal(new) if new else (exists[field] if exists else None)
 
+    subjects = data.get("subjects")
+    if isinstance(subjects, list):
+        subject = ", ".join(dict.fromkeys(x.strip() for x in subjects if str(x).strip()))
+    else:
+        subject = str(data.get("subject") or "").strip()
     values = {
         "name": name,
-        "subject": data.get("subject") or "",
+        "subject": subject,                 # several subjects stored as "History, Geography, Polity"
         "app_name": data.get("app_name") or f"{name} AI",
         "brand_color": data.get("brand_color") or "#2DD4BF",
         "platform_commission_percent": split,
@@ -228,6 +233,7 @@ def teacher_detail(db: Database, tid: str, default_percent: float = 20) -> dict:
     state = json.loads(t["checklist"] or "{}")
     return {
         "id": t["id"], "name": t["name"], "subject": t["subject"], "app_name": t["app_name"],
+        "subjects": [x.strip() for x in (t["subject"] or "").split(",") if x.strip()],
         "brand_color": t["brand_color"], "status": t["status"], "has_avatar": bool(t["avatar_url"]),
         "platform_percent": pct, "effective_platform_percent": pct_eff, "teacher_percent": 100 - pct_eff,
         "demo_questions": t["demo_questions"], "grace_days": t["grace_days"], "grace_questions": t["grace_questions"],

@@ -49,6 +49,15 @@
   .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
   .sw { width: 38px; height: 38px; border-radius: 999px; border: 3px solid #fff; cursor: pointer; box-shadow: 0 0 0 1px var(--border); }
   .sw.on { box-shadow: 0 0 0 2px var(--text); }
+  .more { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px 0 4px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .more input { width: 30px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 44px; border: 1.5px solid var(--border); border-radius: 12px; background: #fff; padding: 6px 8px; }
+  .chips:focus-within { border-color: var(--acc); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: #E6F4F1; color: var(--acc); font-weight: 700; font-size: 13px; border-radius: 999px; padding: 4px 6px 4px 12px; }
+  .chip button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; width: 22px; height: 22px; border-radius: 999px; }
+  .chips input { flex: 1; min-width: 140px; border: 0; height: 30px; padding: 0 4px; outline: none; font: inherit; }
+  .sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sugg button { border: 1px dashed var(--border); background: var(--surf); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; color: var(--muted); }
   .split { background: var(--surf); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--warn); }
   .bar > div { background: var(--acc); }
@@ -81,7 +90,9 @@ const ICON = {
   back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
 const icon = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
-const COLORS = [['Teal','#2DD4BF'],['Blue','#60A5FA'],['Orange','#F59E0B'],['Pink','#F472B6'],['Lime','#A3E635'],['Violet','#A78BFA']];
+const COLORS = [['Teal','#2DD4BF'],['Blue','#60A5FA'],['Orange','#F59E0B'],['Pink','#F472B6'],['Lime','#A3E635'],['Violet','#A78BFA'],
+  ['Red','#F87171'],['Yellow','#FACC15'],['Green','#4ADE80'],['Cyan','#22D3EE'],['Indigo','#818CF8'],['Rose','#FB7185'],['Amber','#FBBF24'],['Sky','#38BDF8'],['Gold','#EAB308'],['White','#E5E7EB']];
+const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Science','Physics','Chemistry','Biology','Maths','Reasoning','English','Hindi','Current Affairs','Computer','REET','Patwari','RAS','SSC','Banking'];
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
 let KEY = sessionStorage.getItem('adminKey') || '';
@@ -109,9 +120,11 @@ const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span cl
 
 // ---------- Login ----------
 function loginView() {
-  return `<div class="login card"><div style="display:flex;gap:10px;align-items:center"><span class="logo" style="width:40px;height:40px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800">L</span><div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Durina Ventures</span></div></div>
-    <label class="f">Admin key<input id="key" type="password" autocomplete="current-password"></label>
-    <button class="btn primary" id="go">Log in</button><span id="lerr" class="err"></span></div>`;
+  return `<form class="login card" id="lf" style="gap:18px"><div style="display:flex;gap:12px;align-items:center"><span style="width:44px;height:44px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px">L</span>
+      <div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Durina Ventures · authorised staff only</span></div></div>
+    <label class="f">Admin key<input id="key" type="password" autocomplete="current-password" placeholder="Enter your admin key" required></label>
+    <button class="btn primary" id="go" type="submit">Log in</button><span id="lerr" class="err" role="alert"></span>
+    <span class="muted" style="font-size:12px">You stay logged in until you close this browser tab or press Log out.</span></form>`;
 }
 
 // ---------- Teachers ----------
@@ -140,6 +153,7 @@ async function formView(id) {
     id: '', name: '', subject: '', app_name: '', brand_color: '#2DD4BF', platform_percent: d.platform_percent,
     demo_questions: d.demo_questions, grace_days: d.grace_days, grace_questions: d.grace_questions };
   const tp = 100 - (t.platform_percent ?? d.platform_percent);
+  window.__subjects = t.subjects || (t.subject ? t.subject.split(',').map((x) => x.trim()).filter(Boolean) : []);
   const f = (name, label, value, type = 'text', hint = '', extra = '') => `<label class="f">${label}<input name="${name}" type="${type}" value="${esc(value ?? '')}" ${extra}>${hint ? `<span class="h">${hint}</span>` : ''}</label>`;
   const sec = (n, title, sub, inner) => `<section class="card"><div class="sec-h"><span class="num">${n}</span><div><h2>${title}</h2><span class="sub">${sub}</span></div></div>${inner}</section>`;
   return shell(id ? 'Teachers' : 'Add teacher', `
@@ -151,12 +165,15 @@ async function formView(id) {
     <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
       <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:18px">
         ${sec(1, 'Teacher &amp; app', 'Shown to students on every screen', `<div class="grid2">
-          ${f('name', 'Teacher name', t.name, 'text', '', 'required placeholder="e.g. Subhash Sir"')}${f('subject', 'Subject', t.subject, 'text', '', 'placeholder="e.g. Rajasthan History"')}
+          ${f('name', 'Teacher name', t.name, 'text', '', 'required placeholder="e.g. Subhash Sir"')}<div class="f" style="display:flex;flex-direction:column;gap:6px;grid-column:1 / -1"><b style="font-size:13px">Subjects</b>
+            <div class="chips" id="chips"><input id="subIn" placeholder="Type a subject and press Enter" aria-label="Add a subject"></div>
+            <div class="sugg" id="sugg"></div></div>
           ${f('app_name', 'App name (on phone)', t.app_name, 'text', '', 'placeholder="e.g. Subhash Sir AI"')}
           ${f('id', 'Teacher id', t.id, 'text', 'Lower-case, no spaces · used in the app build', (id ? 'readonly ' : '') + 'required pattern="[a-z][a-z0-9-]{1,30}" placeholder="subhash"')}</div>
           <div class="grid2"><div class="f" style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">Teacher photo / avatar</b>
             <label class="photo"><img id="ph" class="av" style="width:52px;height:52px;${t.has_avatar ? '' : 'display:none'}" ${t.has_avatar ? `src="/teachers/${encodeURIComponent(t.id)}/avatar"` : ''} alt=""><span id="phi" class="av" style="width:52px;height:52px;display:${t.has_avatar ? 'none' : 'grid'};place-items:center;color:var(--muted);background:#fff">${icon('plus', 22)}</span><span style="display:flex;flex-direction:column"><b>Upload photo</b><span class="muted" style="font-size:12px">Square image, clear face · consent form needed</span></span><input id="photo" type="file" accept="image/jpeg,image/png" style="display:none"></label></div>
-            <div style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">App colour</b><div class="swatches">${COLORS.map(([n, c]) => `<button type="button" class="sw ${t.brand_color === c ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="${n}"></button>`).join('')}</div></div></div>`)}
+            <div style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">App colour</b><div class="swatches">${COLORS.map(([n, c]) => `<button type="button" class="sw ${t.brand_color === c ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="${n}" title="${n}"></button>`).join('')}
+              <label class="more" title="Pick any colour"><input type="color" id="custom" value="${esc(COLORS.some(([, c]) => c === t.brand_color) ? '#0EA5E9' : t.brand_color)}">More colours</label></div></div></div>`)}
         ${sec(2, 'Plans &amp; free demo', 'Prices students see on Pay Now', `<div class="grid2">
           ${f('monthly_price', 'Monthly price (₹)', t.monthly_price, 'number', '', 'min="0"')}${f('yearly_price', 'Yearly price (₹)', t.yearly_price, 'number', '', 'min="0"')}
           ${f('demo_questions', 'Free demo questions', t.demo_questions, 'number', 'Blank = default from Settings', 'min="0"')}
@@ -186,6 +203,24 @@ function bindForm(id) {
   let color = $('.sw.on')?.dataset.c || '#2DD4BF', photo = null;
   const paint = () => { $('#pav').style.color = color; $('#pbtn').style.background = color; };
   document.querySelectorAll('.sw').forEach((b) => b.onclick = () => { document.querySelectorAll('.sw').forEach((x) => x.classList.remove('on')); b.classList.add('on'); color = b.dataset.c; paint(); });
+  if (!$('.sw.on') && id) { color = $('#custom').value; paint(); }
+  $('#custom').oninput = (e) => { document.querySelectorAll('.sw').forEach((x) => x.classList.remove('on')); color = e.target.value; paint(); };
+  // subjects: chips + suggestions
+  let subjects = (window.__subjects || []).slice();
+  const drawSubjects = () => {
+    document.querySelectorAll('#chips .chip').forEach((c) => c.remove());
+    subjects.forEach((sub, i) => {
+      const c = document.createElement('span'); c.className = 'chip'; c.textContent = sub;
+      const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + sub);
+      x.onclick = () => { subjects.splice(i, 1); drawSubjects(); }; c.append(x); $('#subIn').before(c);
+    });
+    $('#sugg').innerHTML = SUBJECTS.filter((x) => !subjects.includes(x)).slice(0, 12).map((x) => `<button type="button" data-s="${esc(x)}">+ ${esc(x)}</button>`).join('');
+    document.querySelectorAll('#sugg button').forEach((b) => b.onclick = () => { subjects.push(b.dataset.s); drawSubjects(); });
+  };
+  const addSub = () => { const v = $('#subIn').value.replace(/,/g, ' ').trim(); $('#subIn').value = ''; if (!v || subjects.includes(v)) return; subjects.push(v); drawSubjects(); };
+  $('#subIn').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSub(); } else if (e.key === 'Backspace' && !e.target.value && subjects.length) { subjects.pop(); drawSubjects(); } };
+  $('#subIn').onblur = addSub;
+  drawSubjects();
   const s = $('#split');
   s.oninput = () => { const v = +s.value; $('#tp').textContent = v; $('#dp').textContent = 100 - v; $('#tb').style.width = v + '%'; $('#t1').textContent = v * 10; $('#d1').textContent = (100 - v) * 10; };
   const nm = $('input[name=name]'), app = $('input[name=app_name]');
@@ -205,7 +240,7 @@ function bindForm(id) {
   $('#tf').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
-    data.brand_color = color; data.platform_percent = 100 - +s.value;
+    data.brand_color = color; data.platform_percent = 100 - +s.value; data.subjects = subjects; delete data.subject;
     if (photo) data.photo_base64 = photo;
     const btns = document.querySelectorAll('button[type=submit]'); btns.forEach((b) => b.disabled = true);
     try {
@@ -302,7 +337,7 @@ async function render() {
   if (!KEY) {
     app.innerHTML = loginView();
     const go = async () => { KEY = $('#key').value.trim(); try { await api('GET', '/settings'); sessionStorage.setItem('adminKey', KEY); render(); } catch (e) { $('#lerr').textContent = e.message; } };
-    $('#go').onclick = go; $('#key').onkeydown = (e) => e.key === 'Enter' && go(); $('#key').focus();
+    $('#lf').onsubmit = (e) => { e.preventDefault(); go(); }; $('#key').focus();
     return;
   }
   const h = location.hash || '#/';

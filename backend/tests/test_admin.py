@@ -114,3 +114,9 @@ def test_trigger_build_payload():
     m, p, b = calls[0]
     assert p.endswith("/dispatches") and b["inputs"]["teacher_id"] == "meena"
     assert json.loads(b["inputs"]["teacher_config"])["appName"] == "Meena AI"
+
+
+def test_teacher_with_several_subjects(setup):
+    c, _ = setup
+    t = c.post("/admin/api/teachers", json={"id": "anita", "name": "Anita", "subjects": ["History", "Geography", "History", " Polity "]}).json()
+    assert t["subject"] == "History, Geography, Polity" and t["subjects"] == ["History", "Geography", "Polity"]
