@@ -14,7 +14,10 @@ pytest -q                            # tests
 On the server also install Noto fonts (`sudo apt install fonts-noto`) so PDFs render every Indian script.
 
 ## Durina admin panel
-Open `https://<server>/admin` and log in with `ADMIN_KEY`.
+Open `https://<server>/admin` and log in with **email + password**. The first owner account is created
+from `ADMIN_EMAIL` / `ADMIN_PASSWORD` on first start; change the password in Settings → Your account.
+Passwords are stored only as scrypt hashes; 5 wrong tries lock the account for 15 minutes; sessions last 12 hours
+and end when the password changes; Settings shows recent logins.
 - **Teachers:** all teachers with app status (Draft / Building app / Live), their own split, students, plans, this month's revenue.
 - **Add a teacher:** name, subject, app name, photo, colour (live phone preview), plans, demo & grace,
   **this teacher's revenue split** (slider), Razorpay keys (secrets stored encrypted), teacher login.

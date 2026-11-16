@@ -100,6 +100,24 @@ CREATE TABLE IF NOT EXISTS qa_history (
     needs_review INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    password_hash TEXT NOT NULL,          -- scrypt hash, never the password itself
+    role TEXT NOT NULL DEFAULT 'owner',
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until REAL,
+    last_login TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS admin_logins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT,
+    ip TEXT,
+    success INTEGER NOT NULL,
+    at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS platform_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

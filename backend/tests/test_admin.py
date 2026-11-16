@@ -13,21 +13,48 @@ from fastapi.testclient import TestClient  # noqa: E402
 def setup(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "a.db"))
     monkeypatch.setenv("AVATAR_DIR", str(tmp_path / "avatars"))
-    monkeypatch.setenv("ADMIN_KEY", "admin-secret")
+    monkeypatch.setenv("ADMIN_EMAIL", "owner@durina.in")
+    monkeypatch.setenv("ADMIN_PASSWORD", "Durina2026")
     monkeypatch.setenv("SECRETS_KEY", "k" * 40)
     monkeypatch.setenv("LLM_API_KEY", "")
     import app.config, app.main
     importlib.reload(app.config)
     main = importlib.reload(app.main)
     c = TestClient(main.app)
-    c.headers["X-Admin-Key"] = "admin-secret"
+    r = c.post("/admin/api/login", json={"email": "Owner@Durina.in", "password": "Durina2026"})
+    assert r.status_code == 200, r.text
+    c.headers["Authorization"] = "Bearer " + r.json()["token"]
     return c, main
 
 
-def test_admin_requires_key(setup):
+def test_admin_requires_login(setup):
+    c, main = setup
+    assert c.get("/admin/api/overview", headers={"Authorization": ""}).status_code == 401
+    assert c.get("/admin").status_code == 200  # the page itself loads; data needs a login
+    assert c.get("/admin/api/me").json()["role"] == "owner"
+    raw = main.db.one("SELECT password_hash FROM admin_users")["password_hash"]
+    assert raw.startswith("scrypt$") and "Durina2026" not in raw  # never stored in plain text
+
+
+def test_wrong_password_and_lockout(setup):
     c, _ = setup
-    assert c.get("/admin/api/overview", headers={"X-Admin-Key": "wrong"}).status_code == 403
-    assert c.get("/admin").status_code == 200  # the page itself loads; data needs the key
+    anon = TestClient(c.app)
+    for _ in range(5):
+        r = anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "wrong-pass1"})
+        assert r.status_code == 401 and r.json()["detail"] == "Wrong email or password"
+    r = anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "Durina2026"})
+    assert r.status_code == 401 and "Too many wrong passwords" in r.json()["detail"]
+    assert anon.post("/admin/api/login", json={"email": "nobody@x.in", "password": "x"}).status_code == 401
+
+
+def test_change_password_ends_old_sessions(setup):
+    c, _ = setup
+    assert c.post("/admin/api/password", json={"current_password": "nope", "new_password": "NewPass123"}).status_code == 400
+    assert c.post("/admin/api/password", json={"current_password": "Durina2026", "new_password": "short"}).status_code == 400
+    assert c.post("/admin/api/password", json={"current_password": "Durina2026", "new_password": "NewPass123"}).json()["changed"]
+    assert c.get("/admin/api/overview").status_code == 401  # old login no longer works
+    anon = TestClient(c.app)
+    assert anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "NewPass123"}).status_code == 200
 
 
 def test_add_teacher_with_own_split_and_secret(setup):

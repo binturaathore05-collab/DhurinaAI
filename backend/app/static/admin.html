@@ -95,13 +95,13 @@ const COLORS = [['Teal','#2DD4BF'],['Blue','#60A5FA'],['Orange','#F59E0B'],['Pin
 const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Science','Physics','Chemistry','Biology','Maths','Reasoning','English','Hindi','Current Affairs','Computer','REET','Patwari','RAS','SSC','Banking'];
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
-let KEY = sessionStorage.getItem('adminKey') || '';
+let KEY = (() => { try { return sessionStorage.getItem('adminToken') || ''; } catch { return ''; } })();
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 3200); }
 
 async function api(method, path, body) {
-  const res = await fetch('/admin/api' + path, { method, headers: { 'Content-Type': 'application/json', 'X-Admin-Key': KEY }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch('/admin/api' + path, { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 403) { KEY = ''; sessionStorage.removeItem('adminKey'); render(); throw new Error('Wrong admin key'); }
+  if (res.status === 401 && path !== '/login' && path !== '/password') { KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} render(); throw new Error(data.detail || 'Please log in again'); }
   if (!res.ok) throw new Error(data.detail || 'Something went wrong');
   return data;
 }
@@ -122,9 +122,11 @@ const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span cl
 function loginView() {
   return `<form class="login card" id="lf" style="gap:18px"><div style="display:flex;gap:12px;align-items:center"><span style="width:44px;height:44px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px">L</span>
       <div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Durina Ventures · authorised staff only</span></div></div>
-    <label class="f">Admin key<input id="key" type="password" autocomplete="current-password" placeholder="Enter your admin key" required></label>
+    <label class="f">Email<input id="email" type="email" autocomplete="username" placeholder="you@durina.in" required></label>
+    <label class="f">Password<span style="position:relative;display:flex"><input id="key" type="password" autocomplete="current-password" placeholder="Your password" required style="flex:1;padding-right:64px">
+      <button type="button" id="eye" style="position:absolute;right:6px;top:6px;height:32px;border:0;background:var(--surf);border-radius:8px;padding:0 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Show</button></span></label>
     <button class="btn primary" id="go" type="submit">Log in</button><span id="lerr" class="err" role="alert"></span>
-    <span class="muted" style="font-size:12px">You stay logged in until you close this browser tab or press Log out.</span></form>`;
+    <span class="muted" style="font-size:12px">Forgot your password? Ask the owner to reset it. After 5 wrong tries the account locks for 15 minutes. You stay logged in for 12 hours or until you press Log out.</span></form>`;
 }
 
 // ---------- Teachers ----------
@@ -303,6 +305,8 @@ async function loadBuilds(id) {
 // ---------- Settings ----------
 async function settingsView() {
   const s = await api('GET', '/settings');
+  const me = await api('GET', '/me');
+  const logins = (me.recent_logins || []).map((l) => `<div class="row" style="padding:6px 0;border-top:1px solid var(--border)"><span>${esc(new Date(l.at.replace(' ', 'T') + 'Z').toLocaleString('en-IN'))}</span><span class="muted">${esc(l.ip || '')}</span><b style="color:${l.success ? 'var(--ok)' : 'var(--bad)'}">${l.success ? 'Logged in' : 'Wrong password'}</b></div>`).join('');
   const f = (sec, name, label, value, type = 'text', hint = '') => `<label class="f">${label}<input data-sec="${sec}" name="${name}" type="${type}" value="${esc(value)}">${hint ? `<span class="h">${hint}</span>` : ''}</label>`;
   const card = (title, sub, inner) => `<section class="card"><div><h2>${title}</h2><span class="sub">${sub}</span></div>${inner}</section>`;
   return shell('Settings', `<div class="row"><div><h1>Settings</h1><span class="sub">Apply to the whole platform. Each teacher can still override plans, demo and split.</span></div><button class="btn primary" id="save">Save settings</button></div>
@@ -315,9 +319,17 @@ async function settingsView() {
     ${card('AI answers', 'Used by every teacher’s AI', `<div class="grid2"><label class="f">Trusted websites for internet answers<textarea data-sec="ai" name="trusted_sites">${esc(s.ai.trusted_sites.join('\n'))}</textarea><span class="h">One per line</span></label>
       <label class="f">Topics the AI must not answer<textarea data-sec="ai" name="blocked_topics">${esc(s.ai.blocked_topics.join('\n'))}</textarea><span class="h">One per line</span></label></div>`)}
     ${card('Legal', 'Shown in every app; required by Play Store', `<div class="grid2">${f('legal', 'privacy_url', 'Privacy Policy URL', s.legal.privacy_url)}${f('legal', 'terms_url', 'Terms URL', s.legal.terms_url)}</div>`)}
-    ${card('Coming next', 'Planned for the next steps', `<span class="muted">SMS / WhatsApp provider · Team members &amp; roles · Login history</span>`)}`);
+    ${card('Your account', esc(me.email) + ' · ' + esc(me.role), `<div class="grid2"><label class="f">Current password<input id="pw0" type="password" autocomplete="current-password"></label>
+      <label class="f">New password<input id="pw1" type="password" autocomplete="new-password"><span class="h">At least 8 characters, letters and numbers</span></label></div>
+      <div class="row"><span id="pwmsg" class="muted"></span><button class="btn ghost" id="pwbtn" type="button">Change password</button></div>
+      <div><b style="font-size:13px">Recent logins</b>${logins || '<p class="muted">No logins yet.</p>'}</div>`)}
+    ${card('Coming next', 'Planned for the next steps', `<span class="muted">SMS / WhatsApp provider · Team members &amp; roles</span>`)}`);
 }
 function bindSettings() {
+  $('#pwbtn').onclick = async () => {
+    try { await api('POST', '/password', { current_password: $('#pw0').value, new_password: $('#pw1').value });
+      toast('Password changed — please log in again'); KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} setTimeout(render, 800); }
+    catch (e) { $('#pwmsg').textContent = e.message; $('#pwmsg').className = 'err'; } };
   $('#save').onclick = async () => {
     const out = {};
     document.querySelectorAll('[data-sec]').forEach((el) => {
@@ -336,13 +348,19 @@ async function render() {
   const app = $('#app');
   if (!KEY) {
     app.innerHTML = loginView();
-    const go = async () => { KEY = $('#key').value.trim(); try { await api('GET', '/settings'); sessionStorage.setItem('adminKey', KEY); render(); } catch (e) { $('#lerr').textContent = e.message; } };
-    $('#lf').onsubmit = (e) => { e.preventDefault(); go(); }; $('#key').focus();
+    $('#eye').onclick = () => { const k = $('#key'); const show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('#eye').textContent = show ? 'Hide' : 'Show'; };
+    const go = async () => {
+      try {
+        const r = await api('POST', '/login', { email: $('#email').value, password: $('#key').value });
+        KEY = r.token; try { sessionStorage.setItem('adminToken', KEY); } catch {} render();
+      } catch (e) { $('#lerr').textContent = e.message; }
+    };
+    $('#lf').onsubmit = (e) => { e.preventDefault(); go(); }; $('#email').focus();
     return;
   }
   const h = location.hash || '#/';
   try {
-    if (h === '#/logout') { KEY = ''; sessionStorage.removeItem('adminKey'); location.hash = '#/'; return render(); }
+    if (h === '#/logout') { KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
     if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }

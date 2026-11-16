@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from .config import settings
 from .db import Database
 from .i18n import t
-from .services import accounts, admin, builds, notes_pdf, payments
+from .services import accounts, admin, admin_auth, builds, notes_pdf, payments
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
 from .services.tutor import TeacherProfile, Tutor, approve_answer, is_save_command, review_queue
@@ -266,16 +266,55 @@ def teacher_approve(qa_id: int, body: Approval, teacher_id: str = Depends(teache
 
 
 # ---------- Durina admin panel ----------
-# Open https://<server>/admin in a browser. Login uses ADMIN_KEY from .env (sent as X-Admin-Key).
+# Open https://<server>/admin in a browser and log in with email + password.
+# The first owner account comes from ADMIN_EMAIL / ADMIN_PASSWORD in .env.
+
+admin_auth.ensure_first_admin(db, os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD"))
 
 AVATAR_DIR = os.environ.get("AVATAR_DIR", "avatars")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
-def require_admin(x_admin_key: str = Header(...)) -> None:
-    expected = os.environ.get("ADMIN_KEY", "")
-    if not expected or not hmac.compare_digest(expected, x_admin_key):
-        raise HTTPException(403, "Wrong admin key")
+def require_admin(authorization: str = Header("")):
+    try:
+        return admin_auth.read_session(db, authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+    except admin_auth.LoginError as exc:
+        raise HTTPException(401, str(exc))
+
+
+class AdminLogin(BaseModel):
+    email: str
+    password: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/admin/api/login")
+def admin_login(body: AdminLogin, request: Request):
+    try:
+        return admin_auth.login(db, body.email, body.password, settings.jwt_secret,
+                                request.client.host if request.client else "")
+    except admin_auth.LoginError as exc:
+        raise HTTPException(401, str(exc))
+
+
+@app.get("/admin/api/me")
+def admin_me(user=Depends(require_admin)):
+    logins = [dict(r) for r in db.all("SELECT at, ip, success FROM admin_logins WHERE email = ? ORDER BY id DESC LIMIT 5",
+                                      (user["email"],))]
+    return {"email": user["email"], "name": user["name"], "role": user["role"], "recent_logins": logins}
+
+
+@app.post("/admin/api/password")
+def admin_password(body: PasswordChange, user=Depends(require_admin)):
+    try:
+        admin_auth.change_password(db, user["id"], body.current_password, body.new_password)
+    except admin_auth.LoginError as exc:
+        raise HTTPException(400, str(exc))
+    return {"changed": True}
 
 
 def _default_pct() -> float:
