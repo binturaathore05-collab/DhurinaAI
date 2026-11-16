@@ -281,8 +281,24 @@ async def teacher_style_save(request: Request, teacher_id: str = Depends(teacher
 
 @app.get("/teacher/review")
 def teacher_review(offset: int = 0, limit: int = 20, q: str = "", origin: str = "", sort: str = "most_asked",
-                   teacher_id: str = Depends(teacher_admin)):
-    return teacher_data.review_page(db, teacher_id, offset, limit, q, origin, sort)
+                   status: str = "pending", teacher_id: str = Depends(teacher_admin)):
+    return teacher_data.review_page(db, teacher_id, offset, limit, q, origin, sort, status)
+
+
+@app.post("/teacher/review/undo")
+async def teacher_review_undo(request: Request, teacher_id: str = Depends(teacher_admin)):
+    """Approved or rejected by mistake → back to Waiting (an approved answer stops being used at once)."""
+    return teacher_data.review_undo(db, teacher_id, (await request.json()).get("ids", []))
+
+
+@app.put("/teacher/verified/{verified_id}")
+async def teacher_edit_verified(verified_id: int, request: Request, teacher_id: str = Depends(teacher_admin)):
+    try:
+        return teacher_data.edit_verified(db, teacher_id, verified_id, (await request.json()).get("answer", ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except KeyError:
+        raise HTTPException(404, "Approved answer not found")
 
 
 @app.post("/teacher/review/bulk")

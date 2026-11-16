@@ -97,3 +97,33 @@ def test_teacher_report_never_shows_platform_share(db):
 def test_past_month_period_runs_to_month_end(db):
     rep = teacher_data.monthly_report(db, "subhash", "2026-02", audience="teacher")
     assert rep["period_from"] == "01 Feb 2026" and rep["period_to"] == "28 Feb 2026"
+
+
+def test_undo_wrong_approval_and_rejection(db):
+    from app.services.knowledge import KnowledgeBase
+    sid = accounts.get_or_create_student(db, "subhash", "+919876543210")
+    for q in ["Rajasthan ki rajdhani?", "rajasthan ki rajdhani", "Guru Shikhar kahan hai?"]:
+        db.execute("INSERT INTO qa_history (student_id, question, answer, origin, language, needs_review) VALUES (?, ?, 'Udaipur', 'general_ai', 'hi', 1)", (sid, q))
+    groups = teacher_data.review_page(db, "subhash")["items"]
+    capital = next(g for g in groups if g["asked"] == 2)
+    other = next(g for g in groups if g["asked"] == 1)
+    teacher_data.review_decide(db, "subhash", [{"ids": capital["ids"], "action": "approve"}, {"ids": other["ids"], "action": "reject"}])
+    kb = KnowledgeBase(db)
+    assert kb.find_verified("subhash", "Rajasthan ki rajdhani?")["answer"] == "Udaipur"   # the wrong answer is now live…
+    approved = teacher_data.review_page(db, "subhash", status="approved")["items"][0]
+    assert approved["asked"] == 2 and approved["reviewed_at"]
+    # 1) fix it in place
+    teacher_data.edit_verified(db, "subhash", approved["verified_id"], "Jaipur")
+    assert kb.find_verified("subhash", "Rajasthan ki rajdhani?")["answer"] == "Jaipur"
+    assert teacher_data.review_page(db, "subhash", status="approved")["items"][0]["answer"] == "Jaipur"
+    # 2) or undo completely → back to Waiting, and the AI stops using it immediately
+    assert teacher_data.review_undo(db, "subhash", approved["ids"])["restored"] == 2
+    assert kb.find_verified("subhash", "Rajasthan ki rajdhani?") is None
+    assert teacher_data.review_page(db, "subhash")["total_answers"] == 2
+    # undo a wrong rejection too
+    rejected = teacher_data.review_page(db, "subhash", status="rejected")["items"][0]
+    assert teacher_data.review_undo(db, "subhash", rejected["ids"])["restored"] == 1
+    assert teacher_data.review_page(db, "subhash")["total_answers"] == 3
+    assert teacher_data.review_undo(db, "other", [1, 2])["restored"] == 0                  # can't touch other teachers
+    with pytest.raises(ValueError):
+        teacher_data.edit_verified(db, "subhash", 1, "  ")

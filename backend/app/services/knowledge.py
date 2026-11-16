@@ -98,7 +98,7 @@ class KnowledgeBase:
         if not q:
             return None
         best, best_score = None, 0.0
-        for row in self.db.all("SELECT * FROM verified_answers WHERE teacher_id = ?", (teacher_id,)):
+        for row in self.db.all("SELECT * FROM verified_answers WHERE teacher_id = ? AND active = 1", (teacher_id,)):
             v = set(tokenize(row["question"]))
             score = len(q & v) / len(q | v) if v else 0
             if score > best_score:

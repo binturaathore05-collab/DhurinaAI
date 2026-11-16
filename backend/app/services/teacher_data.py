@@ -21,12 +21,16 @@ def _norm(q: str) -> str:
 
 
 def review_page(db: Database, teacher_id: str, offset: int = 0, limit: int = 20, q: str = "",
-                origin: str = "", sort: str = "most_asked") -> dict:
-    """Answers waiting for the teacher, grouped by question. 500 waiting answers about 120 distinct
-    questions show as 120 rows, most-asked first, 20 per page."""
-    rows = db.all("SELECT h.id, h.question, h.answer, h.origin, h.language, h.created_at, h.sources "
+                origin: str = "", sort: str = "most_asked", status: str = "pending") -> dict:
+    """Answers grouped by question. status = pending (waiting), approved or rejected.
+    500 waiting answers about 120 distinct questions show as 120 rows, most-asked first, 20 per page."""
+    where = {"pending": "h.needs_review = 1", "approved": "h.review_status = 'approved'",
+             "rejected": "h.review_status = 'rejected'"}.get(status, "h.needs_review = 1")
+    rows = db.all("SELECT h.id, h.question, h.answer, h.origin, h.language, h.created_at, h.sources, h.reviewed_at, "
+                  "v.answer AS verified_answer, v.id AS verified_id "
                   "FROM qa_history h JOIN students s ON s.id = h.student_id "
-                  "WHERE s.teacher_id = ? AND h.needs_review = 1 ORDER BY h.id DESC", (teacher_id,))
+                  "LEFT JOIN verified_answers v ON v.id = h.verified_id "
+                  f"WHERE s.teacher_id = ? AND {where} ORDER BY h.id DESC", (teacher_id,))
     groups: dict[str, dict] = {}
     for r in rows:
         if origin and r["origin"] != origin:
@@ -34,8 +38,9 @@ def review_page(db: Database, teacher_id: str, offset: int = 0, limit: int = 20,
         if q and q.lower() not in (r["question"] + " " + r["answer"]).lower():
             continue
         g = groups.setdefault(_norm(r["question"]), {
-            "ids": [], "question": r["question"], "answer": r["answer"], "origin": r["origin"],
-            "language": r["language"], "latest": r["created_at"],
+            "ids": [], "question": r["question"], "answer": r["verified_answer"] or r["answer"], "origin": r["origin"],
+            "language": r["language"], "latest": r["created_at"], "reviewed_at": r["reviewed_at"],
+            "verified_id": r["verified_id"],
             "source": (json.loads(r["sources"] or "[]") or [{"title": r["origin"]}])[0].get("title")})
         g["ids"].append(r["id"])
     items = [{**g, "asked": len(g["ids"])} for g in groups.values()]
@@ -63,15 +68,49 @@ def review_decide(db: Database, teacher_id: str, decisions: list[dict]) -> dict:
         marks = ",".join("?" * len(own))
         if d.get("action") == "approve":
             answer = (d.get("answer") or "").strip() or rows[0]["answer"]
-            db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language) VALUES (?, ?, ?, ?)",
-                       (teacher_id, rows[0]["question"], answer, rows[0]["language"]))
-            db.execute(f"UPDATE qa_history SET needs_review = 0, review_status = 'approved' WHERE id IN ({marks})", tuple(own))
+            cur = db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language) VALUES (?, ?, ?, ?)",
+                             (teacher_id, rows[0]["question"], answer, rows[0]["language"]))
+            db.execute(f"UPDATE qa_history SET needs_review = 0, review_status = 'approved', reviewed_at = CURRENT_TIMESTAMP, "
+                       f"verified_id = ? WHERE id IN ({marks})", (cur.lastrowid, *own))
         elif d.get("action") == "reject":
-            db.execute(f"UPDATE qa_history SET needs_review = 0, review_status = 'rejected' WHERE id IN ({marks})", tuple(own))
+            db.execute(f"UPDATE qa_history SET needs_review = 0, review_status = 'rejected', reviewed_at = CURRENT_TIMESTAMP "
+                       f"WHERE id IN ({marks})", tuple(own))
         else:
             continue
         done += len(own)
     return {"updated": done}
+
+
+def review_undo(db: Database, teacher_id: str, ids: list[int]) -> dict:
+    """Mistake? Put approved/rejected answers back to 'Waiting'. An approved answer stops being used at once."""
+    ids = [int(i) for i in ids][:1000]
+    if not ids:
+        return {"restored": 0}
+    marks = ",".join("?" * len(ids))
+    rows = db.all(f"SELECT h.id, h.verified_id FROM qa_history h JOIN students s ON s.id = h.student_id "
+                  f"WHERE s.teacher_id = ? AND h.id IN ({marks}) AND h.review_status IS NOT NULL", (teacher_id, *ids))
+    if not rows:
+        return {"restored": 0}
+    own = [r["id"] for r in rows]
+    for vid in {r["verified_id"] for r in rows if r["verified_id"]}:
+        db.execute("UPDATE verified_answers SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND teacher_id = ?",
+                   (vid, teacher_id))
+    m2 = ",".join("?" * len(own))
+    db.execute(f"UPDATE qa_history SET needs_review = 1, review_status = NULL, reviewed_at = NULL, verified_id = NULL "
+               f"WHERE id IN ({m2})", tuple(own))
+    return {"restored": len(own)}
+
+
+def edit_verified(db: Database, teacher_id: str, verified_id: int, answer: str) -> dict:
+    """Fix an approved answer later — every student gets the new version from the next question on."""
+    answer = (answer or "").strip()
+    if not answer:
+        raise ValueError("Answer cannot be empty")
+    cur = db.execute("UPDATE verified_answers SET answer = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND teacher_id = ? AND active = 1",
+                     (answer, verified_id, teacher_id))
+    if cur.rowcount == 0:
+        raise KeyError(verified_id)
+    return {"updated": True}
 
 
 # ---------------------------------------------------------------- students

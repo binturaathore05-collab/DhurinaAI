@@ -9,6 +9,10 @@
   :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
           --acc:#0F766E; --accHover:#115E59; --accSoft:#E6F4F1; --warn:#B45309; --warnSoft:#FEF3C7; --ok:#15803D; --bad:#B91C1C; }
   * { box-sizing: border-box; }
+  /* Always light: stops phones/browsers in dark mode from turning control text white on our white boxes */
+  :root { color-scheme: light; }
+  button, input, select, textarea, option { color: var(--text); }
+  input::placeholder, textarea::placeholder { color: #8A93A3; opacity: 1; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; }
   a { color: var(--acc); } a:hover { color: var(--accHover); }
   .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
@@ -86,6 +90,7 @@
   .bars .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; }
   .bars .b div { width: 100%; max-width: 46px; background: var(--acc); border-radius: 8px 8px 0 0; min-height: 2px; }
   .muted { color: var(--muted); } .err { color: var(--bad); font-weight: 600; }
+  .toastbtn { margin-left: 14px; background: #fff; color: var(--text); border: 0; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 800; cursor: pointer; }
   .toast { position: fixed; right: 20px; bottom: 20px; background: var(--text); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 600; z-index: 9; }
   .login { max-width: 400px; margin: 12vh auto; }
   .note { background: var(--accSoft); color: #134E4A; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
@@ -106,7 +111,12 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rupees = (p) => '₹' + Math.round((p || 0) / 100).toLocaleString('en-IN');
 const ago = (ts) => { const s = (Date.now() - ts) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' days ago'; };
-function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.append(t); setTimeout(() => t.remove(), 3000); }
+function toast(m, actionLabel, action) {
+  document.querySelectorAll('.toast').forEach((x) => x.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m;
+  if (actionLabel) { const b = document.createElement('button'); b.textContent = actionLabel; b.className = 'toastbtn';
+    b.onclick = () => { t.remove(); action(); }; t.append(b); }
+  document.body.append(t); setTimeout(() => t.remove(), actionLabel ? 10000 : 3000); }
 const ICON = {
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
   yt: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9l5 3-5 3z"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
@@ -164,7 +174,8 @@ const DEMO = (() => {
       for (let k = 0; k < 150; k++) { const b = base[k % 5]; const asked = k < 5 ? [97, 64, 41, 23, 18][k] : 1 + (k * 7) % 4;
         g.push({ ids: [...Array(asked)].map(() => id++), question: k < 5 ? b[0] : b[0].replace('?', '') + ' (' + (k + 1) + ')?', answer: b[1], source: b[2], language: b[3], asked, at: now - k * 0.4 * H }); }
       return g; })(),
-    approvedGroups: [{ ids: [9], question: 'Chetak kaun tha?', answer: 'Chetak Maharana Pratap ka vafadar ghoda tha…', asked: 12, at: now - 2 * D, source: 'Approved', language: 'Hinglish' }],
+    approvedGroups: [{ ids: [9], question: 'Chetak kaun tha?', answer: 'Chetak Maharana Pratap ka vafadar ghoda tha…', asked: 12, at: now - 2 * D, source: 'General AI', language: 'Hinglish', verified_id: 9 }],
+    rejectedGroups: [],
     allStudents: (() => { const names = ['Rohit', 'Pooja', 'Aman', 'Neha', '', 'Vikram', 'Kavita', '', 'Sunil', 'Priya']; const lv = ['beginner', 'intermediate', 'advanced'];
       return [...Array(1000)].map((_, i) => { const k = i % 4; const ends = k === 0 ? null : k === 1 ? now + (30 + i % 300) * D : k === 2 ? now + (i % 3) * 0.9 * D : now - (1 + i % 40) * D;
         return { id: i + 1, name: names[i % 10], phone: '•••••• ' + String(1000 + (i * 7919) % 9000), status: k === 0 ? 'demo' : k === 1 ? 'active' : k === 2 ? 'ending' : 'ended',
@@ -192,14 +203,21 @@ const DEMO = (() => {
     if (path === '/style' && method === 'PUT') { db.style = body; return db.style; }
     const url = new URL('http://x' + path), P = Object.fromEntries(url.searchParams), off = +(P.offset || 0), lim = +(P.limit || 20);
     if (url.pathname === '/review') {
-      let list = (P.tab === 'approved' ? db.approvedGroups : db.reviewGroups).filter((g) => (!P.q || (g.question + g.answer).toLowerCase().includes(P.q.toLowerCase()))
+      let list = (P.status === 'approved' ? db.approvedGroups : P.status === 'rejected' ? db.rejectedGroups : db.reviewGroups).filter((g) => (!P.q || (g.question + g.answer).toLowerCase().includes(P.q.toLowerCase()))
         && (!P.origin || (P.origin === 'internet' ? g.source.startsWith('Internet') : g.source === 'General AI')));
       list = [...list].sort((a, b) => P.sort === 'newest' ? b.at - a.at : b.asked - a.asked || b.at - a.at);
       return { total: list.length, total_answers: list.reduce((a, g) => a + g.asked, 0), items: list.slice(off, off + lim) }; }
     if (url.pathname === '/review/bulk') { let n = 0;
       for (const d of body.decisions) { const i = db.reviewGroups.findIndex((g) => g.ids[0] === d.ids[0]); if (i < 0) continue; const g = db.reviewGroups.splice(i, 1)[0]; n += g.asked;
-        if (d.action === 'approve') db.approvedGroups.unshift({ ...g, answer: d.answer || g.answer, at: Date.now() }); }
+        const done = { ...g, answer: d.answer || g.answer, reviewed: Date.now(), verified_id: g.ids[0] };
+        (d.action === 'approve' ? db.approvedGroups : db.rejectedGroups).unshift(done); }
       return { updated: n }; }
+    if (url.pathname === '/review/undo') { let n = 0;
+      for (const list of [db.approvedGroups, db.rejectedGroups]) { const i = list.findIndex((g) => g.ids[0] === body.ids[0]);
+        if (i >= 0) { const g = list.splice(i, 1)[0]; n += g.asked; delete g.reviewed; db.reviewGroups.unshift(g); } }
+      return { restored: n }; }
+    if (url.pathname.startsWith('/verified/')) { const g = db.approvedGroups.find((x) => x.verified_id === +url.pathname.split('/')[2]);
+      if (!body.answer.trim()) throw new Error('Answer cannot be empty'); g.answer = body.answer; return { updated: true }; }
     if (url.pathname === '/students') {
       const counts = { active: 0, ending: 0, ended: 0, demo: 0 }; db.allStudents.forEach((x) => counts[x.status]++);
       const list = db.allStudents.filter((x) => (!P.status || x.status === P.status) && (!P.q || (x.name + ' ' + x.phone.slice(-4)).toLowerCase().includes(P.q.toLowerCase())));
@@ -334,7 +352,7 @@ function pager(total, offset, limit, attr) {
 // ---------- Review answers (hundreds at once) ----------
 const RV = { tab: 'pending', q: '', origin: '', sort: 'most_asked', offset: 0, limit: 20, sel: new Set(), editing: null, data: null };
 async function reviewView() {
-  const qs = `?tab=${RV.tab}&q=${encodeURIComponent(RV.q)}&origin=${RV.origin}&sort=${RV.sort}&offset=${RV.offset}&limit=${RV.limit}`;
+  const qs = `?status=${RV.tab}&q=${encodeURIComponent(RV.q)}&origin=${RV.origin}&sort=${RV.sort}&offset=${RV.offset}&limit=${RV.limit}`;
   const r = RV.data = await api('GET', '/review' + qs);
   const pendingTotal = D.reviewGroups.reduce((a, g) => a + g.asked, 0);
   const cards = r.items.map((g) => { const key = g.ids[0];
@@ -346,9 +364,14 @@ async function reviewView() {
       ${RV.editing === key ? `<textarea id="ed">${esc(g.answer)}</textarea>` : `<div class="a">${esc(g.answer)}</div>`}
       ${RV.tab === 'pending' ? `<div class="row" style="justify-content:flex-start;gap:8px">${RV.editing === key
         ? `<button class="btn primary small" data-save="${key}">Save &amp; approve</button><button class="btn ghost small" data-cancel>Cancel</button>`
-        : `<button class="btn primary small" data-ok="${key}">${icon('check', 16)}Approve</button><button class="btn ghost small" data-edit="${key}">Edit answer</button><button class="btn danger small" data-no="${key}">Wrong — don’t use</button>`}</div>` : ''}</div>`; }).join('');
+        : `<button class="btn primary small" data-ok="${key}">${icon('check', 16)}Approve</button><button class="btn ghost small" data-edit="${key}">Edit answer</button><button class="btn danger small" data-no="${key}">Wrong — don’t use</button>`}</div>`
+      : RV.tab === 'approved' ? `<div class="row" style="justify-content:flex-start;gap:8px">${RV.editing === key
+        ? `<button class="btn primary small" data-fix="${g.verified_id}">Save corrected answer</button><button class="btn ghost small" data-cancel>Cancel</button>`
+        : `<span class="muted" style="font-size:12px">Approved ${g.reviewed ? ago(g.reviewed) : ''} · every student now gets this answer</span><button class="btn ghost small" data-edit="${key}">Edit approved answer</button><button class="btn danger small" data-undo="${key}">Undo approval</button>`}</div>`
+      : `<div class="row" style="justify-content:flex-start;gap:8px"><span class="muted" style="font-size:12px">Rejected ${g.reviewed ? ago(g.reviewed) : ''} · the AI won’t use this answer</span><button class="btn ghost small" data-undo="${key}">Undo — back to Waiting</button></div>`}</div>`; }).join('');
   return shell('review', `${head('Review answers', 'Same question from many students = one card. Approve or correct it once — every student gets your version.')}
-    <div class="tabs"><button class="${RV.tab === 'pending' ? 'on' : ''}" data-tab="pending">Waiting (${pendingTotal})</button><button class="${RV.tab === 'approved' ? 'on' : ''}" data-tab="approved">Approved (${D.approvedGroups.length})</button></div>
+    <div class="tabs"><button class="${RV.tab === 'pending' ? 'on' : ''}" data-tab="pending">Waiting (${pendingTotal})</button><button class="${RV.tab === 'approved' ? 'on' : ''}" data-tab="approved">Approved (${D.approvedGroups.length})</button><button class="${RV.tab === 'rejected' ? 'on' : ''}" data-tab="rejected">Rejected (${D.rejectedGroups.length})</button></div>
+    ${RV.tab !== 'pending' ? `<div class="note">Approved or rejected something by mistake? Press <b>Undo</b> — it goes back to Waiting and the AI stops using it at once. You can also <b>edit</b> an approved answer any time.</div>` : ''}
     <section class="card" style="gap:12px"><div class="toolbar">
       <input type="search" id="rq" placeholder="Search questions" value="${esc(RV.q)}" aria-label="Search questions" style="flex:1;min-width:220px">
       <select id="ro" aria-label="Source"><option value="">All sources</option><option value="general_ai" ${RV.origin === 'general_ai' ? 'selected' : ''}>General AI</option><option value="internet" ${RV.origin === 'internet' ? 'selected' : ''}>Internet</option></select>
@@ -453,8 +476,13 @@ function bind(view) {
     $$('[data-sel]').forEach((c) => c.onchange = () => { c.checked ? RV.sel.add(+c.dataset.sel) : RV.sel.delete(+c.dataset.sel); render(); });
     $('#all') && ($('#all').onchange = (e) => { RV.data.items.forEach((g) => e.target.checked ? RV.sel.add(g.ids[0]) : RV.sel.delete(g.ids[0])); render(); });
     const group = (key) => RV.data.items.find((g) => g.ids[0] === key);
-    const decide = async (keys, action, answer) => { const r = await api('POST', '/review/bulk', { decisions: keys.map((k) => ({ ids: group(k)?.ids || [k], action, answer })) });
-      keys.forEach((k) => RV.sel.delete(k)); RV.editing = null; toast(`${r.updated} student answer${r.updated === 1 ? '' : 's'} ${action === 'approve' ? 'approved' : 'rejected'}`); render(); };
+    const decide = async (keys, action, answer) => { const groups = keys.map((k) => group(k)).filter(Boolean);
+      const r = await api('POST', '/review/bulk', { decisions: groups.map((g) => ({ ids: g.ids, action, answer })) });
+      keys.forEach((k) => RV.sel.delete(k)); RV.editing = null; render();
+      toast(`${r.updated} student answer${r.updated === 1 ? '' : 's'} ${action === 'approve' ? 'approved' : 'rejected'}`, 'Undo', async () => {
+        for (const g of groups) await api('POST', '/review/undo', { ids: g.ids }); toast('Undone — back in Waiting'); render(); }); };
+    $$('[data-undo]').forEach((b) => b.onclick = async () => { const r = await api('POST', '/review/undo', { ids: group(+b.dataset.undo).ids }); toast(`${r.restored} answer${r.restored === 1 ? '' : 's'} moved back to Waiting`); render(); });
+    $$('[data-fix]').forEach((b) => b.onclick = async () => { try { await api('PUT', '/verified/' + b.dataset.fix, { answer: $('#ed').value }); RV.editing = null; toast('Approved answer corrected — students get the new version'); render(); } catch (e) { toast(e.message); } });
     $('#bok') && ($('#bok').onclick = () => decide([...RV.sel], 'approve'));
     $('#bno') && ($('#bno').onclick = () => decide([...RV.sel], 'reject'));
     $$('[data-ok]').forEach((b) => b.onclick = () => decide([+b.dataset.ok], 'approve'));

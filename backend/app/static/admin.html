@@ -9,6 +9,10 @@
   :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
           --acc:#0F766E; --accHover:#115E59; --warn:#B45309; --ok:#15803D; --bad:#B91C1C; }
   * { box-sizing: border-box; }
+  /* Always light: stops phones/browsers in dark mode from turning control text white on our white boxes */
+  :root { color-scheme: light; }
+  button, input, select, textarea, option { color: var(--text); }
+  input::placeholder, textarea::placeholder { color: #8A93A3; opacity: 1; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; }
   a { color: var(--acc); } a:hover { color: var(--accHover); }
   .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
