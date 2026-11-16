@@ -179,7 +179,7 @@ def monthly_report(db: Database, teacher_id: str, month: str, default_percent: f
     start, end = month_bounds(month)
     t = db.one("SELECT name, platform_commission_percent FROM teachers WHERE id = ?", (teacher_id,))
     rows = db.all("""
-        SELECT p.id, p.created_at, p.razorpay_payment_id, p.amount_paise, p.platform_percent, pl.name AS plan,
+        SELECT p.id, datetime(p.created_at, '+330 minutes') AS created_ist, p.razorpay_payment_id, p.amount_paise, p.platform_percent, pl.name AS plan,
                st.phone, st.id AS sid,
                (SELECT COUNT(*) FROM payments p2 WHERE p2.student_id = p.student_id AND p2.status = 'paid'
                  AND p2.id < p.id) AS earlier
@@ -193,7 +193,7 @@ def monthly_report(db: Database, teacher_id: str, month: str, default_percent: f
         pct = (t["platform_commission_percent"] if t and t["platform_commission_percent"] is not None else default_percent) if pct is None else pct
         cut = round(r["amount_paise"] * pct / 100)
         gross, durina = gross + r["amount_paise"], durina + cut
-        items.append({"date": r["created_at"][:10], "payment_id": r["razorpay_payment_id"] or "", "student": mask_phone(r["phone"]),
+        items.append({"date": r["created_ist"][:10], "payment_id": r["razorpay_payment_id"] or "", "student": mask_phone(r["phone"]),
                       "plan": r["plan"], "type": "Renewal" if r["earlier"] else "New",
                       "amount_paise": r["amount_paise"], "durina_percent": pct, "durina_paise": cut,
                       "teacher_paise": r["amount_paise"] - cut})

@@ -162,3 +162,20 @@ def test_admin_downloads_teacher_report(setup, monkeypatch):
     p = c.get(f"/admin/api/teachers/meena/report?month={month}&format=pdf")
     assert p.status_code == 200 and p.content.startswith(b"%PDF")
     assert c.get("/admin/api/teachers/meena/report?month=nov").status_code == 400
+
+
+def test_admin_reports_api(setup):
+    c, main = setup
+    c.post("/admin/api/teachers", json={"id": "meena", "name": "Meena", "platform_percent": 25, "monthly_price": 500})
+    sid = main.accounts.get_or_create_student(main.db, "meena", "+919876543210")
+    main.db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise, platform_percent, status) "
+                    "VALUES (?, 'meena-monthly', 'o1', 50000, 25, 'paid')", (sid,))
+    from app.services.teacher_data import TZ
+    today = __import__("datetime").datetime.now(TZ).date().isoformat()   # "today" in India
+    r = c.get(f"/admin/api/reports?date_from=2026-01-01&date_to={today}").json()
+    assert r["summary"]["durina_paise"] == 12500 and r["by_teacher"][0]["name"] == "Meena"
+    assert c.get(f"/admin/api/reports/payments?date_from=2026-01-01&date_to={today}").json()["total"] == 1
+    x = c.get(f"/admin/api/reports/export?date_from=2026-01-01&date_to={today}&format=xlsx")
+    assert x.status_code == 200 and x.content[:2] == b"PK"
+    assert c.get("/admin/api/reports?date_from=2026-12-01&date_to=2026-01-01").status_code == 400
+    assert c.get("/admin/api/teachers/meena/students").json()["total"] == 1

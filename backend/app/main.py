@@ -20,6 +20,7 @@ from .i18n import t
 from .services import accounts, admin, admin_auth, builds, notes_pdf, payments
 from .services import style as style_mod
 from .services import teacher_data
+from .services import admin_reports
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
@@ -489,6 +490,49 @@ def admin_builds(tid: str):
 def admin_teacher_report(tid: str, month: str, format: str = "json", view: str = "admin"):
     """view=teacher gives exactly what the teacher sees (to send it to them)."""
     return _report_response(tid, month, format, "teacher" if view == "teacher" else "admin")
+
+
+# ---- Reports: all teachers' sales for any period ----
+
+def _rep_err(fn):
+    try:
+        return fn()
+    except admin_reports.ReportError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/admin/api/reports", dependencies=[Depends(require_admin)])
+def admin_reports_view(date_from: str, date_to: str, teacher: str = "", sort: str = "sales"):
+    return _rep_err(lambda: admin_reports.full_report(db, date_from, date_to, _default_pct(), teacher or None, sort))
+
+
+@app.get("/admin/api/reports/payments", dependencies=[Depends(require_admin)])
+def admin_reports_payments(date_from: str, date_to: str, teacher: str = "", q: str = "", offset: int = 0, limit: int = 50):
+    def run():
+        start, end, _, _ = admin_reports.parse_period(date_from, date_to)
+        return admin_reports.payments(db, start, end, _default_pct(), teacher or None, q, offset, limit)
+    return _rep_err(run)
+
+
+@app.get("/admin/api/reports/export", dependencies=[Depends(require_admin)])
+def admin_reports_export(date_from: str, date_to: str, format: str = "xlsx", teacher: str = ""):
+    rep = _rep_err(lambda: admin_reports.full_report(db, date_from, date_to, _default_pct(), teacher or None))
+    name = f"liveteach-sales-{date_from}-to-{date_to}" + (f"-{teacher}" if teacher else "")
+    if format == "pdf":
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = notes_pdf.render_pdf(admin_reports.export_html(rep), os.path.join(d, "r.pdf"))
+            with open(path, "rb") as f:
+                data = f.read()
+        return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'})
+    return Response(admin_reports.export_xlsx(db, rep, _default_pct()),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})
+
+
+@app.get("/admin/api/teachers/{tid}/students", dependencies=[Depends(require_admin)])
+def admin_teacher_students(tid: str, offset: int = 0, limit: int = 25, q: str = "", status: str = ""):
+    return teacher_data.students_page(db, tid, offset, limit, q, status)
 
 
 @app.get("/admin/api/settings", dependencies=[Depends(require_admin)])

@@ -24,6 +24,11 @@ and end when the password changes; Settings shows recent logins.
 - **Save & build app:** starts the GitHub Actions workflow with this teacher's config and photo;
   the APK appears under "App builds" (needs `GITHUB_TOKEN`, `GITHUB_REPO`, `PUBLIC_BASE_URL`).
 - **Teacher detail:** revenue split report, last 6 months, launch checklist, builds.
+- **Reports:** all teachers' sales for any period (this month, last month, 3 months, this year, last year, custom
+  dates) or one teacher: total sales, Durina earnings, paid to teachers, new vs renewals, paying students,
+  month-by-month chart, sales by teacher (sortable, with each teacher's own split and share of sales), and every
+  payment (who paid how much, to which teacher; 50 per page, searchable). Export Excel (Summary, By teacher,
+  every Payment, Monthly) or PDF.
 - **Settings:** company/GSTIN, Durina linked account, defaults for new teachers, AI trusted sites and blocked topics, legal links.
 
 ## Languages
