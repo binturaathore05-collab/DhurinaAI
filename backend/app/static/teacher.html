@@ -67,8 +67,7 @@
   .pager button { min-width: 38px; height: 36px; border-radius: 10px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .pager button.on { background: var(--text); color: #fff; border-color: var(--text); } .pager button:disabled { opacity: .4; cursor: default; }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  select, input[type=date] { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; font: inherit; padding: 0 10px; }
-  input[type=date] { margin-left: 6px; }
+  select { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; font: inherit; padding: 0 10px; }
   .qa input[type=checkbox], th input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc); }
   .chipf { height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .chipf.on { background: var(--text); color: #fff; border-color: var(--text); }
@@ -99,7 +98,6 @@
   .login { max-width: 400px; margin: 12vh auto; }
   .note { background: var(--accSoft); color: #134E4A; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
   .progress { height: 6px; border-radius: 999px; background: var(--surf); overflow: hidden; } .progress div { height: 100%; background: var(--acc); }
-  @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
   /* confirm popup before risky actions */
   .confirm { position: fixed; inset: 0; background: rgba(17,24,39,.5); display: grid; place-items: center; padding: 20px; z-index: 20; }
   .confirm .box { background: #fff; border-radius: 18px; padding: 22px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
@@ -107,6 +105,29 @@
   .confirm .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; padding: 10px 12px; background: #F9FAFB; border-radius: 10px; cursor: pointer; }
   .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   .confirm .btn.risk { background: var(--bad); color: #fff; } .confirm .btn:disabled { opacity: .45; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  /* our own calendar: opens on any click, works inside any browser or frame */
+  .dfield { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; color: var(--text); font: inherit; font-weight: 600; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+  .dfield:hover, .dfield.open { border-color: var(--acc); } .dfield svg { color: var(--muted); }
+  .dpop { position: absolute; z-index: 30; background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 40px rgba(17,24,39,.18); padding: 12px; width: 300px; }
+  .dpop .hd { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .dpop .hd select { height: 34px; flex: 1; padding: 0 6px; border-radius: 10px; }
+  .dpop .nav { width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--border); background: #fff; color: var(--text); font: inherit; font-weight: 800; cursor: pointer; }
+  .dpop .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .dpop .wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+  .dpop .d { height: 36px; border: 0; border-radius: 10px; background: #fff; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+  .dpop .d:hover { background: #F3F4F6; } .dpop .d.today { box-shadow: inset 0 0 0 1.5px var(--acc); }
+  .dpop .d.sel { background: var(--acc); color: #fff; font-weight: 800; } .dpop .d:disabled { color: #C4C9D2; cursor: not-allowed; background: #fff; }
+  .dpop .ft { display: flex; justify-content: space-between; margin-top: 8px; }
+  .dpop .ft button { border: 0; background: none; color: var(--acc); font: inherit; font-weight: 700; cursor: pointer; padding: 6px; }
+  /* phones: the menu becomes a slim strip at the top that scrolls sideways */
+  @media (max-width: 700px) {
+    .shell { flex-direction: column; flex-wrap: nowrap; } nav, main { width: 100%; min-width: 0; } main { padding: 18px 14px; }
+    nav { position: sticky; top: 0; z-index: 6; flex: none; max-width: none; flex-direction: row; align-items: center; gap: 4px; padding: 8px 10px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+    nav::-webkit-scrollbar { display: none; }
+    nav .brand, nav .me { padding: 0 6px 0 0; flex: none; } nav .brand > span:last-child, nav .me > span:last-child { display: none; }
+    nav .item { flex: none; white-space: nowrap; padding: 8px 10px; } nav .spacer { display: none; } nav .badge { margin-left: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -122,6 +143,49 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rupees = (p) => '₹' + Math.round((p || 0) / 100).toLocaleString('en-IN');
 const ago = (ts) => { const s = (Date.now() - ts) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' days ago'; };
+// ---------- Date field with our own calendar popup ----------
+// dateField('id', '2026-04-01') → a button; read it with dateVal('id'); it fires 'change' when a day is picked.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const niceDate = (v) => { if (!v) return 'Choose date'; const [y, m, d] = v.split('-').map(Number); return String(d).padStart(2, '0') + ' ' + MONTHS[m - 1].slice(0, 3) + ' ' + y; };
+const CAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+function dateField(id, value, label = '') { return `<button type="button" class="dfield" id="${id}" data-v="${value || ''}" aria-haspopup="dialog" aria-label="${label || 'Date'}: ${niceDate(value)}">${CAL}<span>${niceDate(value)}</span></button>`; }
+const dateVal = (id) => (document.getElementById(id) || {}).dataset?.v || '';
+function setDate(id, v) { const b = document.getElementById(id); if (!b) return; b.dataset.v = v; b.querySelector('span').textContent = niceDate(v); b.setAttribute('aria-label', 'Date: ' + niceDate(v)); }
+function closeCal() { document.querySelectorAll('.dpop').forEach((p) => p.remove()); document.querySelectorAll('.dfield.open').forEach((b) => b.classList.remove('open')); }
+function openCal(btn) {
+  closeCal(); btn.classList.add('open');
+  const today = ymd(new Date()), cur = btn.dataset.v || today; let [vy, vm] = cur.split('-').map(Number); vm -= 1;
+  const pop = document.createElement('div'); pop.className = 'dpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Choose a date');
+  const years = []; for (let y = new Date().getFullYear() + 1; y >= 2024; y--) years.push(y);
+  const draw = () => {
+    const first = new Date(vy, vm, 1), start = (first.getDay() + 6) % 7, days = new Date(vy, vm + 1, 0).getDate();
+    let cells = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((w) => `<span class="wd">${w}</span>`).join('') + '<span></span>'.repeat(start);
+    for (let d = 1; d <= days; d++) { const v = ymd(new Date(vy, vm, d));
+      cells += `<button type="button" class="d ${v === btn.dataset.v ? 'sel' : ''} ${v === today ? 'today' : ''}" data-day="${v}" ${v > today ? 'disabled title="Future date"' : ''}>${d}</button>`; }
+    pop.innerHTML = `<div class="hd"><button type="button" class="nav" data-mv="-1" aria-label="Previous month">‹</button>
+      <select data-m aria-label="Month">${MONTHS.map((m, i) => `<option value="${i}" ${i === vm ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <select data-y aria-label="Year">${years.map((y) => `<option ${y === vy ? 'selected' : ''}>${y}</option>`).join('')}</select>
+      <button type="button" class="nav" data-mv="1" aria-label="Next month">›</button></div><div class="grid">${cells}</div>
+      <div class="ft"><button type="button" data-today>Today</button><button type="button" data-close>Close</button></div>`;
+  };
+  draw();
+  pop.addEventListener('click', (e) => { e.stopPropagation();
+    const mv = e.target.closest('[data-mv]'); if (mv) { vm += +mv.dataset.mv; if (vm < 0) { vm = 11; vy--; } if (vm > 11) { vm = 0; vy++; } return draw(); }
+    const day = e.target.closest('[data-day]') || (e.target.closest('[data-today]') && { dataset: { day: today } });
+    if (day) { setDate(btn.id, day.dataset.day); closeCal(); btn.focus(); btn.dispatchEvent(new Event('change', { bubbles: true })); return; }
+    if (e.target.closest('[data-close]')) { closeCal(); btn.focus(); } });
+  pop.addEventListener('change', (e) => { if (e.target.matches('[data-m]')) vm = +e.target.value; if (e.target.matches('[data-y]')) vy = +e.target.value; draw(); });
+  document.body.append(pop);
+  const r = btn.getBoundingClientRect(), w = 300;
+  pop.style.left = Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - w - 8)) + 'px';
+  const below = r.bottom + 6 + pop.offsetHeight < innerHeight;
+  pop.style.top = (below ? r.bottom + scrollY + 6 : r.top + scrollY - pop.offsetHeight - 6) + 'px';
+  (pop.querySelector('.d.sel') || pop.querySelector('.d.today') || pop.querySelector('.d'))?.focus();
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('.dfield'); if (b) { e.preventDefault(); return b.classList.contains('open') ? closeCal() : openCal(b); } if (!e.target.closest('.dpop')) closeCal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.querySelector('.dpop')) { const b = document.querySelector('.dfield.open'); closeCal(); b && b.focus(); } });
+window.addEventListener('resize', closeCal);
 // ---------- Ask before risky actions ----------
 // Every delete / reject / disconnect / log out / build / money change asks first. "Cancel" has focus,
 // Esc or a click outside also cancels — so a slip of the finger never changes anything.
@@ -441,7 +505,7 @@ async function studentsView() {
     <section class="card"><div class="row"><div><h2>Earnings report</h2><span class="sub">For a month, a year, a financial year (April–March) or any dates you choose. Subscriptions, total received and your earnings.</span></div>
       <div class="toolbar"><select id="rp" aria-label="Report period">${RPT.map(([k, l]) => `<option value="${k}" ${RQ.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select id="rm" aria-label="Month" ${RQ.kind === 'month' ? '' : 'hidden'}>${months}</select>
-        <span id="rc" class="toolbar" ${RQ.kind === 'custom' ? '' : 'hidden'}><label class="muted" style="font-size:13px">From <input type="date" id="rf" value="${RQ.from}"></label><label class="muted" style="font-size:13px">To <input type="date" id="rt" value="${RQ.to}"></label></span>
+        <span class="toolbar"><span class="muted" style="font-size:13px;font-weight:600">From</span>${dateField('rf', RQ.from, 'From')}<span class="muted" style="font-size:13px;font-weight:600">To</span>${dateField('rt', RQ.to, 'To')}</span>
         <button class="btn ghost small" id="rv">View</button><button class="btn primary small" data-dl="xlsx">Download Excel</button><button class="btn primary small" data-dl="pdf">Download PDF</button></div></div>
       <div class="bars">${bars}</div></section>
     <section class="card" style="gap:12px"><div class="row"><h2>Students</h2><input type="search" id="sq" value="${esc(SV.q)}" placeholder="Search name or last 4 digits" aria-label="Search students" style="min-width:260px"></div>
@@ -455,13 +519,19 @@ async function studentsView() {
 const isoD = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const RPT = [['this_month', 'This month'], ['last_month', 'Last month'], ['month', 'Choose a month…'], ['this_year', 'This year (Jan–Dec)'], ['last_year', 'Last year'],
   ['this_fy', 'This financial year (Apr–Mar)'], ['last_fy', 'Last financial year'], ['custom', 'Custom dates…']];
-const RQ = { kind: 'this_month', from: isoD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), to: isoD(new Date()) };
-function reportRange() {
+const RQ = { kind: 'this_month', month: '', from: isoD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), to: isoD(new Date()) };
+// the From/To dates always show the chosen period; picking a date yourself switches to "Custom dates"
+function kindRange(kind) {
   const t = new Date(), y = t.getFullYear(), m = t.getMonth(), fy = m >= 3 ? y : y - 1;
-  if (RQ.kind === 'month') { const [a, b] = $('#rm').value.split('-').map(Number); const end = new Date(a, b, 0); return [new Date(a, b - 1, 1), end > t ? t : end].map(isoD); }
-  if (RQ.kind === 'custom') { const f = $('#rf').value, to = $('#rt').value; if (!f || !to) throw new Error('Choose both dates'); if (to < f) throw new Error('“To” date is before “From” date'); return [f, to]; }
+  if (kind === 'month') { const [a, b] = (RQ.month || isoD(t).slice(0, 7)).split('-').map(Number); const end = new Date(a, b, 0); return [new Date(a, b - 1, 1), end > t ? t : end].map(isoD); }
+  if (kind === 'custom') return [RQ.from, RQ.to];
   return { this_month: [new Date(y, m, 1), t], last_month: [new Date(y, m - 1, 1), new Date(y, m, 0)], this_year: [new Date(y, 0, 1), t], last_year: [new Date(y - 1, 0, 1), new Date(y - 1, 11, 31)],
-    this_fy: [new Date(fy, 3, 1), t], last_fy: [new Date(fy - 1, 3, 1), new Date(fy, 2, 31)] }[RQ.kind].map(isoD);
+    this_fy: [new Date(fy, 3, 1), t], last_fy: [new Date(fy - 1, 3, 1), new Date(fy, 2, 31)] }[kind].map(isoD);
+}
+function reportRange() {
+  if (!RQ.from || !RQ.to) throw new Error('Choose both dates');
+  if (RQ.to < RQ.from) throw new Error('“To” date is before “From” date');
+  return [RQ.from, RQ.to];
 }
 async function showReport() {
   let range; try { range = reportRange(); } catch (e) { return toast(e.message); }
@@ -576,8 +646,13 @@ function bind(view) {
     let t; $('#sq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SV.q = e.target.value; SV.offset = 0; render().then(() => $('#sq').focus()); }, 350); };
     $$('[data-st]').forEach((b) => b.onclick = () => { SV.status = b.dataset.st; SV.offset = 0; render(); });
     $$('[data-sp]').forEach((b) => b.onclick = () => { SV.offset = +b.dataset.sp; render(); });
-    $('#rp').onchange = (e) => { RQ.kind = e.target.value; $('#rm').hidden = RQ.kind !== 'month'; $('#rc').hidden = RQ.kind !== 'custom'; };
-    $('#rf').onchange = (e) => { RQ.from = e.target.value; }; $('#rt').onchange = (e) => { RQ.to = e.target.value; };
+    const show = () => { [RQ.from, RQ.to] = kindRange(RQ.kind); setDate('rf', RQ.from); setDate('rt', RQ.to); $('#rp').value = RQ.kind; $('#rm').hidden = RQ.kind !== 'month'; };
+    if (RQ.month) $('#rm').value = RQ.month;
+    $('#rp').onchange = (e) => { RQ.kind = e.target.value; if (RQ.kind === 'month') RQ.month = $('#rm').value; show(); };
+    $('#rm').onchange = (e) => { RQ.month = e.target.value; show(); };
+    // a From after the To (or a To before the From) moves the other date so the range always makes sense
+    $('#rf').addEventListener('change', () => { RQ.kind = 'custom'; RQ.from = dateVal('rf'); if (RQ.to < RQ.from) RQ.to = isoD(new Date()); show(); });
+    $('#rt').addEventListener('change', () => { RQ.kind = 'custom'; RQ.to = dateVal('rt'); if (RQ.to < RQ.from) RQ.from = RQ.to; show(); });
     $('#rv').onclick = () => showReport();
     $$('[data-dl]').forEach((b) => b.onclick = () => download(b.dataset.dl));
   }

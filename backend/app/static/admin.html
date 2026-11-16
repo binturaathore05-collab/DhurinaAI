@@ -94,7 +94,6 @@
   .login { max-width: 380px; margin: 14vh auto; }
   .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
   .scroll { overflow-x: auto; }
-  @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
   /* confirm popup before risky actions */
   .confirm { position: fixed; inset: 0; background: rgba(17,24,39,.5); display: grid; place-items: center; padding: 20px; z-index: 20; }
   .confirm .box { background: #fff; border-radius: 18px; padding: 22px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
@@ -102,6 +101,29 @@
   .confirm .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; padding: 10px 12px; background: #F9FAFB; border-radius: 10px; cursor: pointer; }
   .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   .confirm .btn.risk { background: var(--bad); color: #fff; } .confirm .btn:disabled { opacity: .45; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  /* our own calendar: opens on any click, works inside any browser or frame */
+  .dfield { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; color: var(--text); font: inherit; font-weight: 600; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+  .dfield:hover, .dfield.open { border-color: var(--acc); } .dfield svg { color: var(--muted); }
+  .dpop { position: absolute; z-index: 30; background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 40px rgba(17,24,39,.18); padding: 12px; width: 300px; }
+  .dpop .hd { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .dpop .hd select { height: 34px; flex: 1; padding: 0 6px; border-radius: 10px; }
+  .dpop .nav { width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--border); background: #fff; color: var(--text); font: inherit; font-weight: 800; cursor: pointer; }
+  .dpop .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .dpop .wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+  .dpop .d { height: 36px; border: 0; border-radius: 10px; background: #fff; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+  .dpop .d:hover { background: #F3F4F6; } .dpop .d.today { box-shadow: inset 0 0 0 1.5px var(--acc); }
+  .dpop .d.sel { background: var(--acc); color: #fff; font-weight: 800; } .dpop .d:disabled { color: #C4C9D2; cursor: not-allowed; background: #fff; }
+  .dpop .ft { display: flex; justify-content: space-between; margin-top: 8px; }
+  .dpop .ft button { border: 0; background: none; color: var(--acc); font: inherit; font-weight: 700; cursor: pointer; padding: 6px; }
+  /* phones: the menu becomes a slim strip at the top that scrolls sideways */
+  @media (max-width: 700px) {
+    .shell { flex-direction: column; flex-wrap: nowrap; } nav, main { width: 100%; min-width: 0; } main { padding: 18px 14px; }
+    nav { position: sticky; top: 0; z-index: 6; flex: none; max-width: none; flex-direction: row; align-items: center; gap: 4px; padding: 8px 10px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+    nav::-webkit-scrollbar { display: none; }
+    nav .brand, nav .me { padding: 0 6px 0 0; flex: none; } nav .brand > span:last-child, nav .me > span:last-child { display: none; }
+    nav .item { flex: none; white-space: nowrap; padding: 8px 10px; } nav .spacer { display: none; } nav .badge { margin-left: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -122,6 +144,49 @@ const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Sci
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
 let KEY = (() => { try { return sessionStorage.getItem('adminToken') || ''; } catch { return ''; } })();
+// ---------- Date field with our own calendar popup ----------
+// dateField('id', '2026-04-01') → a button; read it with dateVal('id'); it fires 'change' when a day is picked.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const niceDate = (v) => { if (!v) return 'Choose date'; const [y, m, d] = v.split('-').map(Number); return String(d).padStart(2, '0') + ' ' + MONTHS[m - 1].slice(0, 3) + ' ' + y; };
+const CAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+function dateField(id, value, label = '') { return `<button type="button" class="dfield" id="${id}" data-v="${value || ''}" aria-haspopup="dialog" aria-label="${label || 'Date'}: ${niceDate(value)}">${CAL}<span>${niceDate(value)}</span></button>`; }
+const dateVal = (id) => (document.getElementById(id) || {}).dataset?.v || '';
+function setDate(id, v) { const b = document.getElementById(id); if (!b) return; b.dataset.v = v; b.querySelector('span').textContent = niceDate(v); b.setAttribute('aria-label', 'Date: ' + niceDate(v)); }
+function closeCal() { document.querySelectorAll('.dpop').forEach((p) => p.remove()); document.querySelectorAll('.dfield.open').forEach((b) => b.classList.remove('open')); }
+function openCal(btn) {
+  closeCal(); btn.classList.add('open');
+  const today = ymd(new Date()), cur = btn.dataset.v || today; let [vy, vm] = cur.split('-').map(Number); vm -= 1;
+  const pop = document.createElement('div'); pop.className = 'dpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Choose a date');
+  const years = []; for (let y = new Date().getFullYear() + 1; y >= 2024; y--) years.push(y);
+  const draw = () => {
+    const first = new Date(vy, vm, 1), start = (first.getDay() + 6) % 7, days = new Date(vy, vm + 1, 0).getDate();
+    let cells = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((w) => `<span class="wd">${w}</span>`).join('') + '<span></span>'.repeat(start);
+    for (let d = 1; d <= days; d++) { const v = ymd(new Date(vy, vm, d));
+      cells += `<button type="button" class="d ${v === btn.dataset.v ? 'sel' : ''} ${v === today ? 'today' : ''}" data-day="${v}" ${v > today ? 'disabled title="Future date"' : ''}>${d}</button>`; }
+    pop.innerHTML = `<div class="hd"><button type="button" class="nav" data-mv="-1" aria-label="Previous month">‹</button>
+      <select data-m aria-label="Month">${MONTHS.map((m, i) => `<option value="${i}" ${i === vm ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <select data-y aria-label="Year">${years.map((y) => `<option ${y === vy ? 'selected' : ''}>${y}</option>`).join('')}</select>
+      <button type="button" class="nav" data-mv="1" aria-label="Next month">›</button></div><div class="grid">${cells}</div>
+      <div class="ft"><button type="button" data-today>Today</button><button type="button" data-close>Close</button></div>`;
+  };
+  draw();
+  pop.addEventListener('click', (e) => { e.stopPropagation();
+    const mv = e.target.closest('[data-mv]'); if (mv) { vm += +mv.dataset.mv; if (vm < 0) { vm = 11; vy--; } if (vm > 11) { vm = 0; vy++; } return draw(); }
+    const day = e.target.closest('[data-day]') || (e.target.closest('[data-today]') && { dataset: { day: today } });
+    if (day) { setDate(btn.id, day.dataset.day); closeCal(); btn.focus(); btn.dispatchEvent(new Event('change', { bubbles: true })); return; }
+    if (e.target.closest('[data-close]')) { closeCal(); btn.focus(); } });
+  pop.addEventListener('change', (e) => { if (e.target.matches('[data-m]')) vm = +e.target.value; if (e.target.matches('[data-y]')) vy = +e.target.value; draw(); });
+  document.body.append(pop);
+  const r = btn.getBoundingClientRect(), w = 300;
+  pop.style.left = Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - w - 8)) + 'px';
+  const below = r.bottom + 6 + pop.offsetHeight < innerHeight;
+  pop.style.top = (below ? r.bottom + scrollY + 6 : r.top + scrollY - pop.offsetHeight - 6) + 'px';
+  (pop.querySelector('.d.sel') || pop.querySelector('.d.today') || pop.querySelector('.d'))?.focus();
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('.dfield'); if (b) { e.preventDefault(); return b.classList.contains('open') ? closeCal() : openCal(b); } if (!e.target.closest('.dpop')) closeCal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.querySelector('.dpop')) { const b = document.querySelector('.dfield.open'); closeCal(); b && b.focus(); } });
+window.addEventListener('resize', closeCal);
 // ---------- Ask before risky actions ----------
 // Every delete / reject / disconnect / log out / build / money change asks first. "Cancel" has focus,
 // Esc or a click outside also cancels — so a slip of the finger never changes anything.
@@ -399,8 +464,8 @@ async function reportsView() {
   return shell('Reports', `<div class="row"><div><h1>Reports</h1><span class="sub">Sales of every teacher, for any period — with Dhurina’s and each teacher’s share.</span></div>
       <div class="row"><button class="btn ghost" data-exp="xlsx">Export Excel</button><button class="btn primary" data-exp="pdf">Export PDF</button></div></div>
     <section class="card" style="gap:12px"><div class="presets">${preset('this_month', 'This month')}${preset('last_month', 'Last month')}${preset('last_3', 'Last 3 months')}${preset('this_year', 'This year')}${preset('last_year', 'Last year')}${preset('this_fy', 'This financial year')}${preset('last_fy', 'Last financial year')}${preset('custom', 'Custom dates')}</div>
-      <div class="row" style="justify-content:flex-start"><label class="f" style="flex-direction:row;align-items:center;gap:8px">From<input type="date" id="df" value="${RP.from}"></label>
-        <label class="f" style="flex-direction:row;align-items:center;gap:8px">To<input type="date" id="dt" value="${RP.to}"></label>
+      <div class="row" style="justify-content:flex-start"><span class="row" style="gap:8px"><span class="muted" style="font-weight:600">From</span>${dateField('df', RP.from, 'From')}</span>
+        <span class="row" style="gap:8px"><span class="muted" style="font-weight:600">To</span>${dateField('dt', RP.to, 'To')}</span>
         <select id="tf" aria-label="Teacher"><option value="">All teachers</option>${ov.teachers.map((t) => `<option value="${esc(t.id)}" ${RP.teacher === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
         <button class="btn ghost" id="apply" style="height:40px">Show</button></div>
       <b>Period: ${esc(rep.period_from)} to ${esc(rep.period_to)}${RP.teacher ? ' · ' + esc(rep.by_teacher[0]?.name || '') : ' · all teachers'}</b></section>
@@ -418,7 +483,10 @@ async function reportsView() {
 function bindReports() {
   const go = () => { RP.offset = 0; render(); };
   document.querySelectorAll('[data-preset]').forEach((b) => b.onclick = () => { RP.preset = b.dataset.preset; if (RP.preset !== 'custom') [RP.from, RP.to] = presetRange(RP.preset); go(); });
-  $('#apply').onclick = () => { RP.from = $('#df').value; RP.to = $('#dt').value; RP.teacher = $('#tf').value; RP.preset = 'custom'; go(); };
+  const pick = (e) => { let a = dateVal('df'), b = dateVal('dt');
+    if (b < a) { if (e && e.target.id === 'dt') a = b; else b = ymd(new Date()); }   // keep the range valid
+    RP.from = a; RP.to = b; RP.teacher = $('#tf').value; RP.preset = 'custom'; go(); };
+  $('#apply').onclick = pick; $('#df').addEventListener('change', pick); $('#dt').addEventListener('change', pick);   // a picked date shows at once
   $('#tf').onchange = () => { RP.teacher = $('#tf').value; go(); };
   document.querySelectorAll('[data-sort]').forEach((h) => h.onclick = () => { RP.sort = h.dataset.sort; render(); });
   document.querySelectorAll('[data-pick]').forEach((a) => a.onclick = (e) => { e.preventDefault(); RP.teacher = a.dataset.pick; go(); });
