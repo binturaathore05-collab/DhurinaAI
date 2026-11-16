@@ -11,3 +11,18 @@
   split automatically with Razorpay Route.
 - **Answer accuracy:** verified answers → teacher's notes → general AI (flagged for teacher review).
 - **Tech:** Flutter app, Python FastAPI backend, phases: Phase 1 = chat + teacher voice; Phase 2 = video avatar.
+
+## Roadmap (agreed 16 Nov 2026)
+The product is a platform, not one teacher's app. Build everything generic first with a dummy teacher;
+real teachers (content, voice, YouTube) are added at the end, only through dashboards — no code changes.
+
+1. White-label student app (Flutter): the 6 Video Call screens wired to the backend, dummy teacher.
+2. Durina admin panel: add a teacher (name, photo, colour, plans, Razorpay details) → app config generated.
+3. Teacher dashboard: upload PDFs/notes/handwritten photos/audio/video, connect own YouTube channel
+   (auto-sync), teaching-style profile, answer settings (AI / trusted web fallback), review queue, earnings.
+4. Payments, real OTP SMS, demo limit.
+5. Teacher voice and video avatar.
+6. Onboard the first real teacher and launch.
+
+Build note: this environment can install Python packages but cannot download the Flutter SDK, so the
+Android APK is built by GitHub Actions (cloud) and downloaded from the repository's Actions tab.

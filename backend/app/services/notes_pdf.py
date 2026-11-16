@@ -56,7 +56,7 @@ def render_pdf(html_text: str, out_path: str, chromium_path: str | None = None) 
 
 
 def save_note(db: Database, student_id: int, qa_id: int, teacher_name: str, notes_dir: str,
-              renderer=render_pdf) -> dict:
+              renderer=None) -> dict:
     """Save one answer from the student's history as a PDF in their library. Saving twice is harmless."""
     existing = db.one("SELECT * FROM saved_notes WHERE student_id = ? AND qa_id = ?", (student_id, qa_id))
     if existing:
@@ -67,7 +67,7 @@ def save_note(db: Database, student_id: int, qa_id: int, teacher_name: str, note
     html_text = build_note_html(teacher_name, qa["question"], qa["answer"], json.loads(qa["sources"] or "[]"),
                                 qa["language"], qa["created_at"][:10])
     path = os.path.join(notes_dir, str(student_id), f"note_{qa_id}.pdf")
-    renderer(html_text, path)
+    (renderer or render_pdf)(html_text, path)
     title = qa["question"][:80]
     cur = db.execute("INSERT INTO saved_notes (student_id, qa_id, title, pdf_path) VALUES (?, ?, ?, ?)",
                      (student_id, qa_id, title, path))
