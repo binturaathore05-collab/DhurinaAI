@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video Call – My Library</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#5EEAD4}a:hover{color:#5EEAD4}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0B1220; font-family: 'Plus Jakarta Sans', sans-serif; color: #F1F5F9; display: flex; flex-direction: column; padding: 16px 16px 20px; gap: 14px;">
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <a href="CallLive.dc.html" aria-label="Back to class" style="width: 44px; height: 44px; border-radius: 999px; background: #162033; color: #F1F5F9; display: flex; align-items: center; justify-content: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>
+    <h1 style="margin: 0; font-size: 24px; font-weight: 800;">My Library</h1>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; height: 48px; border-radius: 14px; background: #162033; padding: 0 14px; color: #94A3B8;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+    <label for="lib-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden;">Search your questions and notes</label>
+    <input id="lib-search" type="search" placeholder="Search questions &amp; notes" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: #F1F5F9; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px;">
+  </div>
+  <div style="background: #111A2B; border: 1.5px solid #2DD4BF; border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-size: 16px; font-weight: 800;">Saved Notes</span>
+      <span style="font-size: 12px; font-weight: 700; color: #5EEAD4;">3 PDFs</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+      <div style="background: #162033; border: 1.5px solid #273449; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 8px;"><span style="width: 36px; height: 36px; border-radius: 10px; background: #3B1D1D; color: #FCA5A5; display: flex; align-items: center; justify-content: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"></path><path d="M14 3v5h5"></path></svg></span><span style="font-size: 14px; font-weight: 700; line-height: 1.3;">Maharana Pratap</span><span style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #94A3B8;">1 page · Today<button type="button" aria-label="Download Maharana Pratap" style="width: 30px; height: 30px; border-radius: 999px; border: 0; background: #0B1220; color: #5EEAD4; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg></button></span></div><div style="background: #162033; border: 1.5px solid #273449; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 8px;"><span style="width: 36px; height: 36px; border-radius: 10px; background: #3B1D1D; color: #FCA5A5; display: flex; align-items: center; justify-content: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"></path><path d="M14 3v5h5"></path></svg></span><span style="font-size: 14px; font-weight: 700; line-height: 1.3;">Battle of Haldighati</span><span style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #94A3B8;">1 page · Today<button type="button" aria-label="Download Battle of Haldighati" style="width: 30px; height: 30px; border-radius: 999px; border: 0; background: #0B1220; color: #5EEAD4; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg></button></span></div>
+    </div>
+    <a href="#all-notes" style="font-size: 13px; font-weight: 700; color: #5EEAD4;">See all notes</a>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+    <span style="font-size: 16px; font-weight: 800;">Question history</span>
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #94A3B8; margin-top: 10px;">TODAY</span>
+    <a href="CallLive.dc.html" style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid #1E293B; text-decoration: none; color: #F1F5F9;"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><span style="font-size: 15px; font-weight: 700;">Sir, tell me about Maharana Pratap</span><span style="font-size: 11px; color: #94A3B8; flex: none;">8:42 PM</span></span><span style="font-size: 13px; color: #94A3B8; line-height: 1.4;">Ruler of Mewar (1540–1597), refused Akbar’s rule, fought at Haldighati…</span><span style="display: flex;"><span style="font-size: 11px; font-weight: 700; color: #04201C; background: #2DD4BF; padding: 2px 8px; border-radius: 999px;">PDF saved</span></span></a><a href="CallLive.dc.html" style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid #1E293B; text-decoration: none; color: #F1F5F9;"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><span style="font-size: 15px; font-weight: 700;">Explain the Battle of Haldighati</span><span style="font-size: 11px; color: #94A3B8; flex: none;">8:35 PM</span></span><span style="font-size: 13px; color: #94A3B8; line-height: 1.4;">Fought in 1576 between Maharana Pratap and Akbar’s army led by Man Singh…</span><span style="display: flex;"><span style="font-size: 11px; font-weight: 700; color: #04201C; background: #2DD4BF; padding: 2px 8px; border-radius: 999px;">PDF saved</span></span></a>
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #94A3B8; margin-top: 10px;">YESTERDAY</span>
+    <a href="CallLive.dc.html" style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid #1E293B; text-decoration: none; color: #F1F5F9;"><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px;"><span style="font-size: 15px; font-weight: 700;">Where does the Chambal river originate?</span><span style="font-size: 11px; color: #94A3B8; flex: none;">6:10 PM</span></span><span style="font-size: 13px; color: #94A3B8; line-height: 1.4;">It rises in the Vindhya range near Janapav, Mhow (Madhya Pradesh)…</span></a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

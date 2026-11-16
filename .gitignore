@@ -7,3 +7,4 @@ __pycache__/
 .venv/
 build/
 .dart_tool/
+tools/demo/out/
