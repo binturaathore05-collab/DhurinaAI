@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveTeach · Teacher Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
+          --acc:#0F766E; --accHover:#115E59; --accSoft:#E6F4F1; --warn:#B45309; --warnSoft:#FEF3C7; --ok:#15803D; --bad:#B91C1C; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; }
+  a { color: var(--acc); } a:hover { color: var(--accHover); }
+  .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
+  nav { flex: 1 1 250px; max-width: 270px; background: #fff; border-right: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .me { display: flex; gap: 10px; align-items: center; padding: 0 8px 20px; }
+  .me img, .av { width: 42px; height: 42px; border-radius: 999px; object-fit: cover; object-position: center 15%; background: var(--surf); flex: none; }
+  nav a.item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 15px; white-space: nowrap; }
+  nav a.item.on { background: var(--surf); color: var(--text); }
+  nav .badge { margin-left: auto; background: var(--warn); color: #fff; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 8px; }
+  nav .spacer { flex: 1; }
+  main { flex: 999 1 560px; min-width: 0; padding: 30px 36px 48px; display: flex; flex-direction: column; gap: 22px; }
+  h1 { margin: 0; font-size: 26px; font-weight: 800; } h2 { margin: 0; font-size: 17px; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: 12px; font: inherit; font-weight: 800; border: 0; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--acc); color: #fff; } .btn.primary:hover { background: var(--accHover); color: #fff; }
+  .btn.ghost { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+  .btn.small { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+  .btn.danger { background: #fff; color: var(--bad); border: 1.5px solid #F3C4C4; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .stat { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .stat .k { color: var(--muted); font-size: 13px; } .stat .v { font-size: 26px; font-weight: 800; } .stat .n { color: var(--muted); font-size: 12px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; border: 1.5px solid currentColor; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+  .drop { border: 2px dashed #B9C2CE; border-radius: 16px; background: var(--surf); padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--acc); background: var(--accSoft); }
+  .types { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .types span { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .list > div { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .ficon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; }
+  .grow { flex: 1; min-width: 0; } .grow b, .grow span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button { height: 36px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; color: var(--muted); }
+  .tabs button.on { background: var(--text); color: #fff; border-color: var(--text); }
+  .qa { border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #fff; }
+  .qa .q { font-weight: 800; font-size: 15px; }
+  .qa .a { background: var(--surf); border-radius: 10px; padding: 12px; line-height: 1.5; white-space: pre-wrap; }
+  .qa textarea { width: 100%; min-height: 110px; border-radius: 10px; border: 1.5px solid var(--acc); padding: 10px 12px; font: inherit; line-height: 1.5; outline: none; }
+  .style-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .trait { border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+  .trait textarea { width: 100%; min-height: 96px; border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; resize: vertical; outline: none; }
+  .trait textarea:focus { border-color: var(--acc); }
+  .toggle { position: relative; width: 44px; height: 26px; flex: none; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle span { position: absolute; inset: 0; border-radius: 999px; background: #CBD2DC; cursor: pointer; transition: .15s; }
+  .toggle span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 999px; background: #fff; transition: .15s; }
+  .toggle input:checked + span { background: var(--acc); } .toggle input:checked + span::after { left: 21px; }
+  .toggle input:focus-visible + span { outline: 2px solid var(--acc); outline-offset: 2px; }
+  input[type=text], input[type=email], input[type=password], input[type=url], input[type=search] { height: 44px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; color: var(--text); padding: 0 14px; font: inherit; outline: none; }
+  input:focus { border-color: var(--acc); }
+  label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .yt { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .yt .logo { width: 56px; height: 56px; border-radius: 14px; background: #FEE2E2; color: #B91C1C; display: grid; place-items: center; font-weight: 800; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th { text-align: left; font-size: 12px; color: var(--muted); letter-spacing: .04em; padding: 10px 12px; }
+  td { padding: 12px; border-top: 1px solid var(--border); }
+  .scroll { overflow-x: auto; }
+  .bars { display: flex; gap: 14px; align-items: flex-end; height: 180px; }
+  .bars .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; }
+  .bars .b div { width: 100%; max-width: 46px; background: var(--acc); border-radius: 8px 8px 0 0; min-height: 2px; }
+  .muted { color: var(--muted); } .err { color: var(--bad); font-weight: 600; }
+  .toast { position: fixed; right: 20px; bottom: 20px; background: var(--text); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 600; z-index: 9; }
+  .login { max-width: 400px; margin: 12vh auto; }
+  .note { background: var(--accSoft); color: #134E4A; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
+  .progress { height: 6px; border-radius: 999px; background: var(--surf); overflow: hidden; } .progress div { height: 100%; background: var(--acc); }
+  @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input id="filepick" type="file" multiple accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.mp3,.m4a,.wav,.mp4,.mov" style="display:none">
+<script>
+/* ===================================================================================
+   LiveTeach teacher dashboard. All data goes through api(); DEMO answers with sample data
+   until this page is connected to the server (/teacher/api/...).
+   =================================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rupees = (p) => '₹' + Math.round((p || 0) / 100).toLocaleString('en-IN');
+const ago = (ts) => { const s = (Date.now() - ts) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' days ago'; };
+function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.append(t); setTimeout(() => t.remove(), 3000); }
+const ICON = {
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
+  yt: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9l5 3-5 3z"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  check: '<path d="M5 12l5 5 9-10"/>', users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', up: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>', mic: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/>',
+};
+const icon = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+const FT = { pdf: ['PDF', '#FEE2E2', '#B91C1C'], doc: ['DOC', '#DBEAFE', '#1D4ED8'], img: ['IMG', '#FCE7F3', '#9D174D'], audio: ['AUD', '#EDE9FE', '#5B21B6'], video: ['VID', '#FFEDD5', '#9A3412'], text: ['TXT', '#E6F4F1', '#0F766E'], yt: ['YT', '#FEE2E2', '#B91C1C'] };
+const kindOf = (name) => { const e = name.split('.').pop().toLowerCase();
+  return e === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(e) ? 'doc' : ['jpg', 'jpeg', 'png'].includes(e) ? 'img' : ['mp3', 'm4a', 'wav'].includes(e) ? 'audio' : ['mp4', 'mov'].includes(e) ? 'video' : 'text'; };
+const STATUS = { ready: ['Ready', 'var(--ok)'], processing: ['Processing…', 'var(--warn)'], failed: ['Failed', 'var(--bad)'], queued: ['Waiting', 'var(--muted)'] };
+const pill = (st) => { const [t, c] = STATUS[st] || STATUS.queued; return `<span class="pill" style="color:${c}">${t}</span>`; };
+
+// ------------------------------- DEMO DATA ---------------------------------------
+const DEMO = (() => {
+  const now = Date.now(), H = 3600e3, D = 24 * H;
+  const db = {
+    me: { name: 'Subhash Sir', email: 'subhash@example.com', subjects: 'Rajasthan GK, History, Geography', app: 'Subhash Sir AI', avatar: window.__AVATAR || '', split: 80 },
+    files: [
+      { id: 1, name: 'Rajasthan History – Chapter 6 (Mewar).pdf', kind: 'pdf', status: 'ready', points: 84, lang: 'Hindi', at: now - 3 * D, size: '2.4 MB' },
+      { id: 2, name: 'Rivers of Rajasthan – handwritten notes (12 photos)', kind: 'img', status: 'ready', points: 37, lang: 'Hindi', at: now - 2 * D, size: '18 MB' },
+      { id: 3, name: 'Folk deities short notes.docx', kind: 'doc', status: 'ready', points: 41, lang: 'Hinglish', at: now - D, size: '310 KB' },
+      { id: 4, name: 'Current affairs – October lecture.mp3', kind: 'audio', status: 'processing', points: 0, lang: '—', at: now - 0.3 * H, size: '46 MB', progress: 60 },
+    ],
+    yt: { connected: true, channel: 'Subhash Sir Classes', subs: '[N] subscribers', autosync: true, lastSync: now - 2 * H,
+      playlists: [{ name: 'Rajasthan History (Full Course)', on: true, n: 42 }, { name: 'Rajasthan Geography', on: true, n: 31 }, { name: 'Daily Current Affairs', on: false, n: 120 }, { name: 'Motivation', on: false, n: 15 }],
+      videos: [
+        { title: 'Haldighati ka Yuddh – poori kahani', status: 'ready', note: 'Learned · 28 points', at: now - 2 * H },
+        { title: 'Maharana Pratap ke 10 important facts', status: 'ready', note: 'Learned · 19 points', at: now - D },
+        { title: 'Chambal Nadi – udgam se sangam tak', status: 'ready', note: 'Learned · 23 points', at: now - 2 * D },
+        { title: 'Live Q&A – Sunday doubt session', status: 'failed', note: 'No captions — upload the video file instead', at: now - 3 * D } ] },
+    style: [
+      { key: 'greeting', title: 'How Sir starts', text: 'Begins with "Dekho bachho…" and a one-line question to grab attention.', on: true },
+      { key: 'language', title: 'Language mix', text: 'Hindi with common English words (Hinglish). Switches fully to English when the student asks in English.', on: true },
+      { key: 'explain', title: 'How Sir explains', text: 'Tells the topic as a short story first, then gives 3–5 exam points with years and names.', on: true },
+      { key: 'tricks', title: 'Memory tricks', text: 'Gives a short trick to remember lists, e.g. first letters of names joined into a word.', on: true },
+      { key: 'check', title: 'Checking understanding', text: 'Ends with one quick question: "Achha batao, … kaun tha?" and praises a right answer with "Shabaash!"', on: true },
+      { key: 'avoid', title: 'Never does', text: 'No politics or personal opinions. Says "Ye syllabus se bahar hai" for unrelated questions.', on: true } ],
+    review: [
+      { id: 11, q: 'इस महीने राजस्थान में कौन-सी नई योजना शुरू हुई?', a: 'यह जवाब इंटरनेट की भरोसेमंद सरकारी साइटों से लिया गया है: …', src: 'Internet · pib.gov.in', lang: 'Hindi', at: now - 0.5 * H, asked: 3 },
+      { id: 12, q: 'What is the difference between a lake and a reservoir?', a: 'A lake is a natural body of water, while a reservoir is usually man-made, created by building a dam across a river…', src: 'General AI', lang: 'English', at: now - 3 * H, asked: 1 },
+      { id: 13, q: 'Sir, Rajasthan ka sabse ooncha shikhar kaunsa hai?', a: 'Rajasthan ka sabse ooncha shikhar Guru Shikhar hai, jo Mount Abu (Sirohi) mein Aravali parvatmala mein hai. Iski oonchai lagbhag 1722 metre hai.', src: 'General AI', lang: 'Hinglish', at: now - 6 * H, asked: 7 } ],
+    approved: [{ id: 9, q: 'Chetak kaun tha?', a: 'Chetak Maharana Pratap ka vafadar ghoda tha…', at: now - 2 * D }],
+    students: [
+      { name: 'Student', phone: '•••••• 3210', plan: 'Yearly', ends: now + 300 * D, asked: 86, joined: now - 60 * D },
+      { name: 'Student', phone: '•••••• 7781', plan: 'Monthly', ends: now + 2 * D, asked: 41, joined: now - 28 * D },
+      { name: 'Student', phone: '•••••• 1092', plan: 'Monthly', ends: now - 1 * D, asked: 12, joined: now - 31 * D },
+      { name: 'Student', phone: '•••••• 5534', plan: 'Demo', ends: null, asked: 3, joined: now - 1 * D } ],
+    months: [24950, 34930, 29940, 44910, 39920, 49900].map((r) => r * 100),
+    weekQuestions: 312, fromNotes: 0.86,
+  };
+  let nextId = 100;
+  return async (method, path, body) => {
+    await new Promise((r) => setTimeout(r, 120));
+    if (path === '/login') { if (!body.login || !body.password) throw new Error('Enter your email or mobile and password'); return { token: 'demo' }; }
+    if (path === '/home') return db;
+    if (path === '/files' && method === 'POST') {
+      const f = { id: nextId++, name: body.name, kind: body.kind || kindOf(body.name), status: 'processing', points: 0, lang: '—', at: Date.now(), size: body.size || '', progress: 5 };
+      db.files.unshift(f);
+      const tick = setInterval(() => { f.progress = Math.min(100, f.progress + 25);
+        if (f.progress >= 100) { clearInterval(tick); f.status = 'ready'; f.points = 10 + Math.floor(Math.random() * 40); f.lang = 'Hindi'; }
+        if (location.hash === '#knowledge') render(); }, 1200);
+      return f; }
+    if (path.startsWith('/files/') && method === 'DELETE') { db.files = db.files.filter((f) => f.id !== +path.split('/')[2]); return {}; }
+    if (path === '/notes' && method === 'POST') { db.files.unshift({ id: nextId++, name: body.title, kind: 'text', status: 'ready', points: Math.max(3, Math.round(body.text.length / 60)), lang: 'Hindi', at: Date.now(), size: body.text.length + ' chars' }); return {}; }
+    if (path === '/youtube' && method === 'PUT') { Object.assign(db.yt, body); return db.yt; }
+    if (path === '/youtube/sync') { db.yt.lastSync = Date.now(); return db.yt; }
+    if (path === '/style' && method === 'PUT') { db.style = body.style; return {}; }
+    if (path.startsWith('/review/')) { const id = +path.split('/')[2]; const item = db.review.find((r) => r.id === id); db.review = db.review.filter((r) => r.id !== id);
+      if (body.action !== 'reject') db.approved.unshift({ id, q: item.q, a: body.answer || item.a, at: Date.now() }); return {}; }
+    if (path === '/password') { if ((body.new_password || '').length < 8) throw new Error('Password must be at least 8 characters'); return {}; }
+    throw new Error('Not found');
+  };
+})();
+async function api(method, path, body) { return DEMO(method, path, body); }
+
+// ------------------------------- LAYOUT ------------------------------------------
+let TOKEN = '', D = null;
+function shell(active, inner) {
+  const it = (h, ic, label, badge) => `<a class="item ${active === h ? 'on' : ''}" href="#${h}">${icon(ic)}${label}${badge ? `<span class="badge">${badge}</span>` : ''}</a>`;
+  return `<div class="shell"><nav aria-label="Teacher">
+    <div class="me">${D.me.avatar ? `<img src="${D.me.avatar}" alt="">` : `<span class="av"></span>`}<span style="display:flex;flex-direction:column;min-width:0"><b>${esc(D.me.name)}</b><span class="muted" style="font-size:12px">${esc(D.me.app)}</span></span></div>
+    ${it('home', 'home', 'Home')}${it('knowledge', 'book', 'My Knowledge')}${it('youtube', 'yt', 'YouTube')}${it('style', 'spark', 'Teaching Style')}
+    ${it('review', 'check', 'Review answers', D.review.length || '')}${it('students', 'users', 'Students & Earnings')}${it('settings', 'gear', 'Settings')}
+    <span class="spacer"></span><a class="item" href="#logout">${icon('out')}Log out</a></nav><main>${inner}</main></div>`;
+}
+const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="n">${n}</span></div>`;
+const head = (title, sub, right = '') => `<div class="row"><div><h1>${title}</h1><span class="sub">${sub}</span></div>${right}</div>`;
+
+// ------------------------------- VIEWS -------------------------------------------
+function loginView() {
+  return `<form class="login card" id="lf" style="gap:16px"><div style="display:flex;gap:12px;align-items:center"><span style="width:44px;height:44px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px">L</span>
+    <div><h1 style="font-size:22px">Teacher Dashboard</h1><span class="sub">LiveTeach · for teachers</span></div></div>
+    <label class="f">Email or mobile<input id="lg" type="text" autocomplete="username" placeholder="you@example.com or 98765 43210" required></label>
+    <label class="f">Password<input id="pw" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Log in</button><span id="lerr" class="err" role="alert"></span>
+    <span class="muted" style="font-size:12px">Your login is created by Durina when your app is set up. Forgot password? Contact Durina support.</span></form>`;
+}
+
+function homeView() {
+  const ready = D.files.filter((f) => f.status === 'ready'), points = ready.reduce((a, f) => a + f.points, 0) + D.yt.videos.filter((v) => v.status === 'ready').length * 20;
+  const active = D.students.filter((s) => s.ends && s.ends > Date.now()).length;
+  const mine = D.months[5] * D.me.split / 100;
+  return shell('home', `${head('Namaste, ' + esc(D.me.name), 'Here’s how your AI teacher is doing.')}
+    <div class="stats">${stat('Questions this week', D.weekQuestions, 'asked by your students')}${stat('Answered from your content', Math.round(D.fromNotes * 100) + '%', 'the rest came from AI / internet')}
+      ${stat('Active students', active, 'paying right now')}${stat('Your earnings this month', rupees(mine), D.me.split + '% share · paid by Razorpay')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px">
+      <section class="card" style="flex:1 1 340px"><div class="row"><h2>Waiting for your review</h2><a href="#review"><b>Open</b></a></div>
+        ${D.review.length ? D.review.slice(0, 3).map((r) => `<div style="border-top:1px solid var(--border);padding-top:10px"><b>${esc(r.q)}</b><div class="muted" style="font-size:12px">${esc(r.src)} · asked ${r.asked}× · ${ago(r.at)}</div></div>`).join('') : '<p class="muted">All caught up.</p>'}</section>
+      <section class="card" style="flex:1 1 340px"><h2>Your AI’s knowledge</h2>
+        <div class="row"><span>Files learned</span><b>${ready.length} / ${D.files.length}</b></div>
+        <div class="row"><span>YouTube videos learned</span><b>${D.yt.videos.filter((v) => v.status === 'ready').length}</b></div>
+        <div class="row"><span>Points your AI knows</span><b>${points}</b></div>
+        <div class="row" style="justify-content:flex-start;gap:10px"><a class="btn primary small" href="#knowledge">${icon('up', 16)}Upload notes</a><a class="btn ghost small" href="#youtube">YouTube settings</a></div></section></div>
+    <div class="note"><b>Tip:</b> the more of your own notes and videos you add, the more answers come from you instead of general AI — and fewer answers need your review.</div>`);
+}
+
+function knowledgeView() {
+  const rows = D.files.map((f) => { const [t, bg, fg] = FT[f.kind] || FT.text;
+    return `<div><span class="ficon" style="background:${bg};color:${fg}">${t}</span><span class="grow"><b>${esc(f.name)}</b><span class="muted" style="font-size:12px">${esc(f.size)} · ${ago(f.at)}${f.status === 'ready' ? ' · ' + esc(f.lang) + ' · learned ' + f.points + ' points' : ''}</span>
+      ${f.status === 'processing' ? `<div class="progress" style="margin-top:6px"><div style="width:${f.progress || 10}%"></div></div>` : ''}</span>${pill(f.status)}
+      <button class="btn danger small" data-del="${f.id}" aria-label="Delete ${esc(f.name)}">${icon('trash', 16)}</button></div>`; }).join('');
+  return shell('knowledge', `${head('My Knowledge', 'Everything your AI teacher answers from. Only your students see answers built from this.')}
+    <section class="card"><div class="drop" id="drop" role="button" tabindex="0" aria-label="Upload files">${icon('up', 28)}<b style="font-size:16px">Drop files here or click to upload</b>
+      <span class="muted">Hindi, English or any language · handwritten notes are read automatically</span>
+      <div class="types"><span>PDF</span><span>Word</span><span>Photos of notes</span><span>Audio</span><span>Video</span><span>Text</span></div></div></section>
+    <section class="card"><div class="row"><h2>Write a quick note</h2><span class="muted" style="font-size:12px">e.g. a trick, a correction, an important date</span></div>
+      <input id="nt" type="text" placeholder="Title, e.g. Haldighati – exam points" aria-label="Note title">
+      <textarea id="nb" placeholder="Write in any language…" aria-label="Note text" style="min-height:90px;border-radius:12px;border:1.5px solid var(--border);padding:10px 14px;font:inherit;outline:none"></textarea>
+      <div><button class="btn primary small" id="ns">Add to my knowledge</button></div></section>
+    <section class="card"><div class="row"><h2>Your files (${D.files.length})</h2><input type="search" id="fq" placeholder="Search files" aria-label="Search files"></div><div class="list" id="fl">${rows}</div></section>`);
+}
+
+function youtubeView() {
+  const y = D.yt;
+  const vids = y.videos.map((v) => `<div><span class="ficon" style="background:#FEE2E2;color:#B91C1C">YT</span><span class="grow"><b>${esc(v.title)}</b><span class="muted" style="font-size:12px">${esc(v.note)} · ${ago(v.at)}</span></span>${pill(v.status)}</div>`).join('');
+  if (!y.connected) return shell('youtube', `${head('YouTube', 'Let your AI learn from your own videos.')}
+    <section class="card" style="align-items:flex-start"><div class="yt"><span class="logo">YT</span><div><h2>Connect your YouTube channel</h2><span class="sub">You’ll sign in with Google and allow read-only access to your own videos.</span></div></div>
+      <button class="btn primary" id="ytc">Connect YouTube</button><span class="muted" style="font-size:12px">Only your own channel. We never post or change anything on YouTube.</span></section>`);
+  return shell('youtube', `${head('YouTube', 'Your AI learns from your videos automatically.', `<button class="btn ghost" id="sync">Sync now</button>`)}
+    <section class="card"><div class="yt"><span class="logo">YT</span><div class="grow"><b style="font-size:16px">${esc(y.channel)}</b><span class="muted">${esc(y.subs)} · last synced ${ago(y.lastSync)}</span></div>
+      <label class="row" style="gap:10px;justify-content:flex-start"><span class="toggle"><input type="checkbox" id="auto" ${y.autosync ? 'checked' : ''}><span></span></span><b>Auto-sync new videos</b></label>
+      <button class="btn danger small" id="ytd">Disconnect</button></div></section>
+    <section class="card"><div><h2>Which playlists should your AI learn?</h2><span class="sub">Turn off playlists that aren’t study material (motivation, vlogs).</span></div>
+      ${y.playlists.map((p, i) => `<label class="row" style="border-top:1px solid var(--border);padding-top:10px"><span><b>${esc(p.name)}</b> <span class="muted">· ${p.n} videos</span></span><span class="toggle"><input type="checkbox" data-pl="${i}" ${p.on ? 'checked' : ''}><span></span></span></label>`).join('')}</section>
+    <section class="card"><h2>Recently learned</h2><div class="list">${vids}</div></section>`);
+}
+
+function styleView() {
+  const traits = D.style.map((t, i) => `<div class="trait"><div class="row"><b>${esc(t.title)}</b><label class="toggle" title="Use this"><input type="checkbox" data-on="${i}" ${t.on ? 'checked' : ''} aria-label="Use: ${esc(t.title)}"><span></span></label></div>
+      <textarea data-tx="${i}" aria-label="${esc(t.title)}">${esc(t.text)}</textarea></div>`).join('');
+  return shell('style', `${head('Teaching Style', 'Your AI learned this from your videos and notes. Edit anything — your AI will follow your words.', `<button class="btn primary" id="ss">Save style</button>`)}
+    <div class="note">Learned from <b>${D.yt.videos.filter((v) => v.status === 'ready').length} videos</b> and <b>${D.files.filter((f) => f.status === 'ready').length} files</b>. It updates as you add more — your edits are always kept.</div>
+    <div class="style-grid">${traits}</div>
+    <section class="card"><div class="row"><div><h2>${icon('mic', 18)} Your voice</h2><span class="sub">So students hear answers in your own voice. Coming in the next update.</span></div><span class="pill" style="color:var(--muted)">Coming soon</span></div>
+      <span class="muted" style="font-size:13px">You’ll record 10–30 minutes of clear speech and sign a consent form. Your voice is used only inside your own app.</span></section>`);
+}
+
+let reviewTab = 'pending', editing = null;
+function reviewView() {
+  const pending = D.review.map((r) => `<div class="qa"><div class="row"><span class="q">${esc(r.q)}</span><span class="muted" style="font-size:12px">${esc(r.lang)} · asked ${r.asked}× · ${ago(r.at)}</span></div>
+      <span class="pill" style="color:var(--warn);align-self:flex-start">${esc(r.src)}</span>
+      ${editing === r.id ? `<textarea id="ed">${esc(r.a)}</textarea>` : `<div class="a">${esc(r.a)}</div>`}
+      <div class="row" style="justify-content:flex-start;gap:8px">${editing === r.id
+        ? `<button class="btn primary small" data-save="${r.id}">Save &amp; approve</button><button class="btn ghost small" data-cancel>Cancel</button>`
+        : `<button class="btn primary small" data-ok="${r.id}">${icon('check', 16)}Approve</button><button class="btn ghost small" data-edit="${r.id}">Edit answer</button><button class="btn danger small" data-no="${r.id}">Wrong — don’t use</button>`}</div></div>`).join('');
+  const done = D.approved.map((r) => `<div class="qa"><span class="q">${esc(r.q)}</span><div class="a">${esc(r.a)}</div><span class="muted" style="font-size:12px">Approved ${ago(r.at)} · every student now gets this answer</span></div>`).join('');
+  return shell('review', `${head('Review answers', 'Answers that did not come from your own content. Approve or correct them once — after that, every student gets your version.')}
+    <div class="tabs" role="tablist"><button class="${reviewTab === 'pending' ? 'on' : ''}" data-tab="pending">Waiting (${D.review.length})</button><button class="${reviewTab === 'done' ? 'on' : ''}" data-tab="done">Approved (${D.approved.length})</button></div>
+    <div style="display:flex;flex-direction:column;gap:12px">${reviewTab === 'pending' ? (pending || '<p class="muted">Nothing to review. Great job!</p>') : done}</div>`);
+}
+
+function studentsView() {
+  const max = Math.max(1, ...D.months);
+  const labels = [...Array(6)].map((_, i) => { const d = new Date(); d.setMonth(d.getMonth() - 5 + i); return d.toLocaleString('en', { month: 'short' }); });
+  const bars = D.months.map((m, i) => `<div class="b"><div style="height:${Math.round(m * D.me.split / 100 / (max * D.me.split / 100) * 140)}px" title="${rupees(m * D.me.split / 100)}"></div><span class="muted" style="font-size:12px">${labels[i]}</span></div>`).join('');
+  const st = (s) => !s.ends ? ['Demo', 'var(--muted)'] : s.ends < Date.now() ? ['Plan ended', 'var(--bad)'] : s.ends - Date.now() < 3 * 864e5 ? ['Ends soon', 'var(--warn)'] : ['Active', 'var(--ok)'];
+  const rows = D.students.map((s) => { const [t, c] = st(s); return `<tr><td>${esc(s.phone)}</td><td>${esc(s.plan)}</td><td><span class="pill" style="color:${c}">${t}</span></td><td>${s.ends ? new Date(s.ends).toLocaleDateString('en-IN') : '—'}</td><td>${s.asked}</td></tr>`; }).join('');
+  return shell('students', `${head('Students & Earnings', 'Your share is ' + D.me.split + '%. Razorpay settles it to your bank account automatically.')}
+    <div class="stats">${stat('This month (your share)', rupees(D.months[5] * D.me.split / 100), 'after Durina’s ' + (100 - D.me.split) + '%')}${stat('Last 6 months', rupees(D.months.reduce((a, b) => a + b, 0) * D.me.split / 100), 'your share')}
+      ${stat('Active students', D.students.filter((s) => s.ends && s.ends > Date.now()).length, 'paying now')}${stat('Ending in 3 days', D.students.filter((s) => s.ends && s.ends > Date.now() && s.ends - Date.now() < 3 * 864e5).length, 'they get a renew reminder')}</div>
+    <section class="card"><h2>Your earnings, last 6 months</h2><div class="bars">${bars}</div></section>
+    <section class="card"><h2>Students</h2><span class="muted" style="font-size:12px">Phone numbers are hidden to protect students’ privacy.</span>
+      <div class="scroll"><table><thead><tr><th>STUDENT</th><th>PLAN</th><th>STATUS</th><th>VALID TILL</th><th>QUESTIONS ASKED</th></tr></thead><tbody>${rows}</tbody></table></div></section>`);
+}
+
+function settingsView() {
+  return shell('settings', `${head('Settings', 'Your profile and login.')}
+    <section class="card"><div class="row" style="justify-content:flex-start;gap:16px">${D.me.avatar ? `<img class="av" style="width:64px;height:64px" src="${D.me.avatar}" alt="">` : ''}<div><b style="font-size:17px">${esc(D.me.name)}</b><div class="muted">${esc(D.me.subjects)}</div><div class="muted">App: ${esc(D.me.app)}</div></div></div>
+      <span class="muted" style="font-size:12px">To change your name, photo, subjects, prices or revenue split, contact Durina.</span></section>
+    <section class="card"><h2>Change password</h2><div class="grid2"><label class="f">Current password<input id="p0" type="password" autocomplete="current-password"></label><label class="f">New password<input id="p1" type="password" autocomplete="new-password"></label></div>
+      <div class="row"><span id="pm" class="muted"></span><button class="btn ghost" id="pb">Change password</button></div></section>`);
+}
+
+// ------------------------------- WIRING ------------------------------------------
+async function uploadFiles(files) { for (const f of files) { await api('POST', '/files', { name: f.name, size: (f.size / 1048576).toFixed(1) + ' MB' }); } toast(files.length + ' file(s) added — your AI is learning them'); render(); }
+function bind(view) {
+  if (view === 'knowledge') {
+    const drop = $('#drop'), pick = $('#filepick');
+    drop.onclick = () => pick.click(); drop.onkeydown = (e) => (e.key === 'Enter' || e.key === ' ') && pick.click();
+    pick.onchange = () => { uploadFiles([...pick.files]); pick.value = ''; };
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
+    $$('[data-del]').forEach((b) => b.onclick = async () => { await api('DELETE', '/files/' + b.dataset.del); toast('Removed — your AI no longer uses this file'); render(); });
+    $('#ns').onclick = async () => { const t = $('#nt').value.trim(), x = $('#nb').value.trim(); if (!t || !x) return toast('Add a title and some text');
+      await api('POST', '/notes', { title: t, text: x }); toast('Note added'); render(); };
+    $('#fq').oninput = (e) => $$('#fl > div').forEach((r) => r.style.display = r.textContent.toLowerCase().includes(e.target.value.toLowerCase()) ? '' : 'none');
+  }
+  if (view === 'youtube') {
+    $('#ytc') && ($('#ytc').onclick = async () => { await api('PUT', '/youtube', { connected: true }); toast('Channel connected'); render(); });
+    $('#ytd') && ($('#ytd').onclick = async () => { await api('PUT', '/youtube', { connected: false }); toast('Disconnected — already learned videos stay'); render(); });
+    $('#sync') && ($('#sync').onclick = async () => { await api('POST', '/youtube/sync'); toast('Checking for new videos…'); render(); });
+    $('#auto') && ($('#auto').onchange = async (e) => { await api('PUT', '/youtube', { autosync: e.target.checked }); toast(e.target.checked ? 'Auto-sync on' : 'Auto-sync off'); });
+    $$('[data-pl]').forEach((c) => c.onchange = async () => { D.yt.playlists[+c.dataset.pl].on = c.checked; await api('PUT', '/youtube', { playlists: D.yt.playlists }); toast('Saved'); });
+  }
+  if (view === 'style') $('#ss').onclick = async () => {
+    const style = D.style.map((t, i) => ({ ...t, text: $(`[data-tx="${i}"]`).value, on: $(`[data-on="${i}"]`).checked }));
+    await api('PUT', '/style', { style }); toast('Style saved — your AI will follow it'); };
+  if (view === 'review') {
+    $$('[data-tab]').forEach((b) => b.onclick = () => { reviewTab = b.dataset.tab; render(); });
+    $$('[data-ok]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.ok, { action: 'approve' }); toast('Approved'); render(); });
+    $$('[data-no]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.no, { action: 'reject' }); toast('Marked wrong — AI won’t use it'); render(); });
+    $$('[data-edit]').forEach((b) => b.onclick = () => { editing = +b.dataset.edit; render(); setTimeout(() => $('#ed')?.focus(), 0); });
+    $$('[data-cancel]').forEach((b) => b.onclick = () => { editing = null; render(); });
+    $$('[data-save]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.save, { action: 'approve', answer: $('#ed').value }); editing = null; toast('Your answer is saved and approved'); render(); });
+  }
+  if (view === 'settings') $('#pb').onclick = async () => { try { await api('POST', '/password', { current_password: $('#p0').value, new_password: $('#p1').value }); $('#pm').textContent = 'Password changed'; $('#pm').className = 'muted'; } catch (e) { $('#pm').textContent = e.message; $('#pm').className = 'err'; } };
+}
+
+const VIEWS = { home: homeView, knowledge: knowledgeView, youtube: youtubeView, style: styleView, review: reviewView, students: studentsView, settings: settingsView };
+async function render() {
+  const app = $('#app');
+  if (!TOKEN) {
+    app.innerHTML = loginView();
+    $('#lf').onsubmit = async (e) => { e.preventDefault(); try { TOKEN = (await api('POST', '/login', { login: $('#lg').value, password: $('#pw').value })).token; location.hash = '#home'; render(); } catch (err) { $('#lerr').textContent = err.message; } };
+    return;
+  }
+  const h = (location.hash || '#home').slice(1);
+  if (h === 'logout') { TOKEN = ''; location.hash = ''; return render(); }
+  D = await api('GET', '/home');
+  const view = VIEWS[h] ? h : 'home';
+  app.innerHTML = VIEWS[view]();
+  bind(view);
+}
+window.onhashchange = render;
+render();
+</script>
+</body>
+</html>
