@@ -1,0 +1,54 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Backend URL (leave empty for offline demo mode)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android platform files
+        run: flutter create --platforms=android --org com.durina.liveteach --project-name liveteach .
+
+      - name: White-label app name + internet permission
+        run: |
+          NAME=$(python3 -c "import json;print(json.load(open('assets/teacher/teacher.json'))['appName'])")
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i "s/android:label=\"liveteach\"/android:label=\"$NAME\"/" "$MANIFEST"
+          grep -q "android.permission.INTERNET" "$MANIFEST" || \
+            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$MANIFEST"
+
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+
+      - name: Build APK
+        run: flutter build apk --release --dart-define=API_BASE_URL=${{ github.event.inputs.api_base_url || vars.API_BASE_URL }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: liveteach-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
