@@ -69,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: const TextStyle(color: LT.accentText, fontWeight: FontWeight.w600, fontSize: 13)),
                   ]),
                   const SizedBox(height: 12),
-                  const Text('AI call with your teacher, anytime.',
+                  const Text('Call your AI teacher, anytime.',
                       style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.15)),
                   const SizedBox(height: 8),
                   const Text('Ask any doubt. Sir explains, then checks if you understood.',
