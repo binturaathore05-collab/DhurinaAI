@@ -16,7 +16,7 @@ void main() {
 
   testWidgets('login screen shows the teacher and the demo button', (tester) async {
     await tester.pumpWidget(LiveTeachApp(cfg: cfg, api: DemoApi(cfg), loggedIn: false));
-    expect(find.text('Video call your teacher, anytime.'), findsOneWidget);
+    expect(find.text('AI call with your teacher, anytime.'), findsOneWidget);
     expect(find.text('Start free demo call'), findsOneWidget);
     expect(find.textContaining('Test Sir is available now'), findsOneWidget);
   });

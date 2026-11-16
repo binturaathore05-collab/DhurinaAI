@@ -142,8 +142,13 @@ def save_note(qa_id: int, student=Depends(current_student), teacher: TeacherProf
 
 
 @app.get("/library")
-def my_library(student=Depends(current_student)):
-    return notes_pdf.library(db, student["id"])
+def my_library(q: str | None = None, history_offset: int = 0, student=Depends(current_student)):
+    return notes_pdf.library(db, student["id"], q=q, history_offset=history_offset)
+
+
+@app.get("/notes")
+def my_notes(offset: int = 0, limit: int = 20, q: str | None = None, student=Depends(current_student)):
+    return notes_pdf.list_notes(db, student["id"], offset, limit, q)
 
 
 @app.get("/notes/{note_id}/pdf")

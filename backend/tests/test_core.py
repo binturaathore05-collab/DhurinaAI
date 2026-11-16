@@ -298,3 +298,18 @@ def test_early_renewal_adds_days_after_current_plan(db):
     db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise) VALUES (?, 'y', 'order_e', 99900)", (sid,))
     payments.mark_paid(db, "order_e", "pay_e", now=now)
     assert accounts.access_status(db, sid, 3)["days_left"] >= 374
+
+
+def test_library_pages_many_notes(db, tmp_path):
+    sid = student(db)
+    for i in range(250):
+        cur = db.execute("INSERT INTO qa_history (student_id, question, answer, origin, language) VALUES (?, ?, 'a', 'x', 'en')",
+                         (sid, f"Question {i} about Mewar" if i % 2 else f"Question {i} about Chambal"))
+        db.execute("INSERT INTO saved_notes (student_id, qa_id, title, pdf_path) VALUES (?, ?, ?, 'p')",
+                   (sid, cur.lastrowid, f"Question {i}"))
+    lib = notes_pdf.library(db, sid)
+    assert len(lib["saved_notes"]) == 10 and lib["notes_total"] == 250
+    assert len(lib["history"]) == 30 and lib["history_total"] == 250 and lib["history"][0]["pdf_saved"]
+    page = notes_pdf.list_notes(db, sid, offset=240, limit=20)
+    assert len(page["items"]) == 10
+    assert notes_pdf.library(db, sid, q="Chambal")["history_total"] == 125

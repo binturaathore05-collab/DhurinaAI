@@ -99,10 +99,19 @@ class HistoryItem {
       );
 }
 
+/// One screenful of My Library: the latest few notes + one page of history, with totals.
 class Library {
   final List<SavedNote> notes;
+  final int notesTotal;
   final List<HistoryItem> history;
-  Library(this.notes, this.history);
+  final int historyTotal;
+  Library(this.notes, this.notesTotal, this.history, this.historyTotal);
+}
+
+class NotesPage {
+  final List<SavedNote> items;
+  final int total;
+  NotesPage(this.items, this.total);
 }
 
 class Checkout {
@@ -137,7 +146,8 @@ abstract class Api {
   Future<Access> access();
   Future<Answer> ask(String question);
   Future<SavedNote> saveNote(int qaId);
-  Future<Library> library();
+  Future<Library> library({String query = '', int historyOffset = 0});
+  Future<NotesPage> notes({int offset = 0, int limit = 20, String query = ''});
   Future<Checkout> checkout(String planId);
   Future<Receipt> confirmPayment(String orderId, String paymentId, String signature);
   Future<void> logout();
@@ -212,12 +222,23 @@ class HttpApi implements Api {
       SavedNote.fromJson(await _call('POST', '/notes/$qaId') as Map<String, dynamic>);
 
   @override
-  Future<Library> library() async {
-    final j = await _call('GET', '/library') as Map<String, dynamic>;
+  Future<Library> library({String query = '', int historyOffset = 0}) async {
+    final q = Uri.encodeQueryComponent(query);
+    final j = await _call('GET', '/library?q=$q&history_offset=$historyOffset') as Map<String, dynamic>;
     return Library(
       (j['saved_notes'] as List).map((n) => SavedNote.fromJson(n as Map<String, dynamic>)).toList(),
+      (j['notes_total'] as num).toInt(),
       (j['history'] as List).map((h) => HistoryItem.fromJson(h as Map<String, dynamic>)).toList(),
+      (j['history_total'] as num).toInt(),
     );
+  }
+
+  @override
+  Future<NotesPage> notes({int offset = 0, int limit = 20, String query = ''}) async {
+    final q = Uri.encodeQueryComponent(query);
+    final j = await _call('GET', '/notes?offset=$offset&limit=$limit&q=$q') as Map<String, dynamic>;
+    return NotesPage((j['items'] as List).map((n) => SavedNote.fromJson(n as Map<String, dynamic>)).toList(),
+        (j['total'] as num).toInt());
   }
 
   @override
@@ -341,8 +362,20 @@ class DemoApi implements Api {
     return note;
   }
 
+  bool _match(String text, String q) => q.isEmpty || text.toLowerCase().contains(q.toLowerCase());
+
   @override
-  Future<Library> library() async => Library(List.of(_notes), List.of(_history));
+  Future<Library> library({String query = '', int historyOffset = 0}) async {
+    final notes = _notes.where((n) => _match(n.title, query)).toList();
+    final hist = _history.where((h) => _match(h.question, query) || _match(h.answer, query)).toList();
+    return Library(notes.take(10).toList(), notes.length, hist.skip(historyOffset).take(30).toList(), hist.length);
+  }
+
+  @override
+  Future<NotesPage> notes({int offset = 0, int limit = 20, String query = ''}) async {
+    final notes = _notes.where((n) => _match(n.title, query)).toList();
+    return NotesPage(notes.skip(offset).take(limit).toList(), notes.length);
+  }
 
   @override
   Future<Checkout> checkout(String planId) async =>

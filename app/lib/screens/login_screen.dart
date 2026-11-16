@@ -69,10 +69,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: const TextStyle(color: LT.accentText, fontWeight: FontWeight.w600, fontSize: 13)),
                   ]),
                   const SizedBox(height: 12),
-                  const Text('Video call your teacher, anytime.',
+                  const Text('AI call with your teacher, anytime.',
                       style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.15)),
                   const SizedBox(height: 8),
-                  const Text('Ask any doubt face to face. Sir explains, then checks if you understood.',
+                  const Text('Ask any doubt. Sir explains, then checks if you understood.',
                       style: TextStyle(fontSize: 15, color: LT.muted, height: 1.5)),
                   const SizedBox(height: 24),
                   const Text('Mobile number', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -98,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 10),
                   Center(
                     child: Text(
-                      '3 free questions · AI avatar of ${cfg.teacherName} · LiveTeach${scope.api.isDemo ? ' · Demo mode' : ''}',
+                      '3 free questions · LiveTeach',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 12, color: LT.muted),
                     ),

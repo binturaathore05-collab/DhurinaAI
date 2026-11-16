@@ -74,15 +74,43 @@ def save_note(db: Database, student_id: int, qa_id: int, teacher_name: str, note
     return dict(db.one("SELECT * FROM saved_notes WHERE id = ?", (cur.lastrowid,)))
 
 
-def library(db: Database, student_id: int) -> dict:
-    """Everything for the My Library screen: saved notes and question history (newest first)."""
-    notes = [dict(r) for r in db.all("SELECT id, qa_id, title, created_at FROM saved_notes "
-                                     "WHERE student_id = ? ORDER BY id DESC", (student_id,))]
-    saved_ids = {n["qa_id"] for n in notes}
-    history = []
-    for r in db.all("SELECT * FROM qa_history WHERE student_id = ? ORDER BY id DESC", (student_id,)):
+def _like(q: str | None) -> str:
+    return f"%{(q or '').strip()}%"
+
+
+def list_notes(db: Database, student_id: int, offset: int = 0, limit: int = 20, q: str | None = None) -> dict:
+    """One page of saved notes, newest first, optionally filtered by a search word."""
+    limit = max(1, min(limit, 100))
+    where, args = "student_id = ? AND title LIKE ?", (student_id, _like(q))
+    total = db.one(f"SELECT COUNT(*) AS n FROM saved_notes WHERE {where}", args)["n"]
+    rows = db.all(f"SELECT id, qa_id, title, created_at FROM saved_notes WHERE {where} "
+                  "ORDER BY id DESC LIMIT ? OFFSET ?", (*args, limit, max(offset, 0)))
+    return {"items": [dict(r) for r in rows], "total": total}
+
+
+def list_history(db: Database, student_id: int, offset: int = 0, limit: int = 30, q: str | None = None) -> dict:
+    """One page of the question history, newest first, with a 'pdf_saved' flag per answer."""
+    limit = max(1, min(limit, 100))
+    where = "q.student_id = ? AND (q.question LIKE ? OR q.answer LIKE ?)"
+    args = (student_id, _like(q), _like(q))
+    total = db.one(f"SELECT COUNT(*) AS n FROM qa_history q WHERE {where}", args)["n"]
+    rows = db.all(f"SELECT q.*, (n.id IS NOT NULL) AS pdf_saved FROM qa_history q "
+                  f"LEFT JOIN saved_notes n ON n.qa_id = q.id AND n.student_id = q.student_id "
+                  f"WHERE {where} ORDER BY q.id DESC LIMIT ? OFFSET ?", (*args, limit, max(offset, 0)))
+    items = []
+    for r in rows:
         item = dict(r)
         item["sources"] = json.loads(item["sources"] or "[]")
-        item["pdf_saved"] = r["id"] in saved_ids
-        history.append(item)
-    return {"saved_notes": notes, "history": history}
+        item["pdf_saved"] = bool(item["pdf_saved"])
+        items.append(item)
+    return {"items": items, "total": total}
+
+
+def library(db: Database, student_id: int, q: str | None = None, notes_preview: int = 10,
+            history_offset: int = 0, history_limit: int = 30) -> dict:
+    """My Library screen: the latest few saved notes (the rest via list_notes) and one page of history.
+    Works the same with 5 notes or 5,000 — the app never loads everything at once."""
+    notes = list_notes(db, student_id, 0, notes_preview, q)
+    history = list_history(db, student_id, history_offset, history_limit, q)
+    return {"saved_notes": notes["items"], "notes_total": notes["total"],
+            "history": history["items"], "history_total": history["total"]}
