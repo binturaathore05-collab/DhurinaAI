@@ -314,11 +314,20 @@ def teacher_students(offset: int = 0, limit: int = 25, q: str = "", status: str 
     return teacher_data.students_page(db, teacher_id, offset, limit, q, status)
 
 
-def _report_response(tid: str, month: str, fmt: str, audience: str):
-    if not re.fullmatch(r"\d{4}-\d{2}", month or ""):
-        raise HTTPException(400, "month must look like 2026-11")
-    rep = teacher_data.monthly_report(db, tid, month, _default_pct(), audience)
-    name = f"liveteach-{tid}-{month}"
+def _report_response(tid: str, month: str, fmt: str, audience: str, date_from: str = "", date_to: str = ""):
+    """month=2026-11, or any period: date_from/date_to (a year, a financial year, custom dates)."""
+    if date_from or date_to:
+        try:
+            start, end, p_from, p_to = teacher_data.parse_period(date_from, date_to)
+        except teacher_data.ReportError as exc:
+            raise HTTPException(400, str(exc))
+        rep = teacher_data.period_report(db, tid, start, end, p_from, p_to, _default_pct(), audience)
+        name = f"liveteach-{tid}-{date_from}-to-{date_to}"
+    else:
+        if not re.fullmatch(r"\d{4}-\d{2}", month or ""):
+            raise HTTPException(400, "month must look like 2026-11")
+        rep = teacher_data.monthly_report(db, tid, month, _default_pct(), audience)
+        name = f"liveteach-{tid}-{month}"
     if fmt == "xlsx":
         return Response(teacher_data.report_xlsx(rep), headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'},
                         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -333,8 +342,9 @@ def _report_response(tid: str, month: str, fmt: str, audience: str):
 
 
 @app.get("/teacher/report")
-def teacher_report(month: str, format: str = "json", teacher_id: str = Depends(teacher_admin)):
-    return _report_response(teacher_id, month, format, "teacher")   # never shows Durina's share
+def teacher_report(month: str = "", format: str = "json", date_from: str = "", date_to: str = "",
+                   teacher_id: str = Depends(teacher_admin)):
+    return _report_response(teacher_id, month, format, "teacher", date_from, date_to)   # never shows Durina's share
 
 
 @app.post("/teacher/review/{qa_id}/approve")
@@ -487,9 +497,9 @@ def admin_builds(tid: str):
 
 
 @app.get("/admin/api/teachers/{tid}/report", dependencies=[Depends(require_admin)])
-def admin_teacher_report(tid: str, month: str, format: str = "json", view: str = "admin"):
+def admin_teacher_report(tid: str, month: str = "", format: str = "json", view: str = "admin", date_from: str = "", date_to: str = ""):
     """view=teacher gives exactly what the teacher sees (to send it to them)."""
-    return _report_response(tid, month, format, "teacher" if view == "teacher" else "admin")
+    return _report_response(tid, month, format, "teacher" if view == "teacher" else "admin", date_from, date_to)
 
 
 # ---- Reports: all teachers' sales for any period ----

@@ -12,26 +12,7 @@ import io
 from datetime import date, datetime, timedelta
 
 from ..db import Database
-from .teacher_data import TZ, mask_phone
-
-
-class ReportError(ValueError):
-    pass
-
-
-def parse_period(date_from: str, date_to: str) -> tuple[float, float, str, str]:
-    """'2026-11-01'..'2026-11-30' (inclusive, IST) → unix start, unix end (exclusive), labels."""
-    try:
-        d1, d2 = date.fromisoformat(date_from), date.fromisoformat(date_to)
-    except (TypeError, ValueError):
-        raise ReportError("Dates must look like 2026-11-01")
-    if d2 < d1:
-        raise ReportError("'To' date is before 'From' date")
-    if (d2 - d1).days > 3700:
-        raise ReportError("Choose a period of 10 years or less")
-    start = datetime(d1.year, d1.month, d1.day, tzinfo=TZ).timestamp()
-    end = datetime(d2.year, d2.month, d2.day, tzinfo=TZ).timestamp() + 86400
-    return start, end, d1.strftime("%d %b %Y"), d2.strftime("%d %b %Y")
+from .teacher_data import TZ, ReportError, mask_phone, parse_period  # noqa: F401
 
 
 _PAID = """
@@ -65,7 +46,9 @@ def summary(db: Database, start: float, end: float, default_pct: float, teacher_
                    {_PAID} {w}""", (default_pct, start, end, *a))
     return {"subscriptions": r["subs"], "renewals": r["renewals"] or 0, "new": r["subs"] - (r["renewals"] or 0),
             "paying_students": r["students"], "selling_teachers": r["teachers"], "gross_paise": int(r["gross"]),
-            "durina_paise": int(r["durina"]), "teachers_paise": int(r["gross"] - r["durina"])}
+            "durina_paise": int(r["durina"]), "teachers_paise": int(r["gross"] - r["durina"]),
+            "teachers_percent": round((r["gross"] - r["durina"]) * 100 / r["gross"], 2) if r["gross"] else None,
+            "durina_percent": round(r["durina"] * 100 / r["gross"], 2) if r["gross"] else None}
 
 
 def by_teacher(db: Database, start: float, end: float, default_pct: float, sort: str = "sales") -> list[dict]:
@@ -115,7 +98,7 @@ def payments(db: Database, start: float, end: float, default_pct: float, teacher
                       "teacher": r["teacher"], "student_id": r["student_id"], "student": r["student_name"] or "Student",
                       "phone": mask_phone(r["phone"]), "plan": r["plan"], "type": "Renewal" if r["renewal"] else "New",
                       "amount_paise": r["amount_paise"], "durina_percent": r["pct"], "durina_paise": cut,
-                      "teacher_paise": r["amount_paise"] - cut})
+                      "teacher_percent": round(100 - r["pct"], 2), "teacher_paise": r["amount_paise"] - cut})
     return {"total": total, "items": items}
 
 
@@ -194,8 +177,9 @@ def export_xlsx(db: Database, rep: dict, default_pct: float) -> bytes:
     ws.append([f"Period: {rep['period_from']} to {rep['period_to']}"])
     ws.append([f"Generated on: {rep['generated_on']}"])
     ws.append([])
-    for k, v in [("Total sales (₹)", _rs(s["gross_paise"])), ("Durina earnings (₹)", _rs(s["durina_paise"])),
-                 ("Paid to teachers (₹)", _rs(s["teachers_paise"])), ("Subscriptions", s["subscriptions"]),
+    for k, v in [("Total sales (₹)", _rs(s["gross_paise"])), ("Teachers' earnings (₹)", _rs(s["teachers_paise"])),
+                 ("Teachers' share (% of sales)", s["teachers_percent"]), ("Durina earnings (₹)", _rs(s["durina_paise"])),
+                 ("Durina share (% of sales)", s["durina_percent"]), ("Subscriptions", s["subscriptions"]),
                  ("New", s["new"]), ("Renewals", s["renewals"]), ("Paying students", s["paying_students"]),
                  ("Teachers with sales", s["selling_teachers"])]:
         ws.append([k, v])
@@ -205,12 +189,12 @@ def export_xlsx(db: Database, rep: dict, default_pct: float) -> bytes:
     ws.append(["Amounts are before payment-gateway fees."])
 
     table(wb.create_sheet("By teacher"),
-          ["Teacher", "App status", "Split T/D %", "All students", "Paying students", "Subscriptions", "New", "Renewals",
-           "Sales (₹)", "Durina (₹)", "Teacher (₹)", "Share of sales %"],
-          [[t["name"], t["status"], f"{t['split_teacher']:g}/{t['split_durina']:g}", t["total_students"], t["paying_students"],
-            t["subscriptions"], t["new"], t["renewals"], _rs(t["gross_paise"]), _rs(t["durina_paise"]), _rs(t["teacher_paise"]),
+          ["Teacher", "App status", "All students", "Paying students", "Subscriptions", "New", "Renewals",
+           "Sales (₹)", "Teacher %", "Teacher earnings (₹)", "Durina %", "Durina earnings (₹)", "Share of sales %"],
+          [[t["name"], t["status"], t["total_students"], t["paying_students"], t["subscriptions"], t["new"], t["renewals"],
+            _rs(t["gross_paise"]), t["split_teacher"], _rs(t["teacher_paise"]), t["split_durina"], _rs(t["durina_paise"]),
             t["share_of_sales"]] for t in rep["by_teacher"]],
-          [8, 9, 10], [24, 12, 12, 12, 14, 13, 8, 10, 14, 14, 14, 13])
+          [7, 9, 11], [24, 12, 12, 14, 13, 8, 10, 14, 10, 16, 10, 16, 13])
 
     start, end, _, _ = parse_period(rep["date_from"], rep["date_to"])
     pays = payments(db, start, end, default_pct, rep.get("teacher_id"), limit=500)
@@ -218,15 +202,15 @@ def export_xlsx(db: Database, rep: dict, default_pct: float) -> bytes:
     while True:  # all payments, page by page (never one huge query)
         page = payments(db, start, end, default_pct, rep.get("teacher_id"), offset=off, limit=500)["items"]
         rows += [[p["date"], p["payment_id"], p["teacher"], p["student"], p["phone"], p["plan"], p["type"],
-                  _rs(p["amount_paise"]), p["durina_percent"], _rs(p["durina_paise"]), _rs(p["teacher_paise"])] for p in page]
+                  _rs(p["amount_paise"]), p["teacher_percent"], _rs(p["teacher_paise"]), p["durina_percent"], _rs(p["durina_paise"])] for p in page]
         off += 500
         if len(page) < 500 or off >= pays["total"]:
             break
     table(wb.create_sheet("Payments"), ["Date & time", "Payment ID", "Teacher", "Student", "Phone", "Plan", "Type",
-                                        "Amount (₹)", "Durina %", "Durina (₹)", "Teacher (₹)"],
-          rows, [7, 9, 10], [17, 22, 20, 14, 14, 10, 9, 12, 9, 12, 12])
-    table(wb.create_sheet("Monthly"), ["Month", "Subscriptions", "Sales (₹)", "Durina (₹)", "Teachers (₹)"],
-          [[m["label"], m["subscriptions"], _rs(m["gross_paise"]), _rs(m["durina_paise"]), _rs(m["gross_paise"] - m["durina_paise"])]
+                                        "Amount (₹)", "Teacher %", "Teacher (₹)", "Durina %", "Durina (₹)"],
+          rows, [7, 9, 11], [17, 22, 20, 14, 14, 10, 9, 12, 10, 12, 10, 12])
+    table(wb.create_sheet("Monthly"), ["Month", "Subscriptions", "Sales (₹)", "Teachers (₹)", "Durina (₹)"],
+          [[m["label"], m["subscriptions"], _rs(m["gross_paise"]), _rs(m["gross_paise"] - m["durina_paise"]), _rs(m["durina_paise"])]
            for m in rep["monthly"]], [2, 3, 4], [12, 14, 14, 14, 14])
     buf = io.BytesIO()
     wb.save(buf)
@@ -237,11 +221,13 @@ def export_html(rep: dict) -> str:
     e, s = html.escape, rep["summary"]
     money = lambda p: f"₹{_rs(p):,.2f}"  # noqa: E731
     box = lambda k, v: f"<div class=box><span>{k}</span><b>{v}</b></div>"  # noqa: E731
-    trs = "".join(f"<tr><td>{e(t['name'])}</td><td class=r>{t['split_teacher']:g}/{t['split_durina']:g}</td><td class=r>{t['paying_students']}</td>"
-                  f"<td class=r>{t['subscriptions']}</td><td class=r>{money(t['gross_paise'])}</td><td class=r>{money(t['durina_paise'])}</td>"
-                  f"<td class=r>{money(t['teacher_paise'])}</td><td class=r>{t['share_of_sales']}%</td></tr>" for t in rep["by_teacher"])
+    pc = lambda v: f"{v:g}%" if v is not None else "—"  # noqa: E731
+    trs = "".join(f"<tr><td>{e(t['name'])}</td><td class=r>{t['paying_students']}</td>"
+                  f"<td class=r>{t['subscriptions']}</td><td class=r>{money(t['gross_paise'])}</td><td class=r>{pc(t['split_teacher'])}</td>"
+                  f"<td class=r>{money(t['teacher_paise'])}</td><td class=r>{pc(t['split_durina'])}</td><td class=r>{money(t['durina_paise'])}</td>"
+                  f"<td class=r>{t['share_of_sales']}%</td></tr>" for t in rep["by_teacher"])
     mrs = "".join(f"<tr><td>{e(m['label'])}</td><td class=r>{m['subscriptions']}</td><td class=r>{money(m['gross_paise'])}</td>"
-                  f"<td class=r>{money(m['durina_paise'])}</td></tr>" for m in rep["monthly"])
+                  f"<td class=r>{money(m['gross_paise'] - m['durina_paise'])}</td><td class=r>{money(m['durina_paise'])}</td></tr>" for m in rep["monthly"])
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Durina sales report</title><style>
 @page {{ size: A4; margin: 14mm; }} body {{ font-family: 'Noto Sans', sans-serif; color: #111827; font-size: 10pt; }}
 h1 {{ font-size: 17pt; margin: 0 0 4px; }} h2 {{ font-size: 12pt; margin: 18px 0 6px; }} .muted {{ color: #5B6472; }}
@@ -252,9 +238,9 @@ th {{ background: #0F766E; color: #fff; text-align: left; padding: 5px; font-siz
 .r {{ text-align: right; }}
 </style></head><body><h1>LiveTeach — Durina sales report</h1>
 <b>Period: {e(rep['period_from'])} to {e(rep['period_to'])}</b><div class=muted>Generated on {e(rep['generated_on'])}</div>
-<div class=grid>{box('Total sales', money(s['gross_paise']))}{box('Durina earnings', money(s['durina_paise']))}{box('Paid to teachers', money(s['teachers_paise']))}
+<div class=grid>{box('Total sales', money(s['gross_paise']))}{box('Teachers’ earnings · ' + pc(s['teachers_percent']), money(s['teachers_paise']))}{box('Durina earnings · ' + pc(s['durina_percent']), money(s['durina_paise']))}
 {box('Subscriptions', f"{s['subscriptions']} ({s['new']} new · {s['renewals']} renewals)")}{box('Paying students', s['paying_students'])}{box('Teachers with sales', s['selling_teachers'])}</div>
-<h2>Sales by teacher</h2><table><thead><tr><th>Teacher</th><th class=r>Split T/D</th><th class=r>Paying students</th><th class=r>Subs</th>
-<th class=r>Sales</th><th class=r>Durina</th><th class=r>Teacher</th><th class=r>Share</th></tr></thead><tbody>{trs}</tbody></table>
-<h2>Month by month</h2><table><thead><tr><th>Month</th><th class=r>Subscriptions</th><th class=r>Sales</th><th class=r>Durina</th></tr></thead><tbody>{mrs}</tbody></table>
+<h2>Sales by teacher</h2><table><thead><tr><th>Teacher</th><th class=r>Paying students</th><th class=r>Subs</th>
+<th class=r>Sales</th><th class=r>Teacher %</th><th class=r>Teacher earnings</th><th class=r>Durina %</th><th class=r>Durina earnings</th><th class=r>Share</th></tr></thead><tbody>{trs}</tbody></table>
+<h2>Month by month</h2><table><thead><tr><th>Month</th><th class=r>Subscriptions</th><th class=r>Sales</th><th class=r>Teachers</th><th class=r>Durina</th></tr></thead><tbody>{mrs}</tbody></table>
 <p class=muted>Every payment, student by student, is in the Excel export. Amounts are before payment-gateway fees.</p></body></html>"""

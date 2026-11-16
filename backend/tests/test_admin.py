@@ -179,3 +179,16 @@ def test_admin_reports_api(setup):
     assert x.status_code == 200 and x.content[:2] == b"PK"
     assert c.get("/admin/api/reports?date_from=2026-12-01&date_to=2026-01-01").status_code == 400
     assert c.get("/admin/api/teachers/meena/students").json()["total"] == 1
+    # teacher's % and money shown next to Durina's
+    assert r["summary"]["teachers_paise"] == 37500 and r["summary"]["teachers_percent"] == 75
+    pay = c.get(f"/admin/api/reports/payments?date_from=2026-01-01&date_to={today}").json()["items"][0]
+    assert pay["teacher_percent"] == 75 and pay["teacher_paise"] == 37500
+    # any period for one teacher's report: financial year / year / custom
+    fy = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}").json()
+    assert fy["summary"]["subscriptions"] == 1 and fy["period_from"] == "01 Apr 2026"
+    assert fy["items"][0]["teacher_percent"] == 75 and fy["summary"]["teacher_percent"] == 75
+    mine = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}&view=teacher").json()
+    assert "durina" not in str(mine).lower() and mine["summary"]["your_paise"] == 37500
+    assert c.get("/admin/api/teachers/meena/report?date_from=2027-03-31&date_to=2026-04-01").status_code == 400
+    x = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}&format=xlsx")
+    assert x.status_code == 200 and "2026-04-01-to-" in x.headers["content-disposition"]

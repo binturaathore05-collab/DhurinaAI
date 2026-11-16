@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="only light">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LiveTeach · Teacher Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -10,9 +11,11 @@
           --acc:#0F766E; --accHover:#115E59; --accSoft:#E6F4F1; --warn:#B45309; --warnSoft:#FEF3C7; --ok:#15803D; --bad:#B91C1C; }
   * { box-sizing: border-box; }
   /* Always light: stops phones/browsers in dark mode from turning control text white on our white boxes */
-  :root { color-scheme: light; }
+  :root { color-scheme: only light; }
   button, input, select, textarea, option { color: var(--text); }
-  input::placeholder, textarea::placeholder { color: #8A93A3; opacity: 1; }
+  input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]), select, textarea, option { background-color: #fff; -webkit-text-fill-color: var(--text); }
+  input:disabled, textarea:disabled, select:disabled { background-color: #F3F4F6; -webkit-text-fill-color: #5B6472; }
+  input::placeholder, textarea::placeholder { color: #8A93A3; -webkit-text-fill-color: #8A93A3; opacity: 1; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; }
   a { color: var(--acc); } a:hover { color: var(--accHover); }
   .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
@@ -64,7 +67,8 @@
   .pager button { min-width: 38px; height: 36px; border-radius: 10px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .pager button.on { background: var(--text); color: #fff; border-color: var(--text); } .pager button:disabled { opacity: .4; cursor: default; }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  select { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; font: inherit; padding: 0 10px; }
+  select, input[type=date] { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; font: inherit; padding: 0 10px; }
+  input[type=date] { margin-left: 6px; }
   .qa input[type=checkbox], th input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc); }
   .chipf { height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .chipf.on { background: var(--text); color: #fff; border-color: var(--text); }
@@ -222,16 +226,17 @@ const DEMO = (() => {
       const counts = { active: 0, ending: 0, ended: 0, demo: 0 }; db.allStudents.forEach((x) => counts[x.status]++);
       const list = db.allStudents.filter((x) => (!P.status || x.status === P.status) && (!P.q || (x.name + ' ' + x.phone.slice(-4)).toLowerCase().includes(P.q.toLowerCase())));
       return { total: list.length, counts, items: list.slice(off, off + lim) }; }
-    if (url.pathname === '/report') { const [y, m] = P.month.split('-').map(Number); const seed = (y * 12 + m) % 7; const items = [], pct = db.me.split;
-      for (let i = 0; i < 18 + seed * 3; i++) { const yearly = i % 4 === 0; const amt = yearly ? 399900 : 49900;
-        items.push({ date: `${P.month}-${String(1 + (i * 3) % 28).padStart(2, '0')}`, student: '•••••• ' + (1000 + (i * 7919) % 9000), plan: yearly ? 'Yearly' : 'Monthly',
+    if (url.pathname === '/report') { const d1 = new Date(P.date_from + 'T00:00:00'), d2 = new Date(P.date_to + 'T00:00:00'); if (!(d2 >= d1)) throw new Error("'To' date is before 'From' date");
+      const days = Math.round((d2 - d1) / 86400000) + 1, items = [], pct = db.me.split, n = Math.min(400, Math.round(days * 0.8));
+      for (let i = 0; i < n; i++) { const yearly = i % 4 === 0; const amt = yearly ? 399900 : 49900; const at = new Date(d1.getTime() + Math.floor(((i * 7919) % 1000) / 1000 * days) * 86400000);
+        items.push({ date: isoD(at), student: '•••••• ' + (1000 + (i * 7919) % 9000), plan: yearly ? 'Yearly' : 'Monthly',
           type: i % 3 ? 'New' : 'Renewal', amount_paise: amt, your_percent: pct, your_paise: Math.round(amt * pct / 100) }); }
       items.sort((a, b) => a.date.localeCompare(b.date)); const gross = items.reduce((a, x) => a + x.amount_paise, 0), mine = items.reduce((a, x) => a + x.your_paise, 0);
-      const first = new Date(y, m - 1, 1), lastDay = new Date(y, m, 0), today = new Date(), to = lastDay > today && first <= today ? today : lastDay;
+      const first = d1, to = d2, today = new Date();
       const f = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return { teacher: db.me.name, month: P.month, period_from: f(first), period_to: f(to), generated_on: f(today), items,
+      return { teacher: db.me.name, period_from: f(first), period_to: f(to), generated_on: f(today), items,
         summary: { subscriptions: items.length, new: items.filter((x) => x.type === 'New').length, renewals: items.filter((x) => x.type === 'Renewal').length,
-          students: items.length - 2, gross_paise: gross, your_percent: pct, your_paise: mine } }; }
+          students: Math.max(0, items.length - 2), gross_paise: gross, your_percent: pct, your_paise: mine } }; }
     if (path === '/password') { if ((body.new_password || '').length < 8) throw new Error('Password must be at least 8 characters'); return {}; }
     throw new Error('Not found');
   };
@@ -400,8 +405,11 @@ async function studentsView() {
   const max = Math.max(1, ...D.months), labels = [...Array(6)].map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return d.toLocaleString('en', { month: 'short' }); });
   const bars = D.months.map((m, i) => `<div class="b"><div style="height:${Math.round(m / max * 140)}px" title="${rupees(m * D.me.split / 100)}"></div><span class="muted" style="font-size:12px">${labels[i]}</span></div>`).join('');
   return shell('students', `${head('Students & Earnings', 'Your share is ' + D.me.split + '%. Razorpay settles it to your bank account automatically.')}
-    <section class="card"><div class="row"><div><h2>Monthly report</h2><span class="sub">Subscriptions, new vs renewals, total received and your earnings — for your own accounts.</span></div>
-      <div class="toolbar"><select id="rm" aria-label="Month">${months}</select><button class="btn ghost small" id="rv">View</button><button class="btn primary small" data-dl="xlsx">Download Excel</button><button class="btn primary small" data-dl="pdf">Download PDF</button></div></div>
+    <section class="card"><div class="row"><div><h2>Earnings report</h2><span class="sub">For a month, a year, a financial year (April–March) or any dates you choose. Subscriptions, total received and your earnings.</span></div>
+      <div class="toolbar"><select id="rp" aria-label="Report period">${RPT.map(([k, l]) => `<option value="${k}" ${RQ.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select id="rm" aria-label="Month" ${RQ.kind === 'month' ? '' : 'hidden'}>${months}</select>
+        <span id="rc" class="toolbar" ${RQ.kind === 'custom' ? '' : 'hidden'}><label class="muted" style="font-size:13px">From <input type="date" id="rf" value="${RQ.from}"></label><label class="muted" style="font-size:13px">To <input type="date" id="rt" value="${RQ.to}"></label></span>
+        <button class="btn ghost small" id="rv">View</button><button class="btn primary small" data-dl="xlsx">Download Excel</button><button class="btn primary small" data-dl="pdf">Download PDF</button></div></div>
       <div class="bars">${bars}</div></section>
     <section class="card" style="gap:12px"><div class="row"><h2>Students</h2><input type="search" id="sq" value="${esc(SV.q)}" placeholder="Search name or last 4 digits" aria-label="Search students" style="min-width:260px"></div>
       <div class="toolbar">${f('', 'All', all)}${f('active', 'Active', c.active)}${f('ending', 'Ends in 3 days', c.ending)}${f('ended', 'Plan ended', c.ended)}${f('demo', 'Demo only', c.demo)}</div>
@@ -410,20 +418,35 @@ async function studentsView() {
       ${pager(r.total, SV.offset, SV.limit, 'data-sp')}</section>`);
 }
 
-async function showReport(month) {
-  const r = await api('GET', '/report?month=' + month), s = r.summary;
+// report period: month / this year / last year / financial year (Apr–Mar) / custom dates — all in Indian time
+const isoD = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const RPT = [['this_month', 'This month'], ['last_month', 'Last month'], ['month', 'Choose a month…'], ['this_year', 'This year (Jan–Dec)'], ['last_year', 'Last year'],
+  ['this_fy', 'This financial year (Apr–Mar)'], ['last_fy', 'Last financial year'], ['custom', 'Custom dates…']];
+const RQ = { kind: 'this_month', from: isoD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), to: isoD(new Date()) };
+function reportRange() {
+  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), fy = m >= 3 ? y : y - 1;
+  if (RQ.kind === 'month') { const [a, b] = $('#rm').value.split('-').map(Number); const end = new Date(a, b, 0); return [new Date(a, b - 1, 1), end > t ? t : end].map(isoD); }
+  if (RQ.kind === 'custom') { const f = $('#rf').value, to = $('#rt').value; if (!f || !to) throw new Error('Choose both dates'); if (to < f) throw new Error('“To” date is before “From” date'); return [f, to]; }
+  return { this_month: [new Date(y, m, 1), t], last_month: [new Date(y, m - 1, 1), new Date(y, m, 0)], this_year: [new Date(y, 0, 1), t], last_year: [new Date(y - 1, 0, 1), new Date(y - 1, 11, 31)],
+    this_fy: [new Date(fy, 3, 1), t], last_fy: [new Date(fy - 1, 3, 1), new Date(fy, 2, 31)] }[RQ.kind].map(isoD);
+}
+async function showReport() {
+  let range; try { range = reportRange(); } catch (e) { return toast(e.message); }
+  const r = await api('GET', `/report?date_from=${range[0]}&date_to=${range[1]}`), s = r.summary;
   const rows = r.items.map((i) => `<tr><td>${esc(i.date)}</td><td>${esc(i.student)}</td><td>${esc(i.plan)}</td><td>${esc(i.type)}</td><td>${rupees(i.amount_paise)}</td><td>${i.your_percent}%</td><td><b>${rupees(i.your_paise)}</b></td></tr>`).join('');
-  const m = document.createElement('div'); m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Monthly report');
+  const m = document.createElement('div'); m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Earnings report');
   m.innerHTML = `<div class="card"><div class="row"><div><h2>${esc(r.teacher)} — earnings report</h2><b>Period: ${esc(r.period_from)} to ${esc(r.period_to)}</b><div class="sub">Generated on ${esc(r.generated_on)} · before payment-gateway fees</div></div><button class="btn ghost small" id="mx">Close</button></div>
-    <div class="stats">${stat('Subscriptions', s.subscriptions, s.new + ' new · ' + s.renewals + ' renewals')}${stat('Total paid', rupees(s.gross_paise), 'by your students')}${stat('Your share', s.your_percent + '%', 'of every payment')}${stat('Your earnings', rupees(s.your_paise), 'settled by Razorpay')}</div>
-    <div class="scroll"><table><thead><tr><th>DATE</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>YOUR SHARE</th><th>YOUR EARNINGS</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div class="stats">${stat('Subscriptions', s.subscriptions, s.new + ' new · ' + s.renewals + ' renewals')}${stat('Total paid', rupees(s.gross_paise), 'by your students')}${stat('Your share', s.your_percent == null ? '—' : s.your_percent + '%', 'of every payment')}${stat('Your earnings', rupees(s.your_paise), 'settled by Razorpay')}</div>
+    <div class="scroll"><table><thead><tr><th>DATE</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>YOUR SHARE</th><th>YOUR EARNINGS</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">No payments in this period.</td></tr>'}</tbody></table></div></div>`;
   document.body.append(m); m.onclick = (e) => { if (e.target === m || e.target.id === 'mx') m.remove(); };
 }
-async function download(fmt, month) {
-  if (IS_DEMO) { toast(`In your live dashboard this downloads ${month}.${fmt}. Here is the report preview.`); return showReport(month); }
-  const res = await fetch(`/teacher/report?month=${month}&format=${fmt}`, { headers: AUTH() });
+async function download(fmt) {
+  let range; try { range = reportRange(); } catch (e) { return toast(e.message); }
+  const name = `liveteach-${range[0]}-to-${range[1]}.${fmt}`;
+  if (IS_DEMO) { toast(`In your live dashboard this downloads ${name}. Here is the report preview.`); return showReport(); }
+  const res = await fetch(`/teacher/report?date_from=${range[0]}&date_to=${range[1]}&format=${fmt}`, { headers: AUTH() });
   if (!res.ok) return toast('Could not create the report');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(await res.blob()); a.download = `liveteach-${month}.${fmt}`; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await res.blob()); a.download = name; a.click();
 }
 
 function settingsView() {
@@ -495,8 +518,10 @@ function bind(view) {
     let t; $('#sq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SV.q = e.target.value; SV.offset = 0; render().then(() => $('#sq').focus()); }, 350); };
     $$('[data-st]').forEach((b) => b.onclick = () => { SV.status = b.dataset.st; SV.offset = 0; render(); });
     $$('[data-sp]').forEach((b) => b.onclick = () => { SV.offset = +b.dataset.sp; render(); });
-    $('#rv').onclick = () => showReport($('#rm').value);
-    $$('[data-dl]').forEach((b) => b.onclick = () => download(b.dataset.dl, $('#rm').value));
+    $('#rp').onchange = (e) => { RQ.kind = e.target.value; $('#rm').hidden = RQ.kind !== 'month'; $('#rc').hidden = RQ.kind !== 'custom'; };
+    $('#rf').onchange = (e) => { RQ.from = e.target.value; }; $('#rt').onchange = (e) => { RQ.to = e.target.value; };
+    $('#rv').onclick = () => showReport();
+    $$('[data-dl]').forEach((b) => b.onclick = () => download(b.dataset.dl));
   }
   if (view === 'settings') $('#pb').onclick = async () => { try { await api('POST', '/password', { current_password: $('#p0').value, new_password: $('#p1').value }); $('#pm').textContent = 'Password changed'; $('#pm').className = 'muted'; } catch (e) { $('#pm').textContent = e.message; $('#pm').className = 'err'; } };
 }
