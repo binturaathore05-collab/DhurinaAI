@@ -54,7 +54,7 @@ jobs:
           if [ -n "$AVATAR_URL" ]; then curl -fsSL "$AVATAR_URL" -o assets/teacher/avatar.jpg; fi
 
       - name: Create Android platform files
-        run: flutter create --platforms=android --org com.durina.liveteach --project-name liveteach .
+        run: flutter create --platforms=android --org com.dhurina.liveteach --project-name liveteach .
 
       - name: White-label app name + internet permission
         run: |
@@ -70,7 +70,7 @@ jobs:
           try:
               g = open(gradle).read()
               tid = re.sub(r'[^a-z0-9]', '', cfg['teacherId'].lower()) or 'demo'
-              g = re.sub(r'applicationId = "[^"]*"', f'applicationId = "com.durina.liveteach.{tid}"', g)
+              g = re.sub(r'applicationId = "[^"]*"', f'applicationId = "com.dhurina.liveteach.{tid}"', g)
               open(gradle, 'w').write(g)
           except FileNotFoundError:
               pass

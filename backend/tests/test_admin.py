@@ -13,15 +13,15 @@ from fastapi.testclient import TestClient  # noqa: E402
 def setup(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "a.db"))
     monkeypatch.setenv("AVATAR_DIR", str(tmp_path / "avatars"))
-    monkeypatch.setenv("ADMIN_EMAIL", "owner@durina.in")
-    monkeypatch.setenv("ADMIN_PASSWORD", "Durina2026")
+    monkeypatch.setenv("ADMIN_EMAIL", "owner@dhurina.in")
+    monkeypatch.setenv("ADMIN_PASSWORD", "Dhurina2026")
     monkeypatch.setenv("SECRETS_KEY", "k" * 40)
     monkeypatch.setenv("LLM_API_KEY", "")
     import app.config, app.main
     importlib.reload(app.config)
     main = importlib.reload(app.main)
     c = TestClient(main.app)
-    r = c.post("/admin/api/login", json={"email": "Owner@Durina.in", "password": "Durina2026"})
+    r = c.post("/admin/api/login", json={"email": "Owner@Dhurina.in", "password": "Dhurina2026"})
     assert r.status_code == 200, r.text
     c.headers["Authorization"] = "Bearer " + r.json()["token"]
     return c, main
@@ -33,16 +33,16 @@ def test_admin_requires_login(setup):
     assert c.get("/admin").status_code == 200  # the page itself loads; data needs a login
     assert c.get("/admin/api/me").json()["role"] == "owner"
     raw = main.db.one("SELECT password_hash FROM admin_users")["password_hash"]
-    assert raw.startswith("scrypt$") and "Durina2026" not in raw  # never stored in plain text
+    assert raw.startswith("scrypt$") and "Dhurina2026" not in raw  # never stored in plain text
 
 
 def test_wrong_password_and_lockout(setup):
     c, _ = setup
     anon = TestClient(c.app)
     for _ in range(5):
-        r = anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "wrong-pass1"})
+        r = anon.post("/admin/api/login", json={"email": "owner@dhurina.in", "password": "wrong-pass1"})
         assert r.status_code == 401 and r.json()["detail"] == "Wrong email or password"
-    r = anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "Durina2026"})
+    r = anon.post("/admin/api/login", json={"email": "owner@dhurina.in", "password": "Dhurina2026"})
     assert r.status_code == 401 and "Too many wrong passwords" in r.json()["detail"]
     assert anon.post("/admin/api/login", json={"email": "nobody@x.in", "password": "x"}).status_code == 401
 
@@ -50,11 +50,11 @@ def test_wrong_password_and_lockout(setup):
 def test_change_password_ends_old_sessions(setup):
     c, _ = setup
     assert c.post("/admin/api/password", json={"current_password": "nope", "new_password": "NewPass123"}).status_code == 400
-    assert c.post("/admin/api/password", json={"current_password": "Durina2026", "new_password": "short"}).status_code == 400
-    assert c.post("/admin/api/password", json={"current_password": "Durina2026", "new_password": "NewPass123"}).json()["changed"]
+    assert c.post("/admin/api/password", json={"current_password": "Dhurina2026", "new_password": "short"}).status_code == 400
+    assert c.post("/admin/api/password", json={"current_password": "Dhurina2026", "new_password": "NewPass123"}).json()["changed"]
     assert c.get("/admin/api/overview").status_code == 401  # old login no longer works
     anon = TestClient(c.app)
-    assert anon.post("/admin/api/login", json={"email": "owner@durina.in", "password": "NewPass123"}).status_code == 200
+    assert anon.post("/admin/api/login", json={"email": "owner@dhurina.in", "password": "NewPass123"}).status_code == 200
 
 
 def test_add_teacher_with_own_split_and_secret(setup):
@@ -173,13 +173,13 @@ def test_admin_reports_api(setup):
     from app.services.teacher_data import TZ
     today = __import__("datetime").datetime.now(TZ).date().isoformat()   # "today" in India
     r = c.get(f"/admin/api/reports?date_from=2026-01-01&date_to={today}").json()
-    assert r["summary"]["durina_paise"] == 12500 and r["by_teacher"][0]["name"] == "Meena"
+    assert r["summary"]["dhurina_paise"] == 12500 and r["by_teacher"][0]["name"] == "Meena"
     assert c.get(f"/admin/api/reports/payments?date_from=2026-01-01&date_to={today}").json()["total"] == 1
     x = c.get(f"/admin/api/reports/export?date_from=2026-01-01&date_to={today}&format=xlsx")
     assert x.status_code == 200 and x.content[:2] == b"PK"
     assert c.get("/admin/api/reports?date_from=2026-12-01&date_to=2026-01-01").status_code == 400
     assert c.get("/admin/api/teachers/meena/students").json()["total"] == 1
-    # teacher's % and money shown next to Durina's
+    # teacher's % and money shown next to Dhurina's
     assert r["summary"]["teachers_paise"] == 37500 and r["summary"]["teachers_percent"] == 75
     pay = c.get(f"/admin/api/reports/payments?date_from=2026-01-01&date_to={today}").json()["items"][0]
     assert pay["teacher_percent"] == 75 and pay["teacher_paise"] == 37500
@@ -188,7 +188,7 @@ def test_admin_reports_api(setup):
     assert fy["summary"]["subscriptions"] == 1 and fy["period_from"] == "01 Apr 2026"
     assert fy["items"][0]["teacher_percent"] == 75 and fy["summary"]["teacher_percent"] == 75
     mine = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}&view=teacher").json()
-    assert "durina" not in str(mine).lower() and mine["summary"]["your_paise"] == 37500
+    assert "dhurina" not in str(mine).lower() and mine["summary"]["your_paise"] == 37500
     assert c.get("/admin/api/teachers/meena/report?date_from=2027-03-31&date_to=2026-04-01").status_code == 400
     x = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}&format=xlsx")
     assert x.status_code == 200 and "2026-04-01-to-" in x.headers["content-disposition"]

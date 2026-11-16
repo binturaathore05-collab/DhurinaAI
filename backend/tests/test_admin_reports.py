@@ -34,11 +34,11 @@ def test_sales_by_teacher_with_their_own_split(db):
     rep = admin_reports.full_report(db, "2026-11-01", "2026-11-30", 20)
     s = rep["summary"]
     assert s["subscriptions"] == 50 and s["gross_paise"] == 50 * 50000 and s["selling_teachers"] == 2
-    assert s["durina_paise"] == 40 * 10000 + 10 * 12500 and s["teachers_paise"] == s["gross_paise"] - s["durina_paise"]
+    assert s["dhurina_paise"] == 40 * 10000 + 10 * 12500 and s["teachers_paise"] == s["gross_paise"] - s["dhurina_paise"]
     bt = {t["id"]: t for t in rep["by_teacher"]}
     assert [t["id"] for t in rep["by_teacher"]][:2] == ["subhash", "meena"]          # biggest sales first
     assert bt["rakesh"]["gross_paise"] == 0                                            # teachers with no sales still listed
-    assert bt["meena"]["split_durina"] == 25 and bt["subhash"]["share_of_sales"] == 80.0
+    assert bt["meena"]["split_dhurina"] == 25 and bt["subhash"]["share_of_sales"] == 80.0
     dec = admin_reports.full_report(db, "2026-12-01", "2026-12-31", 20)
     assert dec["summary"]["renewals"] == 10 and dec["summary"]["new"] == 0
     q = admin_reports.full_report(db, "2026-11-01", "2026-12-31", 20)
@@ -53,7 +53,7 @@ def test_payments_paged_and_searchable(db):
     start, end, _, _ = admin_reports.parse_period("2026-11-01", "2026-11-30")
     page = admin_reports.payments(db, start, end, 20, limit=50)
     assert page["total"] == 120 and len(page["items"]) == 50 and page["items"][0]["teacher"] == "Subhash Sir"
-    assert page["items"][0]["phone"].startswith("••••••") and page["items"][0]["durina_paise"] == 10000
+    assert page["items"][0]["phone"].startswith("••••••") and page["items"][0]["dhurina_paise"] == 10000
     assert len(admin_reports.payments(db, start, end, 20, offset=100, limit=50)["items"]) == 20
     assert admin_reports.payments(db, start, end, 20, q="0007")["total"] == 1          # last 4 digits of phone
     assert admin_reports.payments(db, start, end, 20, q="pay_7")["total"] == 1         # payment id

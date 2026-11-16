@@ -205,8 +205,8 @@ def test_real_pdf_render(tmp_path):
 # ---------- payments ----------
 
 def test_order_payload_splits_commission():
-    p = payments.build_order_payload(99900, "r1", "acc_durina", 20)
-    assert p["transfers"][0] == {"account": "acc_durina", "amount": 19980, "currency": "INR",
+    p = payments.build_order_payload(99900, "r1", "acc_dhurina", 20)
+    assert p["transfers"][0] == {"account": "acc_dhurina", "amount": 19980, "currency": "INR",
                                  "notes": {"purpose": "platform commission"}, "on_hold": 0}
     assert "transfers" not in payments.build_order_payload(99900, "r1", "", 20)
 
@@ -221,7 +221,7 @@ def test_signatures():
 
 
 class S:
-    platform_linked_account, platform_commission_percent = "acc_durina", 20
+    platform_linked_account, platform_commission_percent = "acc_dhurina", 20
     razorpay_key_id, razorpay_key_secret, razorpay_webhook_secret = "rzp_default", "sec", "wh"
 
 

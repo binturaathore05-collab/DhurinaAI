@@ -1,9 +1,9 @@
-# AI Teacher – Real Human-Like Teaching Experience (requirements from Durina, 17 Nov 2026)
+# AI Teacher – Real Human-Like Teaching Experience (requirements from Dhurina, 17 Nov 2026)
 
 **Goal:** the student should feel a real human teacher is personally teaching them — not a robot or a
 plain AI video. Vision: *Call your AI teacher, anytime.*
 
-Instructions from Durina: integrate with the Teaching Style system; give a setting/toggle per feature
+Instructions from Dhurina: integrate with the Teaching Style system; give a setting/toggle per feature
 where useful; keep the UI modern and clean; build phase-wise by feasibility, quality and performance.
 
 ## How each requirement is delivered

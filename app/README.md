@@ -15,6 +15,6 @@ To connect a server: Actions → Build Android APK → Run workflow → enter th
 
 ## Run locally
 ```bash
-flutter create --platforms=android --org com.durina.liveteach --project-name liveteach .   # first time only
+flutter create --platforms=android --org com.dhurina.liveteach --project-name liveteach .   # first time only
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000     # Android emulator → local backend
 ```

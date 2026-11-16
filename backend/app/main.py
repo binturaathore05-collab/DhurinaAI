@@ -344,7 +344,7 @@ def _report_response(tid: str, month: str, fmt: str, audience: str, date_from: s
 @app.get("/teacher/report")
 def teacher_report(month: str = "", format: str = "json", date_from: str = "", date_to: str = "",
                    teacher_id: str = Depends(teacher_admin)):
-    return _report_response(teacher_id, month, format, "teacher", date_from, date_to)   # never shows Durina's share
+    return _report_response(teacher_id, month, format, "teacher", date_from, date_to)   # never shows Dhurina's share
 
 
 @app.post("/teacher/review/{qa_id}/approve")
@@ -356,7 +356,7 @@ def teacher_approve(qa_id: int, body: Approval, teacher_id: str = Depends(teache
     return {"approved": True}
 
 
-# ---------- Durina admin panel ----------
+# ---------- Dhurina admin panel ----------
 # Open https://<server>/admin in a browser and log in with email + password.
 # The first owner account comes from ADMIN_EMAIL / ADMIN_PASSWORD in .env.
 

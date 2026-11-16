@@ -13,7 +13,7 @@ pytest -q                            # tests
 ```
 On the server also install Noto fonts (`sudo apt install fonts-noto`) so PDFs render every Indian script.
 
-## Durina admin panel
+## Dhurina admin panel
 Open `https://<server>/admin` and log in with **email + password**. The first owner account is created
 from `ADMIN_EMAIL` / `ADMIN_PASSWORD` on first start; change the password in Settings → Your account.
 Passwords are stored only as scrypt hashes; 5 wrong tries lock the account for 15 minutes; sessions last 12 hours
@@ -25,11 +25,11 @@ and end when the password changes; Settings shows recent logins.
   the APK appears under "App builds" (needs `GITHUB_TOKEN`, `GITHUB_REPO`, `PUBLIC_BASE_URL`).
 - **Teacher detail:** revenue split report, last 6 months, launch checklist, builds.
 - **Reports:** all teachers' sales for any period (this month, last month, 3 months, this year, last year, custom
-  dates) or one teacher: total sales, Durina earnings, paid to teachers, new vs renewals, paying students,
+  dates) or one teacher: total sales, Dhurina earnings, paid to teachers, new vs renewals, paying students,
   month-by-month chart, sales by teacher (sortable, with each teacher's own split and share of sales), and every
   payment (who paid how much, to which teacher; 50 per page, searchable). Export Excel (Summary, By teacher,
   every Payment, Monthly) or PDF.
-- **Settings:** company/GSTIN, Durina linked account, defaults for new teachers, AI trusted sites and blocked topics, legal links.
+- **Settings:** company/GSTIN, Dhurina linked account, defaults for new teachers, AI trusted sites and blocked topics, legal links.
 
 ## Languages
 The app's screens are always in English. There is no language picker: the AI teacher replies in whatever
@@ -58,7 +58,7 @@ language is saved with each answer and used for its voice and its PDF note (righ
 
 ## Payments
 The teacher's Razorpay account receives the money; each order carries a Razorpay Route transfer that
-sends Durina's commission to Durina's linked account automatically. **The split is set separately for
-every teacher** (admin panel → teacher → Durina %; the teacher gets the rest), along with that
+sends Dhurina's commission to Dhurina's linked account automatically. **The split is set separately for
+every teacher** (admin panel → teacher → Dhurina %; the teacher gets the rest), along with that
 teacher's own Razorpay keys. `PLATFORM_COMMISSION_PERCENT` in `.env` is only a default for a teacher
 with no split set. Each teacher's Razorpay webhook points to `/pay/webhook/<teacher id>`.

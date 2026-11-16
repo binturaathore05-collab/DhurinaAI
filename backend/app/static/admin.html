@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="color-scheme" content="only light">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LiveTeach · Durina Admin</title>
+<title>LiveTeach · Dhurina Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
@@ -128,7 +128,7 @@ async function api(method, path, body) {
 function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
-    <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Durina Admin</span></span></div>
+    <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
     ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
@@ -140,8 +140,8 @@ const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span cl
 // ---------- Login ----------
 function loginView() {
   return `<form class="login card" id="lf" style="gap:18px"><div style="display:flex;gap:12px;align-items:center"><span style="width:44px;height:44px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px">L</span>
-      <div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Durina Ventures · authorised staff only</span></div></div>
-    <label class="f">Email<input id="email" type="email" autocomplete="username" placeholder="you@durina.in" required></label>
+      <div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Dhurina Ventures · authorised staff only</span></div></div>
+    <label class="f">Email<input id="email" type="email" autocomplete="username" placeholder="you@dhurina.in" required></label>
     <label class="f">Password<span style="position:relative;display:flex"><input id="key" type="password" autocomplete="current-password" placeholder="Your password" required style="flex:1;padding-right:64px">
       <button type="button" id="eye" style="position:absolute;right:6px;top:6px;height:32px;border:0;background:var(--surf);border-radius:8px;padding:0 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Show</button></span></label>
     <button class="btn primary" id="go" type="submit">Log in</button><span id="lerr" class="err" role="alert"></span>
@@ -160,9 +160,9 @@ async function teachersView() {
       <a class="btn primary" href="#/new">${icon('plus', 18)}Add teacher</a></div>
     <div class="stats">${stat('Teachers', o.teachers, o.live + ' live on Play Store')}${stat('Students', o.students, 'signed up across all apps')}
       ${stat('Active subscriptions', o.active_plans, 'paying right now')}${stat('Revenue this month', rupees(o.this_month.total_paise), 'all teachers, before split')}
-      ${stat('Durina share', rupees(o.this_month.platform_paise), 'each teacher’s own % · auto-split')}</div>
+      ${stat('Dhurina share', rupees(o.this_month.platform_paise), 'each teacher’s own % · auto-split')}</div>
     <section class="card"><div class="row"><h2>All teachers</h2><input type="search" id="q" placeholder="Search teachers" aria-label="Search teachers" style="min-width:240px"></div>
-      <div class="scroll">${teachers.length ? `<table><thead><tr><th>TEACHER</th><th>APP</th><th>SPLIT · TEACHER / DURINA</th><th>STUDENTS</th><th>ACTIVE PLANS</th><th>THIS MONTH</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+      <div class="scroll">${teachers.length ? `<table><thead><tr><th>TEACHER</th><th>APP</th><th>SPLIT · TEACHER / DHURINA</th><th>STUDENTS</th><th>ACTIVE PLANS</th><th>THIS MONTH</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
         : `<p class="muted">No teachers yet. <a href="#/new">Add the first teacher</a>.</p>`}</div></section>`);
 }
 
@@ -199,11 +199,11 @@ async function formView(id) {
           ${f('monthly_price', 'Monthly price (₹)', t.monthly_price, 'number', '', 'min="0"')}${f('yearly_price', 'Yearly price (₹)', t.yearly_price, 'number', '', 'min="0"')}
           ${f('demo_questions', 'Free demo questions', t.demo_questions, 'number', 'Blank = default from Settings', 'min="0"')}
           ${f('grace_days', 'Grace days after plan ends', t.grace_days, 'number', '0 = no grace', 'min="0"')}${f('grace_questions', 'Grace questions', t.grace_questions, 'number', '', 'min="0"')}</div>`)}
-        ${sec(3, 'Payment split &amp; Razorpay', 'Set this teacher’s own split — every teacher can be different. Money goes to the teacher’s account; Durina’s part is split automatically', `
-          <div class="split"><div class="row"><b>Revenue split for this teacher</b><b>Teacher <span id="tp" style="color:var(--acc)">${tp}</span>% · Durina <span id="dp" style="color:var(--warn)">${100 - tp}</span>%</b></div>
+        ${sec(3, 'Payment split &amp; Razorpay', 'Set this teacher’s own split — every teacher can be different. Money goes to the teacher’s account; Dhurina’s part is split automatically', `
+          <div class="split"><div class="row"><b>Revenue split for this teacher</b><b>Teacher <span id="tp" style="color:var(--acc)">${tp}</span>% · Dhurina <span id="dp" style="color:var(--warn)">${100 - tp}</span>%</b></div>
             <input id="split" type="range" min="0" max="100" step="1" value="${tp}" aria-label="Teacher share in percent" style="width:100%;accent-color:var(--acc)">
             <div class="bar" aria-hidden="true"><div id="tb" style="width:${tp}%"></div></div>
-            <span class="muted" style="font-size:12px">On a ₹1,000 plan: teacher gets ₹<span id="t1">${tp * 10}</span> · Durina gets ₹<span id="d1">${(100 - tp) * 10}</span> (before gateway fees). Can be changed later.</span></div>
+            <span class="muted" style="font-size:12px">On a ₹1,000 plan: teacher gets ₹<span id="t1">${tp * 10}</span> · Dhurina gets ₹<span id="d1">${(100 - tp) * 10}</span> (before gateway fees). Can be changed later.</span></div>
           <div class="grid2">${f('razorpay_key_id', 'Razorpay Key ID', t.razorpay_key_id, 'text', '', 'placeholder="rzp_live_…"')}
             ${f('razorpay_key_secret', 'Razorpay Key Secret', '', 'password', t.razorpay_key_secret ? 'Saved ' + esc(t.razorpay_key_secret) + ' · leave blank to keep' : 'Stored encrypted · never shown again', 'autocomplete="new-password"')}
             ${f('razorpay_webhook_secret', 'Razorpay Webhook Secret', '', 'password', t.razorpay_webhook_secret ? 'Saved ' + esc(t.razorpay_webhook_secret) + ' · leave blank to keep' : 'Webhook URL: /pay/webhook/&lt;teacher id&gt;', 'autocomplete="new-password"')}</div>`)}
@@ -287,7 +287,7 @@ async function detailView(id) {
       <div><h1>${esc(t.name)}</h1><span class="sub" style="display:flex;gap:10px;align-items:center">${esc(t.subject)} · ${esc(t.app_name || '')} ${pill(t.status)}</span></div></div>
       <div class="row"><a class="btn ghost" href="#/reports" onclick="RP.teacher='${esc(t.id)}';RP.offset=0">Sales report</a><a class="btn ghost" href="#/edit/${encodeURIComponent(t.id)}">Edit details</a><button class="btn primary" id="build">${icon('build', 18)}Build new version</button></div></div>
     <div class="stats">${stat('Students', t.students, 'signed up')}${stat('Active plans', t.active_plans, 'paying now')}${stat('This month', rupees(t.this_month.total_paise), 'total paid by students')}
-      ${stat('Teacher · ' + t.teacher_percent + '%', rupees(t.this_month.teacher_paise), 'this teacher’s split · settled by Razorpay')}${stat('Durina · ' + t.effective_platform_percent + '%', rupees(t.this_month.platform_paise), 'this teacher’s split · auto-split')}</div>
+      ${stat('Teacher · ' + t.teacher_percent + '%', rupees(t.this_month.teacher_paise), 'this teacher’s split · settled by Razorpay')}${stat('Dhurina · ' + t.effective_platform_percent + '%', rupees(t.this_month.platform_paise), 'this teacher’s split · auto-split')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:18px">
       <section class="card" style="flex:2 1 460px;min-width:0"><h2>Revenue, last 6 months</h2><div class="bars">${bars}</div></section>
       <section class="card" style="flex:1 1 300px;min-width:0"><h2>Launch checklist</h2>${checks}</section></div>
@@ -297,7 +297,7 @@ async function detailView(id) {
         ${kv('Monthly', t.monthly_price != null ? '₹' + t.monthly_price : '—')}${kv('Yearly', t.yearly_price != null ? '₹' + t.yearly_price : '—')}
         ${kv('Free demo', t.demo_questions != null ? t.demo_questions + ' questions' : 'Default (Settings)')}${kv('Grace', t.grace_days != null ? t.grace_days + ' days · ' + (t.grace_questions ?? 0) + ' questions' : 'Default (Settings)')}
         ${kv('Razorpay', t.razorpay_key_id ? 'Connected · ' + esc(t.razorpay_key_id) : 'Not connected')}
-        <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Durina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>`);
+        <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Dhurina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>`);
 }
 
 async function bindDetail(id) {
@@ -345,18 +345,18 @@ async function reportsView() {
   const [rep, pays, ov] = await Promise.all([api('GET', `/reports?${qs}&sort=${RP.sort}`),
     api('GET', `/reports/payments?${qs}&q=${encodeURIComponent(RP.q)}&offset=${RP.offset}&limit=${RP.limit}`), api('GET', '/overview')]);
   const s = rep.summary, max = Math.max(1, ...rep.monthly.map((m) => m.gross_paise));
-  const bars = rep.monthly.map((m) => `<div class="b" title="${m.label}: ${rupees(m.gross_paise)} (Durina ${rupees(m.durina_paise)})"><div class="stack" style="height:${Math.max(2, Math.round(m.gross_paise / max * 150))}px">
-      <div class="d" style="flex:${m.durina_paise || 0}"></div><div class="t" style="flex:${(m.gross_paise - m.durina_paise) || 0}"></div></div><span class="muted" style="font-size:11px">${esc(m.label)}</span></div>`).join('');
+  const bars = rep.monthly.map((m) => `<div class="b" title="${m.label}: ${rupees(m.gross_paise)} (Dhurina ${rupees(m.dhurina_paise)})"><div class="stack" style="height:${Math.max(2, Math.round(m.gross_paise / max * 150))}px">
+      <div class="d" style="flex:${m.dhurina_paise || 0}"></div><div class="t" style="flex:${(m.gross_paise - m.dhurina_paise) || 0}"></div></div><span class="muted" style="font-size:11px">${esc(m.label)}</span></div>`).join('');
   const th = (k, label) => `<th class="sort ${RP.sort === k ? 'on' : ''}" data-sort="${k}">${label}${RP.sort === k ? ' ↓' : ''}</th>`;
   const trows = rep.by_teacher.map((t) => `<tr><td><a href="#" data-pick="${esc(t.id)}"><b>${esc(t.name)}</b></a><div class="muted" style="font-size:12px">${pill(t.status)}</div></td>
       <td>${t.paying_students} <span class="muted">/ ${t.total_students}</span></td><td>${t.subscriptions} <span class="muted" style="font-size:12px">(${t.new} new · ${t.renewals} ren.)</span></td>
-      <td><b>${rupees(t.gross_paise)}</b></td><td>${t.split_teacher}%</td><td><b>${rupees(t.teacher_paise)}</b></td><td>${t.split_durina}%</td><td>${rupees(t.durina_paise)}</td>
+      <td><b>${rupees(t.gross_paise)}</b></td><td>${t.split_teacher}%</td><td><b>${rupees(t.teacher_paise)}</b></td><td>${t.split_dhurina}%</td><td>${rupees(t.dhurina_paise)}</td>
       <td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="sbar" style="flex:1"><div style="width:${t.share_of_sales}%"></div></div><span style="font-size:12px">${t.share_of_sales}%</span></div></td></tr>`).join('');
   const prow = pays.items.map((p) => `<tr><td style="white-space:nowrap">${esc(p.date)}</td><td>${esc(p.teacher)}</td><td><b>${esc(p.student)}</b><div class="muted" style="font-size:12px">${esc(p.phone)}</div></td>
-      <td>${esc(p.plan)}</td><td>${esc(p.type)}</td><td><b>${rupees(p.amount_paise)}</b></td><td>${p.teacher_percent}%</td><td><b>${rupees(p.teacher_paise)}</b></td><td>${p.durina_percent}%</td><td>${rupees(p.durina_paise)}</td>
+      <td>${esc(p.plan)}</td><td>${esc(p.type)}</td><td><b>${rupees(p.amount_paise)}</b></td><td>${p.teacher_percent}%</td><td><b>${rupees(p.teacher_paise)}</b></td><td>${p.dhurina_percent}%</td><td>${rupees(p.dhurina_paise)}</td>
       <td class="muted" style="font-size:12px">${esc(p.payment_id)}</td></tr>`).join('');
   const preset = (k, label) => `<button type="button" class="${RP.preset === k ? 'on' : ''}" data-preset="${k}">${label}</button>`;
-  return shell('Reports', `<div class="row"><div><h1>Reports</h1><span class="sub">Sales of every teacher, for any period — with Durina’s and each teacher’s share.</span></div>
+  return shell('Reports', `<div class="row"><div><h1>Reports</h1><span class="sub">Sales of every teacher, for any period — with Dhurina’s and each teacher’s share.</span></div>
       <div class="row"><button class="btn ghost" data-exp="xlsx">Export Excel</button><button class="btn primary" data-exp="pdf">Export PDF</button></div></div>
     <section class="card" style="gap:12px"><div class="presets">${preset('this_month', 'This month')}${preset('last_month', 'Last month')}${preset('last_3', 'Last 3 months')}${preset('this_year', 'This year')}${preset('last_year', 'Last year')}${preset('this_fy', 'This financial year')}${preset('last_fy', 'Last financial year')}${preset('custom', 'Custom dates')}</div>
       <div class="row" style="justify-content:flex-start"><label class="f" style="flex-direction:row;align-items:center;gap:8px">From<input type="date" id="df" value="${RP.from}"></label>
@@ -364,14 +364,14 @@ async function reportsView() {
         <select id="tf" aria-label="Teacher"><option value="">All teachers</option>${ov.teachers.map((t) => `<option value="${esc(t.id)}" ${RP.teacher === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
         <button class="btn ghost" id="apply" style="height:40px">Show</button></div>
       <b>Period: ${esc(rep.period_from)} to ${esc(rep.period_to)}${RP.teacher ? ' · ' + esc(rep.by_teacher[0]?.name || '') : ' · all teachers'}</b></section>
-    <div class="stats">${stat('Total sales', rupees(s.gross_paise), 'paid by students')}${stat('Teachers’ earnings', rupees(s.teachers_paise), pct(s.teachers_percent) + ' of sales · settled by Razorpay')}${stat('Durina earnings', rupees(s.durina_paise), pct(s.durina_percent) + ' of sales · auto-split')}
+    <div class="stats">${stat('Total sales', rupees(s.gross_paise), 'paid by students')}${stat('Teachers’ earnings', rupees(s.teachers_paise), pct(s.teachers_percent) + ' of sales · settled by Razorpay')}${stat('Dhurina earnings', rupees(s.dhurina_paise), pct(s.dhurina_percent) + ' of sales · auto-split')}
       ${stat('Subscriptions', s.subscriptions.toLocaleString('en-IN'), s.new + ' new · ' + s.renewals + ' renewals')}${stat('Paying students', s.paying_students.toLocaleString('en-IN'), 'in this period')}${stat('Teachers with sales', s.selling_teachers, 'of ' + ov.overview.teachers + ' teachers')}</div>
-    <section class="card"><div class="row"><h2>Month by month</h2><div class="legend"><span><i style="background:var(--acc)"></i>Durina</span><span><i style="background:#5EB5AA"></i>Teachers</span></div></div><div class="bars">${bars}</div></section>
+    <section class="card"><div class="row"><h2>Month by month</h2><div class="legend"><span><i style="background:var(--acc)"></i>Dhurina</span><span><i style="background:#5EB5AA"></i>Teachers</span></div></div><div class="bars">${bars}</div></section>
     ${RP.teacher ? '' : `<section class="card"><div class="row"><h2>Sales by teacher</h2><span class="muted" style="font-size:12px">Click a teacher to see only their sales · click a column to sort</span></div>
-      <div class="scroll"><table style="min-width:1080px"><thead><tr>${th('name', 'TEACHER')}${th('students', 'PAYING / ALL STUDENTS')}<th>SUBSCRIPTIONS</th>${th('sales', 'SALES')}<th>TEACHER %</th><th>TEACHER EARNINGS</th><th>DURINA %</th>${th('durina', 'DURINA EARNINGS')}<th>SHARE OF SALES</th></tr></thead>
-      <tbody>${trows}</tbody><tfoot><tr><td><b>Total</b></td><td><b>${s.paying_students}</b></td><td><b>${s.subscriptions}</b></td><td><b>${rupees(s.gross_paise)}</b></td><td><b>${pct(s.teachers_percent)}</b></td><td><b>${rupees(s.teachers_paise)}</b></td><td><b>${pct(s.durina_percent)}</b></td><td><b>${rupees(s.durina_paise)}</b></td><td></td></tr></tfoot></table></div></section>`}
+      <div class="scroll"><table style="min-width:1080px"><thead><tr>${th('name', 'TEACHER')}${th('students', 'PAYING / ALL STUDENTS')}<th>SUBSCRIPTIONS</th>${th('sales', 'SALES')}<th>TEACHER %</th><th>TEACHER EARNINGS</th><th>DHURINA %</th>${th('dhurina', 'DHURINA EARNINGS')}<th>SHARE OF SALES</th></tr></thead>
+      <tbody>${trows}</tbody><tfoot><tr><td><b>Total</b></td><td><b>${s.paying_students}</b></td><td><b>${s.subscriptions}</b></td><td><b>${rupees(s.gross_paise)}</b></td><td><b>${pct(s.teachers_percent)}</b></td><td><b>${rupees(s.teachers_paise)}</b></td><td><b>${pct(s.dhurina_percent)}</b></td><td><b>${rupees(s.dhurina_paise)}</b></td><td></td></tr></tfoot></table></div></section>`}
     <section class="card" style="gap:12px"><div class="row"><h2>Payments — who paid how much</h2><input type="search" id="pq" value="${esc(RP.q)}" placeholder="Search teacher, student, last 4 digits or payment ID" aria-label="Search payments" style="min-width:320px"></div>
-      <div class="scroll"><table style="min-width:1180px"><thead><tr><th>DATE</th><th>TEACHER</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>TEACHER %</th><th>TEACHER GETS</th><th>DURINA %</th><th>DURINA GETS</th><th>PAYMENT ID</th></tr></thead>
+      <div class="scroll"><table style="min-width:1180px"><thead><tr><th>DATE</th><th>TEACHER</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>TEACHER %</th><th>TEACHER GETS</th><th>DHURINA %</th><th>DHURINA GETS</th><th>PAYMENT ID</th></tr></thead>
       <tbody>${prow || '<tr><td colspan="11" class="muted">No payments in this period.</td></tr>'}</tbody></table></div>
       ${pagerHtml(pays.total, RP.offset, RP.limit, 'data-pp')}</section>`);
 }
@@ -405,8 +405,8 @@ async function settingsView() {
   return shell('Settings', `<div class="row"><div><h1>Settings</h1><span class="sub">Apply to the whole platform. Each teacher can still override plans, demo and split.</span></div><button class="btn primary" id="save">Save settings</button></div>
     <span id="serr" class="err"></span>
     ${card('Company', 'Printed on commission invoices', `<div class="grid2">${f('company', 'name', 'Company name', s.company.name)}${f('company', 'gstin', 'GSTIN', s.company.gstin)}${f('company', 'pan', 'PAN', s.company.pan)}${f('company', 'address', 'Address', s.company.address)}
-      ${f('company', 'linked_account', 'Durina Razorpay linked account', s.company.linked_account, 'text', 'acc_… · receives Durina’s share from every teacher')}</div>`)}
-    ${card('Defaults for new teachers', 'Pre-filled in “Add a teacher”; can be changed per teacher', `<div class="grid2">${f('defaults', 'platform_percent', 'Durina share (%)', s.defaults.platform_percent, 'number')}
+      ${f('company', 'linked_account', 'Dhurina Razorpay linked account', s.company.linked_account, 'text', 'acc_… · receives Dhurina’s share from every teacher')}</div>`)}
+    ${card('Defaults for new teachers', 'Pre-filled in “Add a teacher”; can be changed per teacher', `<div class="grid2">${f('defaults', 'platform_percent', 'Dhurina share (%)', s.defaults.platform_percent, 'number')}
       ${f('defaults', 'demo_questions', 'Free demo questions', s.defaults.demo_questions, 'number')}${f('defaults', 'grace_days', 'Grace days', s.defaults.grace_days, 'number')}
       ${f('defaults', 'grace_questions', 'Grace questions', s.defaults.grace_questions, 'number')}${f('defaults', 'renew_reminder_days', 'Renew reminder (days before)', s.defaults.renew_reminder_days, 'number')}</div>`)}
     ${card('AI answers', 'Used by every teacher’s AI', `<div class="grid2"><label class="f">Trusted websites for internet answers<textarea data-sec="ai" name="trusted_sites">${esc(s.ai.trusted_sites.join('\n'))}</textarea><span class="h">One per line</span></label>

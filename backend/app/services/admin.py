@@ -1,4 +1,4 @@
-"""Durina admin: add/edit teachers, platform settings, and earnings reports."""
+"""Dhurina admin: add/edit teachers, platform settings, and earnings reports."""
 import json
 import re
 import time
@@ -15,7 +15,7 @@ CHECKLIST = [
 ]
 
 DEFAULT_SETTINGS = {
-    "company": {"name": "Durina Ventures Pvt. Ltd.", "address": "", "gstin": "", "pan": "",
+    "company": {"name": "Dhurina Ventures Pvt. Ltd.", "address": "", "gstin": "", "pan": "",
                 "linked_account": ""},
     "defaults": {"platform_percent": 20, "demo_questions": 3, "grace_days": 2, "grace_questions": 3,
                  "renew_reminder_days": 3},
@@ -82,7 +82,7 @@ def save_teacher(db: Database, data: dict, creating: bool) -> dict:
     if split is not None and split != "":
         split = float(split)
         if not 0 <= split <= 100:
-            raise AdminError("Durina share must be between 0 and 100")
+            raise AdminError("Dhurina share must be between 0 and 100")
     else:
         split = None
 

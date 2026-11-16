@@ -1,6 +1,6 @@
 # LiveTeach (DhurinaAI)
 
-AI personal-tutor app by Durina Ventures Pvt. Ltd. Each teacher gets a white-label app where students
+AI personal-tutor app by Dhurina Ventures Pvt. Ltd. Each teacher gets a white-label app where students
 learn with the teacher's AI avatar: ask by voice, text or photo; get answers grounded in the teacher's
 own notes; save explanations as PDF notes; subscribe via Razorpay.
 

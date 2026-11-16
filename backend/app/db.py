@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS teachers (
     razorpay_key_id TEXT,
     razorpay_key_secret TEXT,
     razorpay_webhook_secret TEXT,
-    platform_commission_percent REAL,   -- Durina's share for THIS teacher; teacher gets the rest
+    platform_commission_percent REAL,   -- Dhurina's share for THIS teacher; teacher gets the rest
     app_name TEXT,
     demo_questions INTEGER,             -- NULL = use the default from .env
     grace_days INTEGER,
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS payments (
     razorpay_order_id TEXT UNIQUE NOT NULL,
     razorpay_payment_id TEXT,
     amount_paise INTEGER NOT NULL,
-    platform_percent REAL,              -- Durina's % at the time of this payment
+    platform_percent REAL,              -- Dhurina's % at the time of this payment
     status TEXT NOT NULL DEFAULT 'created',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

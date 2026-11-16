@@ -1,7 +1,7 @@
 """Razorpay payments with automatic commission split (Razorpay Route).
 
-The teacher's Razorpay account receives the payment; on each order a Route transfer sends Durina's
-commission to Durina's linked account automatically. The split is set PER TEACHER (in the admin
+The teacher's Razorpay account receives the payment; on each order a Route transfer sends Dhurina's
+commission to Dhurina's linked account automatically. The split is set PER TEACHER (in the admin
 panel): e.g. one teacher 80/20, another 75/25. PLATFORM_COMMISSION_PERCENT is only the default for
 teachers without their own value.
 A subscription is activated only after the payment signature (or webhook) is verified, and only once.

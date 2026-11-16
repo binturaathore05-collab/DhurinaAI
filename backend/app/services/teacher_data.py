@@ -204,7 +204,7 @@ def monthly_report(db: Database, teacher_id: str, month: str, default_percent: f
 def period_report(db: Database, teacher_id: str, start: float, end: float, p_from: str, p_to: str,
                   default_percent: float = 20, audience: str = "admin", label: str = "") -> dict:
     """Every paid subscription in the period (month, year, financial year or custom dates) with totals.
-    audience='teacher': only the teacher's own share is shown — nothing about Durina's % or amount."""
+    audience='teacher': only the teacher's own share is shown — nothing about Dhurina's % or amount."""
     t = db.one("SELECT name, platform_commission_percent FROM teachers WHERE id = ?", (teacher_id,))
     rows = db.all("""
         SELECT p.id, datetime(p.created_at, '+330 minutes') AS created_ist, p.razorpay_payment_id, p.amount_paise, p.platform_percent, pl.name AS plan,
@@ -215,24 +215,24 @@ def period_report(db: Database, teacher_id: str, start: float, end: float, p_fro
         WHERE pl.teacher_id = ? AND p.status = 'paid'
           AND p.created_at >= datetime(?, 'unixepoch') AND p.created_at < datetime(?, 'unixepoch')
         ORDER BY p.created_at""", (teacher_id, start, end))
-    items, gross, durina = [], 0, 0
+    items, gross, dhurina = [], 0, 0
     for r in rows:
         pct = r["platform_percent"]
         pct = (t["platform_commission_percent"] if t and t["platform_commission_percent"] is not None else default_percent) if pct is None else pct
         cut = round(r["amount_paise"] * pct / 100)
-        gross, durina = gross + r["amount_paise"], durina + cut
+        gross, dhurina = gross + r["amount_paise"], dhurina + cut
         items.append({"date": r["created_ist"][:10], "payment_id": r["razorpay_payment_id"] or "", "student": mask_phone(r["phone"]),
                       "plan": r["plan"], "type": "Renewal" if r["earlier"] else "New",
-                      "amount_paise": r["amount_paise"], "durina_percent": pct, "durina_paise": cut,
+                      "amount_paise": r["amount_paise"], "dhurina_percent": pct, "dhurina_paise": cut,
                       "teacher_percent": round(100 - pct, 2), "teacher_paise": r["amount_paise"] - cut})
     rep = {"teacher": t["name"] if t else teacher_id, "month": label, "label": label or f"{p_from} to {p_to}",
            "period_from": p_from, "period_to": p_to,
            "generated_on": _fmt(time.time(), "%d %b %Y, %I:%M %p"), "items": items, "summary": {
         "subscriptions": len(items), "new": sum(1 for i in items if i["type"] == "New"),
         "renewals": sum(1 for i in items if i["type"] == "Renewal"), "students": len({r["sid"] for r in rows}),
-        "gross_paise": gross, "durina_paise": durina, "teacher_paise": gross - durina,
-        "teacher_percent": round((gross - durina) * 100 / gross, 2) if gross else None,
-        "durina_percent": round(durina * 100 / gross, 2) if gross else None}}
+        "gross_paise": gross, "dhurina_paise": dhurina, "teacher_paise": gross - dhurina,
+        "teacher_percent": round((gross - dhurina) * 100 / gross, 2) if gross else None,
+        "dhurina_percent": round(dhurina * 100 / gross, 2) if gross else None}}
     return teacher_view(rep) if audience == "teacher" else rep
 
 
@@ -241,7 +241,7 @@ def teacher_view(rep: dict) -> dict:
     def share(paise_total, paise_teacher):
         return round(paise_teacher * 100 / paise_total, 2) if paise_total else None
     items = [{"date": i["date"], "payment_id": i["payment_id"], "student": i["student"], "plan": i["plan"], "type": i["type"],
-              "amount_paise": i["amount_paise"], "your_percent": round(100 - i["durina_percent"], 2),
+              "amount_paise": i["amount_paise"], "your_percent": round(100 - i["dhurina_percent"], 2),
               "your_paise": i["teacher_paise"]} for i in rep["items"]]
     s = rep["summary"]
     pcts = {i["your_percent"] for i in items}
@@ -277,7 +277,7 @@ def report_xlsx(rep: dict) -> bytes:
         lines += [("Your share (%)", s["your_percent"]), ("Your earnings (₹)", _rs(s["your_paise"]))]
     else:
         lines += [("Teacher share (%)", s["teacher_percent"]), ("Teacher earnings (₹)", _rs(s["teacher_paise"])),
-                  ("Durina share (%)", s["durina_percent"]), ("Durina earnings (₹)", _rs(s["durina_paise"]))]
+                  ("Dhurina share (%)", s["dhurina_percent"]), ("Dhurina earnings (₹)", _rs(s["dhurina_paise"]))]
     for k, v in lines:
         ws.append([k, v])
         ws.cell(ws.max_row, 1).font = Font(bold=True)
@@ -293,9 +293,9 @@ def report_xlsx(rep: dict) -> bytes:
                  i["your_percent"], _rs(i["your_paise"])] for i in rep["items"]]
         money_cols, sums = ("F", "H"), {"F": 6, "H": 8}
     else:
-        cols = ["Date", "Payment ID", "Student", "Plan", "Type", "Amount (₹)", "Teacher %", "Teacher (₹)", "Durina %", "Durina (₹)"]
+        cols = ["Date", "Payment ID", "Student", "Plan", "Type", "Amount (₹)", "Teacher %", "Teacher (₹)", "Dhurina %", "Dhurina (₹)"]
         rows = [[i["date"], i["payment_id"], i["student"], i["plan"], i["type"], _rs(i["amount_paise"]),
-                 i["teacher_percent"], _rs(i["teacher_paise"]), i["durina_percent"], _rs(i["durina_paise"])] for i in rep["items"]]
+                 i["teacher_percent"], _rs(i["teacher_paise"]), i["dhurina_percent"], _rs(i["dhurina_paise"])] for i in rep["items"]]
         money_cols, sums = ("F", "H", "J"), {"F": 6, "H": 8, "J": 10}
     d.append(cols)
     for c in d[1]:
@@ -333,14 +333,14 @@ def report_html(rep: dict) -> str:
         extra = [("Your share", f"{s['your_percent']:g}%" if s["your_percent"] is not None else "—"), ("Your earnings", money(s["your_paise"]))]
     else:
         head = ("<th>Date</th><th>Student</th><th>Plan</th><th>Type</th><th class=r>Amount</th><th class=r>Teacher %</th>"
-                "<th class=r>Teacher</th><th class=r>Durina %</th><th class=r>Durina</th>")
+                "<th class=r>Teacher</th><th class=r>Dhurina %</th><th class=r>Dhurina</th>")
         body = "".join(f"<tr><td>{e(i['date'])}</td><td>{e(i['student'])}</td><td>{e(i['plan'])}</td><td>{e(i['type'])}</td>"
                        f"<td class=r>{money(i['amount_paise'])}</td><td class=r>{i['teacher_percent']:g}%</td><td class=r>{money(i['teacher_paise'])}</td>"
-                       f"<td class=r>{i['durina_percent']:g}%</td><td class=r>{money(i['durina_paise'])}</td></tr>" for i in rep["items"])
+                       f"<td class=r>{i['dhurina_percent']:g}%</td><td class=r>{money(i['dhurina_paise'])}</td></tr>" for i in rep["items"])
         cols = 9
         pc = lambda v: f"{v:g}%" if v is not None else "—"  # noqa: E731
         extra = [("Teacher earnings", f"{money(s['teacher_paise'])} ({pc(s['teacher_percent'])})"),
-                 ("Durina earnings", f"{money(s['durina_paise'])} ({pc(s['durina_percent'])})")]
+                 ("Dhurina earnings", f"{money(s['dhurina_paise'])} ({pc(s['dhurina_percent'])})")]
     body = body or f"<tr><td colspan={cols}>No paid subscriptions in this period.</td></tr>"
     box = lambda k, v: f"<div class=box><span>{k}</span><b>{v}</b></div>"  # noqa: E731
     boxes = (box("Subscriptions", s["subscriptions"]) + box("New / Renewals", f"{s['new']} / {s['renewals']}")
