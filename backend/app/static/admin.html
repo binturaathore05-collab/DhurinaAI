@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveTeach · Durina Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
+          --acc:#0F766E; --accHover:#115E59; --warn:#B45309; --ok:#15803D; --bad:#B91C1C; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; }
+  a { color: var(--acc); } a:hover { color: var(--accHover); }
+  .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
+  nav { flex: 1 1 220px; max-width: 260px; background: #fff; border-right: 1px solid var(--border); padding: 26px 18px; display: flex; flex-direction: column; gap: 6px; }
+  nav .brand { display: flex; gap: 10px; align-items: center; padding: 0 8px 22px; }
+  nav .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--acc); color: #fff; display: grid; place-items: center; font-weight: 800; }
+  nav a.item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 15px; }
+  nav a.item.on { background: var(--surf); color: var(--text); }
+  nav .spacer { flex: 1; }
+  main { flex: 999 1 560px; min-width: 0; padding: 30px 36px 48px; display: flex; flex-direction: column; gap: 22px; }
+  h1 { margin: 0; font-size: 26px; font-weight: 800; } h2 { margin: 0; font-size: 17px; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 12px; font: inherit; font-weight: 800; border: 0; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--acc); color: #fff; } .btn.primary:hover { background: var(--accHover); color: #fff; }
+  .btn.ghost { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+  .btn:disabled { opacity: .6; cursor: wait; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .stat { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .stat .k { color: var(--muted); font-size: 13px; } .stat .v { font-size: 26px; font-weight: 800; } .stat .n { color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; min-width: 680px; }
+  th { text-align: left; font-size: 12px; color: var(--muted); letter-spacing: .04em; padding: 10px 12px; }
+  td { padding: 14px 12px; border-top: 1px solid var(--border); }
+  .who { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+  .av { width: 40px; height: 40px; border-radius: 999px; object-fit: cover; object-position: center 15%; background: var(--surf); flex: none; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; border: 1.5px solid currentColor; border-radius: 999px; padding: 3px 10px; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 13px; }
+  label.f span.h { font-weight: 400; color: var(--muted); font-size: 12px; }
+  input[type=text], input[type=number], input[type=password], input[type=tel], input[type=email], input[type=search], textarea {
+    height: 44px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; color: var(--text); padding: 0 14px; font: inherit; outline: none; }
+  textarea { height: 84px; padding: 10px 14px; resize: vertical; }
+  input:focus, textarea:focus { border-color: var(--acc); }
+  .sec-h { display: flex; gap: 12px; align-items: flex-start; }
+  .num { width: 28px; height: 28px; flex: none; border-radius: 999px; background: var(--surf); color: var(--acc); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .sw { width: 38px; height: 38px; border-radius: 999px; border: 3px solid #fff; cursor: pointer; box-shadow: 0 0 0 1px var(--border); }
+  .sw.on { box-shadow: 0 0 0 2px var(--text); }
+  .split { background: var(--surf); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--warn); }
+  .bar > div { background: var(--acc); }
+  .phone { width: 280px; height: 580px; border-radius: 38px; border: 8px solid #111827; background: #0B1220; color: #F1F5F9; overflow: hidden; display: flex; flex-direction: column; }
+  .phone img { width: 100%; height: 280px; object-fit: cover; object-position: center 18%; border-radius: 0 0 22px 22px; background: #162033; }
+  .phone .in { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .photo { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 10px 14px; border-radius: 14px; border: 1.5px dashed var(--border); background: var(--surf); cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
+  .check input { width: 20px; height: 20px; accent-color: var(--acc); }
+  .bars { display: flex; gap: 14px; align-items: flex-end; height: 190px; }
+  .bars .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; }
+  .bars .b div { width: 100%; max-width: 46px; background: var(--acc); border-radius: 8px 8px 0 0; min-height: 2px; }
+  .muted { color: var(--muted); } .err { color: var(--bad); font-weight: 600; }
+  .toast { position: fixed; right: 20px; bottom: 20px; background: var(--text); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 600; }
+  .login { max-width: 380px; margin: 14vh auto; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .scroll { overflow-x: auto; }
+  @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const $ = (sel, el = document) => el.querySelector(sel);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
+const ICON = {
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+};
+const icon = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+const COLORS = [['Teal','#2DD4BF'],['Blue','#60A5FA'],['Orange','#F59E0B'],['Pink','#F472B6'],['Lime','#A3E635'],['Violet','#A78BFA']];
+const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
+
+let KEY = sessionStorage.getItem('adminKey') || '';
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 3200); }
+
+async function api(method, path, body) {
+  const res = await fetch('/admin/api' + path, { method, headers: { 'Content-Type': 'application/json', 'X-Admin-Key': KEY }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 403) { KEY = ''; sessionStorage.removeItem('adminKey'); render(); throw new Error('Wrong admin key'); }
+  if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+  return data;
+}
+
+function shell(active, inner) {
+  const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
+  return `<div class="shell"><nav aria-label="Admin">
+    <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Durina Admin</span></span></div>
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/settings', 'gear', 'Settings')}
+    <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
+    <main id="main">${inner}</main></div>`;
+}
+const pill = (status) => { const [t, c] = STATUS[status] || STATUS.draft; return `<span class="pill" style="color:${c}">${t}</span>`; };
+const avatar = (t) => t.has_avatar ? `<img class="av" src="/teachers/${encodeURIComponent(t.id)}/avatar" alt="">` : `<span class="av" style="display:grid;place-items:center;color:var(--muted)">${icon('users', 18)}</span>`;
+const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="n">${n}</span></div>`;
+
+// ---------- Login ----------
+function loginView() {
+  return `<div class="login card"><div style="display:flex;gap:10px;align-items:center"><span class="logo" style="width:40px;height:40px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800">L</span><div><h1 style="font-size:22px">LiveTeach Admin</h1><span class="sub">Durina Ventures</span></div></div>
+    <label class="f">Admin key<input id="key" type="password" autocomplete="current-password"></label>
+    <button class="btn primary" id="go">Log in</button><span id="lerr" class="err"></span></div>`;
+}
+
+// ---------- Teachers ----------
+async function teachersView() {
+  const { overview: o, teachers } = await api('GET', '/overview');
+  const rows = teachers.map((t) => `<tr data-name="${esc((t.name + ' ' + t.subject).toLowerCase())}">
+      <td><a class="who" href="#/t/${encodeURIComponent(t.id)}">${avatar(t)}<span style="display:flex;flex-direction:column"><b>${esc(t.name)}</b><span class="muted" style="font-size:12px">${esc(t.subject)}</span></span></a></td>
+      <td>${pill(t.status)}</td><td><b>${t.teacher_percent} / ${t.platform_percent}</b></td><td>${t.students}</td><td>${t.active_plans}</td>
+      <td><b>${rupees(t.this_month.total_paise)}</b></td><td style="text-align:right"><a href="#/t/${encodeURIComponent(t.id)}"><b>Open</b></a></td></tr>`).join('');
+  return shell('Teachers', `
+    <div class="row"><div><h1>Teachers</h1><span class="sub">Every teacher is one white-label app. Add a teacher, then build their app.</span></div>
+      <a class="btn primary" href="#/new">${icon('plus', 18)}Add teacher</a></div>
+    <div class="stats">${stat('Teachers', o.teachers, o.live + ' live on Play Store')}${stat('Students', o.students, 'signed up across all apps')}
+      ${stat('Active subscriptions', o.active_plans, 'paying right now')}${stat('Revenue this month', rupees(o.this_month.total_paise), 'all teachers, before split')}
+      ${stat('Durina share', rupees(o.this_month.platform_paise), 'each teacher’s own % · auto-split')}</div>
+    <section class="card"><div class="row"><h2>All teachers</h2><input type="search" id="q" placeholder="Search teachers" aria-label="Search teachers" style="min-width:240px"></div>
+      <div class="scroll">${teachers.length ? `<table><thead><tr><th>TEACHER</th><th>APP</th><th>SPLIT · TEACHER / DURINA</th><th>STUDENTS</th><th>ACTIVE PLANS</th><th>THIS MONTH</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+        : `<p class="muted">No teachers yet. <a href="#/new">Add the first teacher</a>.</p>`}</div></section>`);
+}
+
+// ---------- Add / edit teacher ----------
+async function formView(id) {
+  const settings = await api('GET', '/settings');
+  const d = settings.defaults;
+  const t = id ? await api('GET', '/teachers/' + encodeURIComponent(id)) : {
+    id: '', name: '', subject: '', app_name: '', brand_color: '#2DD4BF', platform_percent: d.platform_percent,
+    demo_questions: d.demo_questions, grace_days: d.grace_days, grace_questions: d.grace_questions };
+  const tp = 100 - (t.platform_percent ?? d.platform_percent);
+  const f = (name, label, value, type = 'text', hint = '', extra = '') => `<label class="f">${label}<input name="${name}" type="${type}" value="${esc(value ?? '')}" ${extra}>${hint ? `<span class="h">${hint}</span>` : ''}</label>`;
+  const sec = (n, title, sub, inner) => `<section class="card"><div class="sec-h"><span class="num">${n}</span><div><h2>${title}</h2><span class="sub">${sub}</span></div></div>${inner}</section>`;
+  return shell(id ? 'Teachers' : 'Add teacher', `
+    <form id="tf" style="display:contents">
+    <div class="row"><div style="display:flex;gap:12px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="${id ? '#/t/' + encodeURIComponent(id) : '#/'}" aria-label="Back">${icon('back')}</a>
+      <div><h1>${id ? 'Edit ' + esc(t.name) : 'Add a teacher'}</h1><span class="sub">Fill this once — the teacher’s app is built from it. No code needed.</span></div></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn ghost" type="submit" data-build="0">Save</button><button class="btn primary" type="submit" data-build="1">${icon('build', 18)}Save &amp; build app</button></div></div>
+    <span id="ferr" class="err"></span>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+      <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:18px">
+        ${sec(1, 'Teacher &amp; app', 'Shown to students on every screen', `<div class="grid2">
+          ${f('name', 'Teacher name', t.name, 'text', '', 'required placeholder="e.g. Subhash Sir"')}${f('subject', 'Subject', t.subject, 'text', '', 'placeholder="e.g. Rajasthan History"')}
+          ${f('app_name', 'App name (on phone)', t.app_name, 'text', '', 'placeholder="e.g. Subhash Sir AI"')}
+          ${f('id', 'Teacher id', t.id, 'text', 'Lower-case, no spaces · used in the app build', (id ? 'readonly ' : '') + 'required pattern="[a-z][a-z0-9-]{1,30}" placeholder="subhash"')}</div>
+          <div class="grid2"><div class="f" style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">Teacher photo / avatar</b>
+            <label class="photo"><img id="ph" class="av" style="width:52px;height:52px;${t.has_avatar ? '' : 'display:none'}" ${t.has_avatar ? `src="/teachers/${encodeURIComponent(t.id)}/avatar"` : ''} alt=""><span id="phi" class="av" style="width:52px;height:52px;display:${t.has_avatar ? 'none' : 'grid'};place-items:center;color:var(--muted);background:#fff">${icon('plus', 22)}</span><span style="display:flex;flex-direction:column"><b>Upload photo</b><span class="muted" style="font-size:12px">Square image, clear face · consent form needed</span></span><input id="photo" type="file" accept="image/jpeg,image/png" style="display:none"></label></div>
+            <div style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">App colour</b><div class="swatches">${COLORS.map(([n, c]) => `<button type="button" class="sw ${t.brand_color === c ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="${n}"></button>`).join('')}</div></div></div>`)}
+        ${sec(2, 'Plans &amp; free demo', 'Prices students see on Pay Now', `<div class="grid2">
+          ${f('monthly_price', 'Monthly price (₹)', t.monthly_price, 'number', '', 'min="0"')}${f('yearly_price', 'Yearly price (₹)', t.yearly_price, 'number', '', 'min="0"')}
+          ${f('demo_questions', 'Free demo questions', t.demo_questions, 'number', 'Blank = default from Settings', 'min="0"')}
+          ${f('grace_days', 'Grace days after plan ends', t.grace_days, 'number', '0 = no grace', 'min="0"')}${f('grace_questions', 'Grace questions', t.grace_questions, 'number', '', 'min="0"')}</div>`)}
+        ${sec(3, 'Payment split &amp; Razorpay', 'Set this teacher’s own split — every teacher can be different. Money goes to the teacher’s account; Durina’s part is split automatically', `
+          <div class="split"><div class="row"><b>Revenue split for this teacher</b><b>Teacher <span id="tp" style="color:var(--acc)">${tp}</span>% · Durina <span id="dp" style="color:var(--warn)">${100 - tp}</span>%</b></div>
+            <input id="split" type="range" min="0" max="100" step="1" value="${tp}" aria-label="Teacher share in percent" style="width:100%;accent-color:var(--acc)">
+            <div class="bar" aria-hidden="true"><div id="tb" style="width:${tp}%"></div></div>
+            <span class="muted" style="font-size:12px">On a ₹1,000 plan: teacher gets ₹<span id="t1">${tp * 10}</span> · Durina gets ₹<span id="d1">${(100 - tp) * 10}</span> (before gateway fees). Can be changed later.</span></div>
+          <div class="grid2">${f('razorpay_key_id', 'Razorpay Key ID', t.razorpay_key_id, 'text', '', 'placeholder="rzp_live_…"')}
+            ${f('razorpay_key_secret', 'Razorpay Key Secret', '', 'password', t.razorpay_key_secret ? 'Saved ' + esc(t.razorpay_key_secret) + ' · leave blank to keep' : 'Stored encrypted · never shown again', 'autocomplete="new-password"')}
+            ${f('razorpay_webhook_secret', 'Razorpay Webhook Secret', '', 'password', t.razorpay_webhook_secret ? 'Saved ' + esc(t.razorpay_webhook_secret) + ' · leave blank to keep' : 'Webhook URL: /pay/webhook/&lt;teacher id&gt;', 'autocomplete="new-password"')}</div>`)}
+        ${sec(4, 'Teacher login', 'For the teacher dashboard (upload notes, review answers, earnings)', `<div class="grid2">${f('teacher_phone', 'Teacher mobile', t.teacher_phone, 'tel', '', 'placeholder="+91 …"')}${f('teacher_email', 'Teacher email', t.teacher_email, 'email', '', 'placeholder="name@example.com"')}</div>`)}
+      </div>
+      <aside style="flex:1 1 300px;max-width:340px;display:flex;flex-direction:column;gap:12px">
+        <b class="muted" style="font-size:12px;letter-spacing:.08em">LIVE APP PREVIEW</b>
+        <div class="phone" role="img" aria-label="Preview of the teacher's app login screen"><img id="pimg" style="${t.has_avatar ? '' : 'display:none'}" ${t.has_avatar ? `src="/teachers/${encodeURIComponent(t.id)}/avatar"` : ''} alt=""><span id="pimgi" style="height:280px;display:${t.has_avatar ? 'none' : 'grid'};place-items:center;color:#94A3B8;background:#162033;border-radius:0 0 22px 22px;font-size:12px">Teacher photo appears here</span>
+          <div class="in"><span id="pav" style="font-size:11px;font-weight:600;color:${esc(t.brand_color)}">● <span id="pname">${esc(t.name || 'Teacher')}</span> is available now</span>
+            <b style="font-size:20px;line-height:1.15">Call your AI teacher, anytime.</b><span style="font-size:11px;color:#94A3B8">Ask any doubt. Sir explains, then checks if you understood.</span>
+            <span style="margin-top:8px;height:38px;border-radius:10px;background:#162033;border:1.5px solid #273449;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#94A3B8">+91  98765 43210</span>
+            <span id="pbtn" style="height:40px;border-radius:10px;background:${esc(t.brand_color)};color:#04201C;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800">Start free demo call</span></div></div>
+        <span class="muted" style="font-size:12px">App name on phone: <b id="papp" style="color:var(--text)">${esc(t.app_name || (t.name ? t.name + ' AI' : ''))}</b></span>
+      </aside></div></form>`);
+}
+
+function bindForm(id) {
+  let color = $('.sw.on')?.dataset.c || '#2DD4BF', photo = null;
+  const paint = () => { $('#pav').style.color = color; $('#pbtn').style.background = color; };
+  document.querySelectorAll('.sw').forEach((b) => b.onclick = () => { document.querySelectorAll('.sw').forEach((x) => x.classList.remove('on')); b.classList.add('on'); color = b.dataset.c; paint(); });
+  const s = $('#split');
+  s.oninput = () => { const v = +s.value; $('#tp').textContent = v; $('#dp').textContent = 100 - v; $('#tb').style.width = v + '%'; $('#t1').textContent = v * 10; $('#d1').textContent = (100 - v) * 10; };
+  const nm = $('input[name=name]'), app = $('input[name=app_name]');
+  const idf = $('input[name=id]'); let idTouched = !!id;
+  idf.oninput = () => { idTouched = true; };
+  nm.oninput = () => {
+    $('#pname').textContent = nm.value || 'Teacher';
+    if (!app.value) $('#papp').textContent = nm.value ? nm.value + ' AI' : '';
+    if (!idTouched) idf.value = nm.value.toLowerCase().replace(/\b(sir|ma'?am|madam|mam)\b/g, '').normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '').slice(0, 30);
+  };
+  app.oninput = () => { $('#papp').textContent = app.value || (nm.value ? nm.value + ' AI' : ''); };
+  $('#photo').onchange = (e) => { const file = e.target.files[0]; if (!file) return; const r = new FileReader();
+    r.onload = () => { photo = r.result; for (const [img, ph] of [['#ph', '#phi'], ['#pimg', '#pimgi']]) { $(img).src = photo; $(img).style.display = ''; $(ph).style.display = 'none'; } };
+    r.readAsDataURL(file); };
+  let build = false;
+  document.querySelectorAll('button[data-build]').forEach((b) => b.onclick = () => { build = b.dataset.build === '1'; });
+  $('#tf').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    data.brand_color = color; data.platform_percent = 100 - +s.value;
+    if (photo) data.photo_base64 = photo;
+    const btns = document.querySelectorAll('button[type=submit]'); btns.forEach((b) => b.disabled = true);
+    try {
+      const saved = id ? await api('PUT', '/teachers/' + encodeURIComponent(id), data) : await api('POST', '/teachers', data);
+      if (build) { try { await api('POST', `/teachers/${encodeURIComponent(saved.id)}/build`); toast('Saved · app build started'); } catch (err) { toast('Saved · ' + err.message); } }
+      else toast('Saved');
+      location.hash = '#/t/' + encodeURIComponent(saved.id);
+    } catch (err) { $('#ferr').textContent = err.message; window.scrollTo(0, 0); }
+    finally { btns.forEach((b) => b.disabled = false); }
+  };
+}
+
+// ---------- Teacher detail ----------
+async function detailView(id) {
+  const t = await api('GET', '/teachers/' + encodeURIComponent(id));
+  const max = Math.max(1, ...t.months.map((m) => m.total_paise));
+  const bars = t.months.map((m) => `<div class="b"><div style="height:${Math.max(2, Math.round(m.total_paise / max * 150))}px" title="${rupees(m.total_paise)}"></div><span class="muted" style="font-size:12px">${m.label}</span></div>`).join('');
+  const checks = t.checklist.map((c) => `<label class="check"><input type="checkbox" data-item="${c.key}" ${c.done ? 'checked' : ''}>${esc(c.label)}</label>`).join('');
+  const kv = (k, v) => `<span class="muted">${k}</span><b>${v}</b>`;
+  return shell('Teachers', `
+    <div class="row"><div style="display:flex;gap:14px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="#/" aria-label="Back to teachers">${icon('back')}</a>
+      ${t.has_avatar ? `<img class="av" style="width:60px;height:60px;border:3px solid var(--acc)" src="/teachers/${encodeURIComponent(t.id)}/avatar" alt="${esc(t.name)}">` : ''}
+      <div><h1>${esc(t.name)}</h1><span class="sub" style="display:flex;gap:10px;align-items:center">${esc(t.subject)} · ${esc(t.app_name || '')} ${pill(t.status)}</span></div></div>
+      <div class="row"><a class="btn ghost" href="#/edit/${encodeURIComponent(t.id)}">Edit details</a><button class="btn primary" id="build">${icon('build', 18)}Build new version</button></div></div>
+    <div class="stats">${stat('Students', t.students, 'signed up')}${stat('Active plans', t.active_plans, 'paying now')}${stat('This month', rupees(t.this_month.total_paise), 'total paid by students')}
+      ${stat('Teacher · ' + t.teacher_percent + '%', rupees(t.this_month.teacher_paise), 'this teacher’s split · settled by Razorpay')}${stat('Durina · ' + t.effective_platform_percent + '%', rupees(t.this_month.platform_paise), 'this teacher’s split · auto-split')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px">
+      <section class="card" style="flex:2 1 460px;min-width:0"><h2>Revenue, last 6 months</h2><div class="bars">${bars}</div></section>
+      <section class="card" style="flex:1 1 300px;min-width:0"><h2>Launch checklist</h2>${checks}</section></div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px">
+      <section class="card" style="flex:1 1 380px;min-width:0"><div class="row"><h2>App builds</h2><span class="muted" style="font-size:12px">built automatically on GitHub</span></div><div id="builds" class="muted">Loading…</div></section>
+      <section class="card" style="flex:1 1 380px;min-width:0"><h2>Plans &amp; payments</h2><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        ${kv('Monthly', t.monthly_price != null ? '₹' + t.monthly_price : '—')}${kv('Yearly', t.yearly_price != null ? '₹' + t.yearly_price : '—')}
+        ${kv('Free demo', t.demo_questions != null ? t.demo_questions + ' questions' : 'Default (Settings)')}${kv('Grace', t.grace_days != null ? t.grace_days + ' days · ' + (t.grace_questions ?? 0) + ' questions' : 'Default (Settings)')}
+        ${kv('Razorpay', t.razorpay_key_id ? 'Connected · ' + esc(t.razorpay_key_id) : 'Not connected')}
+        <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Durina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>`);
+}
+
+async function bindDetail(id) {
+  document.querySelectorAll('input[data-item]').forEach((c) => c.onchange = async () => {
+    try { await api('POST', `/teachers/${encodeURIComponent(id)}/checklist`, { item: c.dataset.item, done: c.checked }); toast('Checklist updated'); }
+    catch (e) { toast(e.message); c.checked = !c.checked; } });
+  $('#build').onclick = async () => { try { await api('POST', `/teachers/${encodeURIComponent(id)}/build`); toast('App build started — ready in about 7 minutes'); loadBuilds(id); } catch (e) { toast(e.message); } };
+  loadBuilds(id);
+}
+async function loadBuilds(id) {
+  const el = $('#builds'); if (!el) return;
+  try {
+    const r = await api('GET', `/teachers/${encodeURIComponent(id)}/builds`);
+    const list = Array.isArray(r) ? r : r.builds;
+    if (r.error) { el.textContent = r.error; return; }
+    el.innerHTML = list.length ? list.map((b) => {
+      const [label, color] = b.status !== 'completed' ? ['Building…', 'var(--warn)'] : b.conclusion === 'success' ? ['Ready', 'var(--ok)'] : ['Failed', 'var(--bad)'];
+      return `<div class="row" style="padding:10px 0;border-top:1px solid var(--border)"><b style="width:80px;color:var(--text)">Build #${b.number}</b><span class="pill" style="color:${color}">${label}</span>
+        <span class="muted" style="flex:1">${new Date(b.created_at).toLocaleString('en-IN')}</span><a href="${esc(b.url)}" target="_blank" rel="noopener"><b>${label === 'Ready' ? 'Download APK' : 'Details'}</b></a></div>`;
+    }).join('') : 'No builds yet. Press “Build new version”.';
+  } catch (e) { el.textContent = e.message; }
+}
+
+// ---------- Settings ----------
+async function settingsView() {
+  const s = await api('GET', '/settings');
+  const f = (sec, name, label, value, type = 'text', hint = '') => `<label class="f">${label}<input data-sec="${sec}" name="${name}" type="${type}" value="${esc(value)}">${hint ? `<span class="h">${hint}</span>` : ''}</label>`;
+  const card = (title, sub, inner) => `<section class="card"><div><h2>${title}</h2><span class="sub">${sub}</span></div>${inner}</section>`;
+  return shell('Settings', `<div class="row"><div><h1>Settings</h1><span class="sub">Apply to the whole platform. Each teacher can still override plans, demo and split.</span></div><button class="btn primary" id="save">Save settings</button></div>
+    <span id="serr" class="err"></span>
+    ${card('Company', 'Printed on commission invoices', `<div class="grid2">${f('company', 'name', 'Company name', s.company.name)}${f('company', 'gstin', 'GSTIN', s.company.gstin)}${f('company', 'pan', 'PAN', s.company.pan)}${f('company', 'address', 'Address', s.company.address)}
+      ${f('company', 'linked_account', 'Durina Razorpay linked account', s.company.linked_account, 'text', 'acc_… · receives Durina’s share from every teacher')}</div>`)}
+    ${card('Defaults for new teachers', 'Pre-filled in “Add a teacher”; can be changed per teacher', `<div class="grid2">${f('defaults', 'platform_percent', 'Durina share (%)', s.defaults.platform_percent, 'number')}
+      ${f('defaults', 'demo_questions', 'Free demo questions', s.defaults.demo_questions, 'number')}${f('defaults', 'grace_days', 'Grace days', s.defaults.grace_days, 'number')}
+      ${f('defaults', 'grace_questions', 'Grace questions', s.defaults.grace_questions, 'number')}${f('defaults', 'renew_reminder_days', 'Renew reminder (days before)', s.defaults.renew_reminder_days, 'number')}</div>`)}
+    ${card('AI answers', 'Used by every teacher’s AI', `<div class="grid2"><label class="f">Trusted websites for internet answers<textarea data-sec="ai" name="trusted_sites">${esc(s.ai.trusted_sites.join('\n'))}</textarea><span class="h">One per line</span></label>
+      <label class="f">Topics the AI must not answer<textarea data-sec="ai" name="blocked_topics">${esc(s.ai.blocked_topics.join('\n'))}</textarea><span class="h">One per line</span></label></div>`)}
+    ${card('Legal', 'Shown in every app; required by Play Store', `<div class="grid2">${f('legal', 'privacy_url', 'Privacy Policy URL', s.legal.privacy_url)}${f('legal', 'terms_url', 'Terms URL', s.legal.terms_url)}</div>`)}
+    ${card('Coming next', 'Planned for the next steps', `<span class="muted">SMS / WhatsApp provider · Team members &amp; roles · Login history</span>`)}`);
+}
+function bindSettings() {
+  $('#save').onclick = async () => {
+    const out = {};
+    document.querySelectorAll('[data-sec]').forEach((el) => {
+      out[el.dataset.sec] = out[el.dataset.sec] || {};
+      let v = el.value;
+      if (el.tagName === 'TEXTAREA') v = v.split('\n').map((x) => x.trim()).filter(Boolean);
+      else if (el.type === 'number') v = Number(v);
+      out[el.dataset.sec][el.name] = v;
+    });
+    try { await api('PUT', '/settings', out); toast('Settings saved'); $('#serr').textContent = ''; } catch (e) { $('#serr').textContent = e.message; }
+  };
+}
+
+// ---------- router ----------
+async function render() {
+  const app = $('#app');
+  if (!KEY) {
+    app.innerHTML = loginView();
+    const go = async () => { KEY = $('#key').value.trim(); try { await api('GET', '/settings'); sessionStorage.setItem('adminKey', KEY); render(); } catch (e) { $('#lerr').textContent = e.message; } };
+    $('#go').onclick = go; $('#key').onkeydown = (e) => e.key === 'Enter' && go(); $('#key').focus();
+    return;
+  }
+  const h = location.hash || '#/';
+  try {
+    if (h === '#/logout') { KEY = ''; sessionStorage.removeItem('adminKey'); location.hash = '#/'; return render(); }
+    if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
+    else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
+    else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
+    else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
+    else {
+      app.innerHTML = await teachersView();
+      const q = $('#q'); if (q) q.oninput = () => document.querySelectorAll('tbody tr').forEach((r) => r.style.display = r.dataset.name.includes(q.value.toLowerCase()) ? '' : 'none');
+    }
+  } catch (e) { if (KEY) app.innerHTML = shell('', `<p class="err">${esc(e.message)}</p>`); }
+}
+window.onhashchange = render;
+render();
+</script>
+</body>
+</html>

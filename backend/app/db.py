@@ -17,6 +17,14 @@ CREATE TABLE IF NOT EXISTS teachers (
     razorpay_key_secret TEXT,
     razorpay_webhook_secret TEXT,
     platform_commission_percent REAL,   -- Durina's share for THIS teacher; teacher gets the rest
+    app_name TEXT,
+    demo_questions INTEGER,             -- NULL = use the default from .env
+    grace_days INTEGER,
+    grace_questions INTEGER,
+    teacher_phone TEXT,
+    teacher_email TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',   -- draft | building | live
+    checklist TEXT,                     -- JSON {item: true/false}
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS students (
@@ -52,6 +60,7 @@ CREATE TABLE IF NOT EXISTS payments (
     razorpay_order_id TEXT UNIQUE NOT NULL,
     razorpay_payment_id TEXT,
     amount_paise INTEGER NOT NULL,
+    platform_percent REAL,              -- Durina's % at the time of this payment
     status TEXT NOT NULL DEFAULT 'created',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -91,6 +100,10 @@ CREATE TABLE IF NOT EXISTS qa_history (
     needs_review INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS saved_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES students(id),
@@ -112,13 +125,21 @@ class Database:
         self._conn.executescript(SCHEMA)
         self._migrate()
 
+    MIGRATIONS = [
+        ("teachers", "razorpay_key_secret", "TEXT"), ("teachers", "razorpay_webhook_secret", "TEXT"),
+        ("teachers", "platform_commission_percent", "REAL"), ("teachers", "app_name", "TEXT"),
+        ("teachers", "demo_questions", "INTEGER"), ("teachers", "grace_days", "INTEGER"),
+        ("teachers", "grace_questions", "INTEGER"), ("teachers", "teacher_phone", "TEXT"),
+        ("teachers", "teacher_email", "TEXT"), ("teachers", "status", "TEXT NOT NULL DEFAULT 'draft'"),
+        ("teachers", "checklist", "TEXT"), ("payments", "platform_percent", "REAL"),
+    ]
+
     def _migrate(self) -> None:
         """Add columns introduced after a database was first created."""
-        have = {r["name"] for r in self._conn.execute("PRAGMA table_info(teachers)")}
-        for col, typ in [("razorpay_key_secret", "TEXT"), ("razorpay_webhook_secret", "TEXT"),
-                         ("platform_commission_percent", "REAL")]:
-            if col not in have:
-                self._conn.execute(f"ALTER TABLE teachers ADD COLUMN {col} {typ}")
+        for table, col, typ in self.MIGRATIONS:
+            have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+            if have and col not in have:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
         self._conn.commit()
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:

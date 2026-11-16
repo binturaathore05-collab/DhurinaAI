@@ -13,6 +13,16 @@ pytest -q                            # tests
 ```
 On the server also install Noto fonts (`sudo apt install fonts-noto`) so PDFs render every Indian script.
 
+## Durina admin panel
+Open `https://<server>/admin` and log in with `ADMIN_KEY`.
+- **Teachers:** all teachers with app status (Draft / Building app / Live), their own split, students, plans, this month's revenue.
+- **Add a teacher:** name, subject, app name, photo, colour (live phone preview), plans, demo & grace,
+  **this teacher's revenue split** (slider), Razorpay keys (secrets stored encrypted), teacher login.
+- **Save & build app:** starts the GitHub Actions workflow with this teacher's config and photo;
+  the APK appears under "App builds" (needs `GITHUB_TOKEN`, `GITHUB_REPO`, `PUBLIC_BASE_URL`).
+- **Teacher detail:** revenue split report, last 6 months, launch checklist, builds.
+- **Settings:** company/GSTIN, Durina linked account, defaults for new teachers, AI trusted sites and blocked topics, legal links.
+
 ## Languages
 The app's screens are always in English. There is no language picker: the AI teacher replies in whatever
 language the student asks in — Hindi question → Hindi answer, Punjabi → Punjabi, English → English,

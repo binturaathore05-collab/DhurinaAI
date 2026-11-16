@@ -1,4 +1,5 @@
 name: Build Android APK
+run-name: APK ${{ github.event.inputs.teacher_id || 'demo' }}
 
 on:
   push:
@@ -6,6 +7,18 @@ on:
     paths: ["app/**", ".github/workflows/android.yml"]
   workflow_dispatch:
     inputs:
+      teacher_id:
+        description: "Teacher id (from the admin panel)"
+        required: false
+        default: ""
+      teacher_config:
+        description: "Teacher app config JSON (written to assets/teacher/teacher.json)"
+        required: false
+        default: ""
+      avatar_url:
+        description: "URL of the teacher photo"
+        required: false
+        default: ""
       api_base_url:
         description: "Backend URL (leave empty for offline demo mode)"
         required: false
@@ -30,14 +43,39 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Use this teacher's name, colour and photo
+        if: ${{ github.event.inputs.teacher_config != '' }}
+        env:
+          TEACHER_CONFIG: ${{ github.event.inputs.teacher_config }}
+          AVATAR_URL: ${{ github.event.inputs.avatar_url }}
+        run: |
+          printf '%s' "$TEACHER_CONFIG" | python3 -c "import json,sys; json.dump(json.load(sys.stdin), open('assets/teacher/teacher.json','w'), ensure_ascii=False, indent=2)"
+          cat assets/teacher/teacher.json
+          if [ -n "$AVATAR_URL" ]; then curl -fsSL "$AVATAR_URL" -o assets/teacher/avatar.jpg; fi
+
       - name: Create Android platform files
         run: flutter create --platforms=android --org com.durina.liveteach --project-name liveteach .
 
       - name: White-label app name + internet permission
         run: |
-          NAME=$(python3 -c "import json;print(json.load(open('assets/teacher/teacher.json'))['appName'])")
+          python3 - <<'PY'
+          import json, re, html
+          cfg = json.load(open('assets/teacher/teacher.json'))
+          path = 'android/app/src/main/AndroidManifest.xml'
+          m = open(path).read()
+          m = re.sub(r'android:label="[^"]*"', 'android:label="%s"' % html.escape(cfg['appName'], quote=True), m, count=1)
+          open(path, 'w').write(m)
+          # each teacher's app gets its own package id, so several teachers' apps can be installed side by side
+          gradle = 'android/app/build.gradle.kts'
+          try:
+              g = open(gradle).read()
+              tid = re.sub(r'[^a-z0-9]', '', cfg['teacherId'].lower()) or 'demo'
+              g = re.sub(r'applicationId = "[^"]*"', f'applicationId = "com.durina.liveteach.{tid}"', g)
+              open(gradle, 'w').write(g)
+          except FileNotFoundError:
+              pass
+          PY
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          sed -i "s/android:label=\"liveteach\"/android:label=\"$NAME\"/" "$MANIFEST"
           grep -q "android.permission.INTERNET" "$MANIFEST" || \
             sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$MANIFEST"
 
@@ -50,5 +88,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: liveteach-apk
+          name: liveteach-${{ github.event.inputs.teacher_id || 'demo' }}-apk
           path: app/build/app/outputs/flutter-apk/app-release.apk

@@ -14,6 +14,7 @@ import time
 import urllib.request
 
 from ..db import Database
+from ..secrets_box import unseal
 
 
 def commission_paise(amount_paise: int, percent: float) -> int:
@@ -65,8 +66,8 @@ def teacher_payment_settings(db: Database, teacher_id: str, settings) -> dict:
         raise ValueError("Commission must be between 0 and 100")
     return {
         "key_id": t["razorpay_key_id"] or settings.razorpay_key_id,
-        "key_secret": t["razorpay_key_secret"] or settings.razorpay_key_secret,
-        "webhook_secret": t["razorpay_webhook_secret"] or settings.razorpay_webhook_secret,
+        "key_secret": unseal(t["razorpay_key_secret"]) or settings.razorpay_key_secret,
+        "webhook_secret": unseal(t["razorpay_webhook_secret"]) or settings.razorpay_webhook_secret,
         "platform_percent": float(percent),
         "teacher_percent": 100 - float(percent),
     }
@@ -84,8 +85,8 @@ def start_checkout(db: Database, student_id: int, plan_id: str, settings, order_
                                    "split": f"teacher {pay['teacher_percent']:g}% / platform {pay['platform_percent']:g}%"})
     key_id = pay["key_id"]
     order = order_creator(key_id, pay["key_secret"], payload)
-    db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise) VALUES (?, ?, ?, ?)",
-               (student_id, plan_id, order["id"], plan["amount_paise"]))
+    db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, amount_paise, platform_percent) "
+               "VALUES (?, ?, ?, ?, ?)", (student_id, plan_id, order["id"], plan["amount_paise"], pay["platform_percent"]))
     # Everything the app needs to open Razorpay Checkout
     return {"key_id": key_id, "order_id": order["id"], "amount": plan["amount_paise"], "currency": "INR",
             "plan_name": plan["name"]}
