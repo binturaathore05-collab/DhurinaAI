@@ -45,4 +45,9 @@ Touches: database (status + reason + log), admin panel (teacher detail + student
 
 ---
 
-<!-- Next points from the owner go below as S2, S3, … -->
+## S2 · Full AI safety & child-protection system — status: **audited, waiting for owner's decisions**
+Owner's brief (17 Nov 2026): `docs/safety-requirements-owner-brief.md` (24 sections).
+Owner's instruction: don't build everything yet — first audit the existing app.
+Audit + gap analysis + phased plan: **`docs/safety-gap-analysis.md`**. S1 is folded into its Phase A (A3).
+
+<!-- Next points from the owner go below as S3, S4, … -->
