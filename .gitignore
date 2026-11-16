@@ -1,0 +1,9 @@
+.env
+*.db
+notes_pdfs/
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/
+build/
+.dart_tool/
