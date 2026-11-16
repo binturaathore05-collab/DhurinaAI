@@ -100,6 +100,13 @@
   .note { background: var(--accSoft); color: #134E4A; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
   .progress { height: 6px; border-radius: 999px; background: var(--surf); overflow: hidden; } .progress div { height: 100%; background: var(--acc); }
   @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
+  /* confirm popup before risky actions */
+  .confirm { position: fixed; inset: 0; background: rgba(17,24,39,.5); display: grid; place-items: center; padding: 20px; z-index: 20; }
+  .confirm .box { background: #fff; border-radius: 18px; padding: 22px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .confirm h3 { margin: 0; font-size: 18px; } .confirm p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 14px; }
+  .confirm .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; padding: 10px 12px; background: #F9FAFB; border-radius: 10px; cursor: pointer; }
+  .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .confirm .btn.risk { background: var(--bad); color: #fff; } .confirm .btn:disabled { opacity: .45; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -115,6 +122,32 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rupees = (p) => '₹' + Math.round((p || 0) / 100).toLocaleString('en-IN');
 const ago = (ts) => { const s = (Date.now() - ts) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' days ago'; };
+// ---------- Ask before risky actions ----------
+// Every delete / reject / disconnect / log out / build / money change asks first. "Cancel" has focus,
+// Esc or a click outside also cancels — so a slip of the finger never changes anything.
+// check: a tick box that must be ticked first (used for big bulk actions).
+function ask({ title, text, ok = 'Yes', danger = false, check = '' }) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'alertdialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', title);
+    m.innerHTML = `<div class="box"><h3>${esc(title)}</h3><p>${text}</p>${check ? `<label class="chk"><input type="checkbox" id="cfchk">${esc(check)}</label>` : ''}
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="button" class="btn ${danger ? 'risk' : 'primary'}" data-c="1" ${check ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(false); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m) return close(false); const b = e.target.closest('[data-c]'); if (b && !b.disabled) close(b.dataset.c === '1'); };
+    if (check) m.querySelector('#cfchk').onchange = (e) => { m.querySelector('[data-c="1"]').disabled = !e.target.checked; };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('[data-c="0"]').focus();
+  });
+}
+// Unsaved changes: a page sets GUARD = () => 'message' while something is typed but not saved.
+let GUARD = null, HERE = location.hash;
+const leaveOk = async () => { const msg = GUARD && GUARD(); if (!msg) return true;
+  return ask({ title: 'Leave without saving?', text: esc(msg), ok: 'Leave without saving', danger: true }); };
+window.addEventListener('beforeunload', (e) => { if (GUARD && GUARD()) { e.preventDefault(); e.returnValue = ''; } });
+window.onhashchange = async () => {
+  const target = location.hash;
+  if (GUARD && GUARD()) { history.replaceState(null, '', HERE || '#'); if (!(await leaveOk())) return; GUARD = null; history.replaceState(null, '', target); }
+  render();
+};
 function toast(m, actionLabel, action) {
   document.querySelectorAll('.toast').forEach((x) => x.remove());
   const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m;
@@ -466,16 +499,23 @@ function bind(view) {
     pick.onchange = () => { uploadFiles([...pick.files]); pick.value = ''; };
     drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
     drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
-    $$('[data-del]').forEach((b) => b.onclick = async () => { await api('DELETE', '/files/' + b.dataset.del); toast('Removed — your AI no longer uses this file'); render(); });
+    $$('[data-del]').forEach((b) => b.onclick = async () => { const f = D.files.find((x) => x.id === +b.dataset.del);
+      if (!(await ask({ title: 'Delete this file?', text: `<b>${esc(f ? f.name : 'This file')}</b> will be removed and your AI will stop using what it learned from it. This cannot be undone — you would have to upload it again.`, ok: 'Delete file', danger: true }))) return;
+      await api('DELETE', '/files/' + b.dataset.del); toast('Removed — your AI no longer uses this file'); render(); });
     $('#ns').onclick = async () => { const t = $('#nt').value.trim(), x = $('#nb').value.trim(); if (!t || !x) return toast('Add a title and some text');
       await api('POST', '/notes', { title: t, text: x }); toast('Note added'); render(); };
+    GUARD = () => ($('#nb') && ($('#nb').value.trim() || $('#nt').value.trim())) ? 'Your new note is not saved yet.' : null;
     $('#fq').oninput = (e) => $$('#fl > div').forEach((r) => r.style.display = r.textContent.toLowerCase().includes(e.target.value.toLowerCase()) ? '' : 'none');
   }
   if (view === 'youtube') {
     $('#ytc') && ($('#ytc').onclick = async () => { await api('PUT', '/youtube', { connected: true }); toast('Channel connected'); render(); });
-    $('#ytd') && ($('#ytd').onclick = async () => { await api('PUT', '/youtube', { connected: false }); toast('Disconnected — already learned videos stay'); render(); });
+    $('#ytd') && ($('#ytd').onclick = async () => {
+      if (!(await ask({ title: 'Disconnect YouTube?', text: 'Your AI will stop learning from new videos. What it already learned stays. You can connect again later.', ok: 'Disconnect', danger: true }))) return;
+      await api('PUT', '/youtube', { connected: false }); toast('Disconnected — already learned videos stay'); render(); });
     $('#sync') && ($('#sync').onclick = async () => { await api('POST', '/youtube/sync'); toast('Checking for new videos…'); render(); });
-    $('#auto') && ($('#auto').onchange = async (e) => { await api('PUT', '/youtube', { autosync: e.target.checked }); toast(e.target.checked ? 'Auto-sync on' : 'Auto-sync off'); });
+    $('#auto') && ($('#auto').onchange = async (e) => {
+      if (!e.target.checked && !(await ask({ title: 'Turn off auto-sync?', text: 'New videos will not be learned automatically. You can still press “Sync now”.', ok: 'Turn off' }))) { e.target.checked = true; return; }
+      await api('PUT', '/youtube', { autosync: e.target.checked }); toast(e.target.checked ? 'Auto-sync on' : 'Auto-sync off'); });
     $$('[data-pl]').forEach((c) => c.onchange = async () => { D.yt.playlists[+c.dataset.pl].on = c.checked; await api('PUT', '/youtube', { playlists: D.yt.playlists }); toast('Saved'); });
   }
   if (view === 'style') {
@@ -484,34 +524,52 @@ function bind(view) {
       if (i >= 0) { if (S.personalities.length > 1) S.personalities.splice(i, 1); else return toast('Keep at least one personality'); }
       else if (S.personalities.length >= 3) return toast('Up to 3 personalities — remove one first'); else S.personalities.push(k);
       render(); });
+    const styleNow = () => JSON.stringify([S.personalities, $$('[data-tx]').map((x) => x.value), $$('input[type=checkbox]').map((x) => x.checked)]);
+    const styleStart = window.__styleStart && window.__styleKeep ? window.__styleStart : styleNow(); window.__styleStart = styleStart; window.__styleKeep = false;
+    GUARD = () => ($('#ss') && styleNow() !== styleStart) ? 'Your Teaching Style changes are not saved yet.' : null;
+    $$('[data-p]').forEach((b) => b.addEventListener('click', () => { window.__styleKeep = true; }, true));
     $('#ss').onclick = async () => {
       for (const k in S.teaching) { S.teaching[k].text = $(`[data-tx="${k}"]`).value; S.teaching[k].on = $(`[data-on="${k}"]`).checked; }
       $$('[data-it]').forEach((c) => S.interaction[c.dataset.it] = c.checked);
       $$('[data-av]').forEach((c) => S.avatar[c.dataset.av] = c.checked);
-      await api('PUT', '/style', S); toast('Style saved — your AI will follow it'); };
+      await api('PUT', '/style', S); window.__styleStart = styleNow(); GUARD = () => ($('#ss') && styleNow() !== window.__styleStart) ? 'Your Teaching Style changes are not saved yet.' : null; toast('Style saved — your AI will follow it'); };
   }
   if (view === 'review') {
     const re = () => { RV.offset = 0; render(); };
-    $$('[data-tab]').forEach((b) => b.onclick = () => { RV.tab = b.dataset.tab; RV.sel.clear(); re(); });
+    $$('[data-tab]').forEach((b) => b.onclick = async () => { if (!(await leaveOk())) return; RV.tab = b.dataset.tab; RV.sel.clear(); re(); });
     let t; $('#rq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { RV.q = e.target.value; re(); }, 350); };
     $('#ro').onchange = (e) => { RV.origin = e.target.value; re(); }; $('#rs').onchange = (e) => { RV.sort = e.target.value; re(); };
     $$('[data-rp]').forEach((b) => b.onclick = () => { RV.offset = +b.dataset.rp; render(); window.scrollTo(0, 0); });
     $$('[data-sel]').forEach((c) => c.onchange = () => { c.checked ? RV.sel.add(+c.dataset.sel) : RV.sel.delete(+c.dataset.sel); render(); });
     $('#all') && ($('#all').onchange = (e) => { RV.data.items.forEach((g) => e.target.checked ? RV.sel.add(g.ids[0]) : RV.sel.delete(g.ids[0])); render(); });
     const group = (key) => RV.data.items.find((g) => g.ids[0] === key);
-    const decide = async (keys, action, answer) => { const groups = keys.map((k) => group(k)).filter(Boolean);
+    const decide = async (keys, action, answer, sure = false) => { const groups = keys.map((k) => group(k)).filter(Boolean);
+      const people = groups.reduce((a, g) => a + (g.asked || g.ids.length), 0);
+      if (!sure && (groups.length > 1 || action === 'reject')) {
+        const many = groups.length > 1, big = groups.length >= 20;
+        const ok = await ask(action === 'approve'
+          ? { title: `Approve ${groups.length} answers?`, text: `These answers go to <b>${people.toLocaleString('en-IN')} students</b> and your AI will reuse them. Please make sure you have read them. You can undo for 10 seconds, or later from the Approved tab.`, ok: `Approve ${groups.length}`, check: big ? `I have checked these ${groups.length} answers` : '' }
+          : { title: many ? `Reject ${groups.length} answers?` : 'Mark this answer as wrong?', danger: true, text: `Your AI will <b>not use ${many ? 'these answers' : 'this answer'}</b> again${many ? ` (asked by ${people.toLocaleString('en-IN')} students)` : ''}. You can undo it later from the Rejected tab.`, ok: many ? `Reject ${groups.length}` : 'Yes, it’s wrong', check: big ? `I have checked these ${groups.length} answers` : '' });
+        if (!ok) return; }
       const r = await api('POST', '/review/bulk', { decisions: groups.map((g) => ({ ids: g.ids, action, answer })) });
       keys.forEach((k) => RV.sel.delete(k)); RV.editing = null; render();
       toast(`${r.updated} student answer${r.updated === 1 ? '' : 's'} ${action === 'approve' ? 'approved' : 'rejected'}`, 'Undo', async () => {
         for (const g of groups) await api('POST', '/review/undo', { ids: g.ids }); toast('Undone — back in Waiting'); render(); }); };
-    $$('[data-undo]').forEach((b) => b.onclick = async () => { const r = await api('POST', '/review/undo', { ids: group(+b.dataset.undo).ids }); toast(`${r.restored} answer${r.restored === 1 ? '' : 's'} moved back to Waiting`); render(); });
-    $$('[data-fix]').forEach((b) => b.onclick = async () => { try { await api('PUT', '/verified/' + b.dataset.fix, { answer: $('#ed').value }); RV.editing = null; toast('Approved answer corrected — students get the new version'); render(); } catch (e) { toast(e.message); } });
+    $$('[data-undo]').forEach((b) => b.onclick = async () => {
+      if (!(await ask({ title: 'Move back to Waiting?', text: RV.tab === 'approved' ? 'Students will <b>stop getting this answer</b> right away, until you approve it again.' : 'The answer goes back to Waiting so you can review it again.', ok: 'Move back' }))) return;
+      const r = await api('POST', '/review/undo', { ids: group(+b.dataset.undo).ids }); toast(`${r.restored} answer${r.restored === 1 ? '' : 's'} moved back to Waiting`); render(); });
+    $$('[data-fix]').forEach((b) => b.onclick = async () => {
+      if (!(await ask({ title: 'Replace the approved answer?', text: 'Every student who asks this will get your new version from now on.', ok: 'Save new answer' }))) return;
+      try { await api('PUT', '/verified/' + b.dataset.fix, { answer: $('#ed').value }); RV.editing = null; toast('Approved answer corrected — students get the new version'); render(); } catch (e) { toast(e.message); } });
     $('#bok') && ($('#bok').onclick = () => decide([...RV.sel], 'approve'));
     $('#bno') && ($('#bno').onclick = () => decide([...RV.sel], 'reject'));
     $$('[data-ok]').forEach((b) => b.onclick = () => decide([+b.dataset.ok], 'approve'));
     $$('[data-no]').forEach((b) => b.onclick = () => decide([+b.dataset.no], 'reject'));
     $$('[data-edit]').forEach((b) => b.onclick = () => { RV.editing = +b.dataset.edit; render(); });
-    $$('[data-cancel]').forEach((b) => b.onclick = () => { RV.editing = null; render(); });
+    $$('[data-cancel]').forEach((b) => b.onclick = async () => { const g = group(RV.editing);
+      if ($('#ed') && g && $('#ed').value !== g.answer && !(await ask({ title: 'Discard your changes?', text: 'The answer you were typing will be lost.', ok: 'Discard', danger: true }))) return;
+      RV.editing = null; render(); });
+    if (RV.editing != null) GUARD = () => { const g = group(RV.editing); return ($('#ed') && g && $('#ed').value !== g.answer) ? 'Your corrected answer is not saved yet.' : null; };
     $$('[data-save]').forEach((b) => b.onclick = () => decide([+b.dataset.save], 'approve', $('#ed').value));
   }
   if (view === 'students') {
@@ -523,7 +581,10 @@ function bind(view) {
     $('#rv').onclick = () => showReport();
     $$('[data-dl]').forEach((b) => b.onclick = () => download(b.dataset.dl));
   }
-  if (view === 'settings') $('#pb').onclick = async () => { try { await api('POST', '/password', { current_password: $('#p0').value, new_password: $('#p1').value }); $('#pm').textContent = 'Password changed'; $('#pm').className = 'muted'; } catch (e) { $('#pm').textContent = e.message; $('#pm').className = 'err'; } };
+  if (view === 'settings') $('#pb').onclick = async () => {
+    if (!$('#p0').value || !$('#p1').value) { $('#pm').textContent = 'Enter your current and new password'; $('#pm').className = 'err'; return; }
+    if (!(await ask({ title: 'Change your password?', text: 'You will use the new password the next time you log in.', ok: 'Change password' }))) return;
+    try { await api('POST', '/password', { current_password: $('#p0').value, new_password: $('#p1').value }); $('#pm').textContent = 'Password changed'; $('#pm').className = 'muted'; } catch (e) { $('#pm').textContent = e.message; $('#pm').className = 'err'; } };
 }
 
 const VIEWS = { home: homeView, knowledge: knowledgeView, youtube: youtubeView, style: styleView, review: reviewView, students: studentsView, settings: settingsView };
@@ -535,13 +596,15 @@ async function render() {
     return;
   }
   const h = (location.hash || '#home').slice(1);
-  if (h === 'logout') { TOKEN = ''; location.hash = ''; return render(); }
+  if (h === 'logout') {
+    if (!(await ask({ title: 'Log out?', text: 'You will need your email or mobile and password to log in again.', ok: 'Log out' }))) { history.replaceState(null, '', HERE || '#home'); return; }
+    TOKEN = ''; location.hash = ''; return render(); }
+  GUARD = null; HERE = location.hash;
   D = await api('GET', '/home');
   const view = VIEWS[h] ? h : 'home';
   app.innerHTML = await VIEWS[view]();
   bind(view);
 }
-window.onhashchange = render;
 render();
 </script>
 </body>

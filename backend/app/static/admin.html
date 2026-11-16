@@ -95,6 +95,13 @@
   .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
   .scroll { overflow-x: auto; }
   @media (max-width: 700px) { main { padding: 20px 16px; } nav { max-width: none; } }
+  /* confirm popup before risky actions */
+  .confirm { position: fixed; inset: 0; background: rgba(17,24,39,.5); display: grid; place-items: center; padding: 20px; z-index: 20; }
+  .confirm .box { background: #fff; border-radius: 18px; padding: 22px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .confirm h3 { margin: 0; font-size: 18px; } .confirm p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 14px; }
+  .confirm .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; padding: 10px 12px; background: #F9FAFB; border-radius: 10px; cursor: pointer; }
+  .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .confirm .btn.risk { background: var(--bad); color: #fff; } .confirm .btn:disabled { opacity: .45; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -115,6 +122,32 @@ const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Sci
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
 let KEY = (() => { try { return sessionStorage.getItem('adminToken') || ''; } catch { return ''; } })();
+// ---------- Ask before risky actions ----------
+// Every delete / reject / disconnect / log out / build / money change asks first. "Cancel" has focus,
+// Esc or a click outside also cancels — so a slip of the finger never changes anything.
+// check: a tick box that must be ticked first (used for big bulk actions).
+function ask({ title, text, ok = 'Yes', danger = false, check = '' }) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'alertdialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', title);
+    m.innerHTML = `<div class="box"><h3>${esc(title)}</h3><p>${text}</p>${check ? `<label class="chk"><input type="checkbox" id="cfchk">${esc(check)}</label>` : ''}
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="button" class="btn ${danger ? 'risk' : 'primary'}" data-c="1" ${check ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(false); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m) return close(false); const b = e.target.closest('[data-c]'); if (b && !b.disabled) close(b.dataset.c === '1'); };
+    if (check) m.querySelector('#cfchk').onchange = (e) => { m.querySelector('[data-c="1"]').disabled = !e.target.checked; };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('[data-c="0"]').focus();
+  });
+}
+// Unsaved changes: a page sets GUARD = () => 'message' while something is typed but not saved.
+let GUARD = null, HERE = location.hash;
+const leaveOk = async () => { const msg = GUARD && GUARD(); if (!msg) return true;
+  return ask({ title: 'Leave without saving?', text: esc(msg), ok: 'Leave without saving', danger: true }); };
+window.addEventListener('beforeunload', (e) => { if (GUARD && GUARD()) { e.preventDefault(); e.returnValue = ''; } });
+window.onhashchange = async () => {
+  const target = location.hash;
+  if (GUARD && GUARD()) { history.replaceState(null, '', HERE || '#'); if (!(await leaveOk())) return; GUARD = null; history.replaceState(null, '', target); }
+  render();
+};
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 3200); }
 
 async function api(method, path, body) {
@@ -258,17 +291,24 @@ function bindForm(id) {
     r.readAsDataURL(file); };
   let build = false;
   document.querySelectorAll('button[data-build]').forEach((b) => b.onclick = () => { build = b.dataset.build === '1'; });
+  const snap = () => JSON.stringify([Object.fromEntries(new FormData($('#tf')).entries()), color, subjects, !!photo, s.value]);
+  const start = snap(), oldSplit = +s.value;
+  GUARD = () => (document.body.contains($('#tf')) && snap() !== start) ? 'Your changes to this teacher are not saved yet.' : null;
   $('#tf').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.brand_color = color; data.platform_percent = 100 - +s.value; data.subjects = subjects; delete data.subject;
+    if (id && +s.value !== oldSplit && !(await ask({ title: 'Change this teacher’s split?',
+      text: `Teacher <b>${oldSplit}% → ${+s.value}%</b>, Dhurina <b>${100 - oldSplit}% → ${100 - +s.value}%</b>.<br>This applies to <b>new payments only</b>. Payments already made keep their old split.`,
+      ok: 'Yes, change split' }))) return;
+    if (build && !(await ask({ title: 'Save and build the app?', text: `A new version of <b>${esc(data.app_name || data.name)}</b> will be built (about 7 minutes). After testing, you upload it to the teacher’s Play Console.`, ok: 'Save & build' }))) return;
     if (photo) data.photo_base64 = photo;
     const btns = document.querySelectorAll('button[type=submit]'); btns.forEach((b) => b.disabled = true);
     try {
       const saved = id ? await api('PUT', '/teachers/' + encodeURIComponent(id), data) : await api('POST', '/teachers', data);
       if (build) { try { await api('POST', `/teachers/${encodeURIComponent(saved.id)}/build`); toast('Saved · app build started'); } catch (err) { toast('Saved · ' + err.message); } }
       else toast('Saved');
-      location.hash = '#/t/' + encodeURIComponent(saved.id);
+      GUARD = null; location.hash = '#/t/' + encodeURIComponent(saved.id);
     } catch (err) { $('#ferr').textContent = err.message; window.scrollTo(0, 0); }
     finally { btns.forEach((b) => b.disabled = false); }
   };
@@ -304,7 +344,7 @@ async function bindDetail(id) {
   document.querySelectorAll('input[data-item]').forEach((c) => c.onchange = async () => {
     try { await api('POST', `/teachers/${encodeURIComponent(id)}/checklist`, { item: c.dataset.item, done: c.checked }); toast('Checklist updated'); }
     catch (e) { toast(e.message); c.checked = !c.checked; } });
-  $('#build').onclick = async () => { try { await api('POST', `/teachers/${encodeURIComponent(id)}/build`); toast('App build started — ready in about 7 minutes'); loadBuilds(id); } catch (e) { toast(e.message); } };
+  $('#build').onclick = async () => { if (!(await ask({ title: 'Build a new app version?', text: 'A new version of this teacher’s app will be built (about 7 minutes). Students get it only after you upload it to the Play Store.', ok: 'Build now' }))) return; try { await api('POST', `/teachers/${encodeURIComponent(id)}/build`); toast('App build started — ready in about 7 minutes'); loadBuilds(id); } catch (e) { toast(e.message); } };
   loadBuilds(id);
 }
 async function loadBuilds(id) {
@@ -420,10 +460,22 @@ async function settingsView() {
 }
 function bindSettings() {
   $('#pwbtn').onclick = async () => {
+    if (!$('#pw0').value || !$('#pw1').value) { $('#pwmsg').textContent = 'Enter your current and new password'; $('#pwmsg').className = 'err'; return; }
+    if (!(await ask({ title: 'Change your password?', text: 'You will be logged out everywhere and must log in with the new password.', ok: 'Change password' }))) return;
     try { await api('POST', '/password', { current_password: $('#pw0').value, new_password: $('#pw1').value });
       toast('Password changed — please log in again'); KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} setTimeout(render, 800); }
     catch (e) { $('#pwmsg').textContent = e.message; $('#pwmsg').className = 'err'; } };
+  const read = () => { const o = {}; document.querySelectorAll('[data-sec]').forEach((el) => { o[el.dataset.sec + '.' + el.name] = el.value; }); return o; };
+  let saved = read();
+  GUARD = () => (document.body.contains($('#save')) && JSON.stringify(read()) !== JSON.stringify(saved)) ? 'Your settings changes are not saved yet.' : null;
   $('#save').onclick = async () => {
+    const now = read(), changed = Object.keys(now).filter((k) => now[k] !== saved[k]);
+    if (!changed.length) return toast('Nothing changed');
+    const money = changed.filter((k) => ['company.linked_account', 'defaults.platform_percent'].includes(k));
+    const labels = { 'company.linked_account': 'Dhurina Razorpay linked account', 'defaults.platform_percent': 'Default Dhurina share for new teachers' };
+    if (!(await ask({ title: 'Save settings?', danger: money.length > 0,
+      text: (money.length ? `<b>Money settings change:</b> ${money.map((k) => esc(labels[k]) + ` (<b>${esc(saved[k])} → ${esc(now[k])}</b>)`).join(', ')}.<br>` : '')
+        + `${changed.length} setting${changed.length > 1 ? 's' : ''} will change for the whole platform.`, ok: 'Save settings' }))) return;
     const out = {};
     document.querySelectorAll('[data-sec]').forEach((el) => {
       out[el.dataset.sec] = out[el.dataset.sec] || {};
@@ -432,7 +484,7 @@ function bindSettings() {
       else if (el.type === 'number') v = Number(v);
       out[el.dataset.sec][el.name] = v;
     });
-    try { await api('PUT', '/settings', out); toast('Settings saved'); $('#serr').textContent = ''; } catch (e) { $('#serr').textContent = e.message; }
+    try { await api('PUT', '/settings', out); saved = read(); toast('Settings saved'); $('#serr').textContent = ''; } catch (e) { $('#serr').textContent = e.message; }
   };
 }
 
@@ -453,7 +505,10 @@ async function render() {
   }
   const h = location.hash || '#/';
   try {
-    if (h === '#/logout') { KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
+    if (h === '#/logout') {
+      if (!(await ask({ title: 'Log out?', text: 'You will need your email and password to log in again.', ok: 'Log out' }))) { history.replaceState(null, '', HERE || '#/'); return; }
+      KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
+    GUARD = null; HERE = h;
     if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
@@ -465,7 +520,6 @@ async function render() {
     }
   } catch (e) { if (KEY) app.innerHTML = shell('', `<p class="err">${esc(e.message)}</p>`); }
 }
-window.onhashchange = render;
 render();
 </script>
 </body>

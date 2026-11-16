@@ -63,6 +63,16 @@ class _PayScreenState extends State<PayScreen> {
     return 'Your plan ended$when. Renew to continue with $teacher. Your notes and history are safe.$grace';
   }
 
+  Future<void> _close() async {
+    if (_busy) {
+      final leave = await confirmAction(context, title: 'Payment in progress',
+          message: 'If you have already paid, don’t worry — your plan will start automatically. Leave this screen?',
+          confirmLabel: 'Leave', danger: true);
+      if (!leave || !mounted) return;
+    }
+    Navigator.of(context).pop(false);
+  }
+
   void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   Future<void> _payNow() async {
@@ -125,7 +135,10 @@ class _PayScreenState extends State<PayScreen> {
     final cfg = AppScope.of(context).cfg;
     final accent = cfg.accent;
     final plans = _plans;
-    return Scaffold(
+    return PopScope(
+      canPop: !_busy,   // a payment is in progress: ask before leaving
+      onPopInvokedWithResult: (didPop, _) async { if (!didPop) _close(); },
+      child: Scaffold(
       body: Column(children: [
         SizedBox(
           height: 210,
@@ -135,7 +148,7 @@ class _PayScreenState extends State<PayScreen> {
             SafeArea(
               child: Align(
                 alignment: Alignment.topLeft,
-                child: IconButton(icon: const Icon(Icons.close), tooltip: 'Close', onPressed: () => Navigator.of(context).pop(false)),
+                child: IconButton(icon: const Icon(Icons.close), tooltip: 'Close', onPressed: _close),
               ),
             ),
           ]),
@@ -206,6 +219,6 @@ class _PayScreenState extends State<PayScreen> {
           ),
         ),
       ]),
-    );
+    ));
   }
 }

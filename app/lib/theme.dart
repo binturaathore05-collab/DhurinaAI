@@ -91,3 +91,29 @@ class RoundIconButton extends StatelessWidget {
     );
   }
 }
+
+/// Ask before anything that can't be taken back or is easy to tap by mistake.
+/// "Cancel" is the safe default (it has focus; back / tap outside also cancels).
+Future<bool> confirmAction(BuildContext context,
+    {required String title, required String message, required String confirmLabel, bool danger = false}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: LT.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(title, style: const TextStyle(color: LT.text, fontWeight: FontWeight.w800, fontSize: 18)),
+      content: Text(message, style: const TextStyle(color: LT.muted, fontSize: 15, height: 1.4)),
+      actions: [
+        TextButton(autofocus: true, onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: LT.text, fontWeight: FontWeight.w700))),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: danger ? LT.danger : LT.accentText,
+              foregroundColor: danger ? Colors.white : LT.onAccent),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
+}

@@ -35,3 +35,14 @@ explain, talking with students, avatar settings) is configured per teacher.
 - **Teacher never sees Dhurina's share** (17 Nov 2026): in the teacher dashboard and teacher reports only the
   total paid, the teacher's own % and the teacher's own earnings appear — no Dhurina % or amount anywhere.
   The admin panel keeps the full split. Reports show "Period: <from> to <to>" in Indian time.
+
+## Ask before risky actions (everywhere: app, teacher panel, admin panel)
+Nothing that is hard to undo happens on one tap. A popup asks first; **Cancel** is the default
+(focused, Enter / Esc / tap outside = Cancel).
+- Admin: log out · change a teacher's split (shows old → new, new payments only) · save & build app ·
+  build new version · save settings (money changes highlighted) · change password · leaving a form with unsaved changes.
+- Teacher: delete a file · disconnect YouTube · turn off auto-sync · mark an answer wrong · bulk approve/reject
+  (20+ needs "I have checked" tick) · move an answer back to Waiting · replace an approved answer · discard an edit ·
+  leaving Teaching Style / a note / an edit unsaved · change password · log out.
+- Student app: End class · phone back button (leave class) · closing the screen while a payment is in progress.
+Any new risky action must use the same `ask()` (web) / `confirmAction()` (app).

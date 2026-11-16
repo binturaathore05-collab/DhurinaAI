@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../main.dart';
@@ -169,7 +170,15 @@ class _LiveScreenState extends State<LiveScreen> {
     final scope = AppScope.of(context);
     final cfg = scope.cfg;
     final access = _access;
-    return Scaffold(
+    return PopScope(
+      canPop: false,   // phone back button: ask before leaving the class
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final leave = await confirmAction(context, title: 'Leave the class?',
+            message: 'Your saved notes stay in your library. You can come back any time.', confirmLabel: 'Leave', danger: true);
+        if (leave) SystemNavigator.pop();
+      },
+      child: Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
@@ -242,13 +251,18 @@ class _LiveScreenState extends State<LiveScreen> {
                     background: cfg.accent, foreground: LT.onAccent,
                     onPressed: () => _toast('Voice is coming in the next update — tap the keyboard to type for now')),
                 RoundIconButton(icon: Icons.call_end_rounded, tooltip: 'End class', background: LT.danger,
-                    onPressed: () => (access != null && access.state != 'active') ? _openPlans() : _openLibrary()),
+                    onPressed: () async {
+                      final end = await confirmAction(context, title: 'End this class?',
+                          message: 'You can start again any time. Your saved notes stay in your library.', confirmLabel: 'End class', danger: true);
+                      if (!end || !mounted) return;
+                      (access != null && access.state != 'active') ? _openPlans() : _openLibrary();
+                    }),
               ]),
             ),
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

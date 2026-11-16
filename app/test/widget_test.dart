@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liveteach/api.dart';
 import 'package:liveteach/config.dart';
 import 'package:liveteach/main.dart';
+import 'package:liveteach/theme.dart';
 
 void main() {
   const cfg = TeacherConfig(
@@ -46,5 +47,23 @@ void main() {
     await expectLater(api.ask('Q4'), throwsA(isA<ApiException>()));
     await api.confirmPayment('o', 'p', 's');
     expect((await api.access()).state, 'active');
+  });
+
+  testWidgets('risky actions ask first: Cancel keeps things, confirm goes ahead', (tester) async {
+    final results = <bool>[];
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () async => results.add(await confirmAction(context,
+            title: 'End this class?', message: 'Notes stay safe.', confirmLabel: 'End class', danger: true)),
+        child: const Text('end')))));
+    await tester.tap(find.text('end'));
+    await tester.pumpAndSettle();
+    expect(find.text('End this class?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('end'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('End class'));
+    await tester.pumpAndSettle();
+    expect(results, [false, true]);
   });
 }
