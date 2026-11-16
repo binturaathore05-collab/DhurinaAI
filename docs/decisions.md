@@ -32,3 +32,6 @@ Android APK is built by GitHub Actions (cloud) and downloaded from the repositor
 Full requirements and phase plan: `docs/ai-teacher-requirements.md`. Every tutor answer carries
 emotion, emphasis and board points for the voice/avatar phase; Teaching Style (personality, how I
 explain, talking with students, avatar settings) is configured per teacher.
+- **Teacher never sees Durina's share** (17 Nov 2026): in the teacher dashboard and teacher reports only the
+  total paid, the teacher's own % and the teacher's own earnings appear — no Durina % or amount anywhere.
+  The admin panel keeps the full split. Reports show "Period: <from> to <to>" in Indian time.

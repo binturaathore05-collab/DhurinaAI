@@ -297,10 +297,10 @@ def teacher_students(offset: int = 0, limit: int = 25, q: str = "", status: str 
     return teacher_data.students_page(db, teacher_id, offset, limit, q, status)
 
 
-def _report_response(tid: str, month: str, fmt: str):
+def _report_response(tid: str, month: str, fmt: str, audience: str):
     if not re.fullmatch(r"\d{4}-\d{2}", month or ""):
         raise HTTPException(400, "month must look like 2026-11")
-    rep = teacher_data.monthly_report(db, tid, month, _default_pct())
+    rep = teacher_data.monthly_report(db, tid, month, _default_pct(), audience)
     name = f"liveteach-{tid}-{month}"
     if fmt == "xlsx":
         return Response(teacher_data.report_xlsx(rep), headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'},
@@ -317,7 +317,7 @@ def _report_response(tid: str, month: str, fmt: str):
 
 @app.get("/teacher/report")
 def teacher_report(month: str, format: str = "json", teacher_id: str = Depends(teacher_admin)):
-    return _report_response(teacher_id, month, format)
+    return _report_response(teacher_id, month, format, "teacher")   # never shows Durina's share
 
 
 @app.post("/teacher/review/{qa_id}/approve")
@@ -470,8 +470,9 @@ def admin_builds(tid: str):
 
 
 @app.get("/admin/api/teachers/{tid}/report", dependencies=[Depends(require_admin)])
-def admin_teacher_report(tid: str, month: str, format: str = "json"):
-    return _report_response(tid, month, format)
+def admin_teacher_report(tid: str, month: str, format: str = "json", view: str = "admin"):
+    """view=teacher gives exactly what the teacher sees (to send it to them)."""
+    return _report_response(tid, month, format, "teacher" if view == "teacher" else "admin")
 
 
 @app.get("/admin/api/settings", dependencies=[Depends(require_admin)])

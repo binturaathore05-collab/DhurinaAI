@@ -3,8 +3,13 @@
 import html
 import io
 import json
+import os
 import re
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo(os.environ.get("REPORT_TZ", "Asia/Kolkata"))   # months and dates in Indian time
 
 from ..db import Database
 
@@ -111,13 +116,27 @@ def students_page(db: Database, teacher_id: str, offset: int = 0, limit: int = 2
 
 def month_bounds(month: str) -> tuple[float, float]:
     y, m = (int(x) for x in month.split("-"))
-    start = time.mktime((y, m, 1, 0, 0, 0, 0, 0, -1))
     ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
-    return start, time.mktime((ny, nm, 1, 0, 0, 0, 0, 0, -1))
+    return datetime(y, m, 1, tzinfo=TZ).timestamp(), datetime(ny, nm, 1, tzinfo=TZ).timestamp()
 
 
-def monthly_report(db: Database, teacher_id: str, month: str, default_percent: float = 20) -> dict:
-    """Every paid subscription in the month with the split, plus totals — for the teacher's own accounts."""
+def _fmt(ts: float, pattern: str = "%d %b %Y") -> str:
+    return datetime.fromtimestamp(ts, TZ).strftime(pattern)
+
+
+def _period(month: str, now: float | None = None) -> tuple[str, str]:
+    """'01 Nov 2026' → last day of the month, or today if the month is still running."""
+    start, end = month_bounds(month)
+    last = min(end - 1, now or time.time())
+    if last < start:
+        last = end - 1
+    return _fmt(start), _fmt(last)
+
+
+def monthly_report(db: Database, teacher_id: str, month: str, default_percent: float = 20,
+                   audience: str = "admin") -> dict:
+    """Every paid subscription in the month with totals.
+    audience='teacher': only the teacher's own share is shown — nothing about Durina's % or amount."""
     start, end = month_bounds(month)
     t = db.one("SELECT name, platform_commission_percent FROM teachers WHERE id = ?", (teacher_id,))
     rows = db.all("""
@@ -139,10 +158,28 @@ def monthly_report(db: Database, teacher_id: str, month: str, default_percent: f
                       "plan": r["plan"], "type": "Renewal" if r["earlier"] else "New",
                       "amount_paise": r["amount_paise"], "durina_percent": pct, "durina_paise": cut,
                       "teacher_paise": r["amount_paise"] - cut})
-    return {"teacher": t["name"] if t else teacher_id, "month": month, "items": items, "summary": {
+    p_from, p_to = _period(month)
+    rep = {"teacher": t["name"] if t else teacher_id, "month": month, "period_from": p_from, "period_to": p_to,
+           "generated_on": _fmt(time.time(), "%d %b %Y, %I:%M %p"), "items": items, "summary": {
         "subscriptions": len(items), "new": sum(1 for i in items if i["type"] == "New"),
         "renewals": sum(1 for i in items if i["type"] == "Renewal"), "students": len({r["sid"] for r in rows}),
         "gross_paise": gross, "durina_paise": durina, "teacher_paise": gross - durina}}
+    return teacher_view(rep) if audience == "teacher" else rep
+
+
+def teacher_view(rep: dict) -> dict:
+    """Strip everything about the platform's cut: the teacher sees the total, their % and their money."""
+    def share(paise_total, paise_teacher):
+        return round(paise_teacher * 100 / paise_total, 2) if paise_total else None
+    items = [{"date": i["date"], "payment_id": i["payment_id"], "student": i["student"], "plan": i["plan"], "type": i["type"],
+              "amount_paise": i["amount_paise"], "your_percent": round(100 - i["durina_percent"], 2),
+              "your_paise": i["teacher_paise"]} for i in rep["items"]]
+    s = rep["summary"]
+    pcts = {i["your_percent"] for i in items}
+    return {**{k: rep[k] for k in ("teacher", "month", "period_from", "period_to", "generated_on")}, "audience": "teacher",
+            "items": items, "summary": {"subscriptions": s["subscriptions"], "new": s["new"], "renewals": s["renewals"],
+            "students": s["students"], "gross_paise": s["gross_paise"], "your_paise": s["teacher_paise"],
+            "your_percent": pcts.pop() if len(pcts) == 1 else share(s["gross_paise"], s["teacher_paise"])}}
 
 
 def _rs(paise: int) -> float:
@@ -153,41 +190,59 @@ def report_xlsx(rep: dict) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
+    teacher = rep.get("audience") == "teacher"
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary"
     head = Font(bold=True, color="FFFFFF")
     fill = PatternFill("solid", fgColor="0F766E")
-    ws.append([f"LiveTeach – {rep['teacher']} – earnings report {rep['month']}"])
+    ws.append([f"LiveTeach – {rep['teacher']} – earnings report"])
     ws["A1"].font = Font(bold=True, size=14)
+    ws.append([f"Period: {rep['period_from']} to {rep['period_to']}"])
+    ws.append([f"Generated on: {rep['generated_on']}"])
     ws.append([])
     s = rep["summary"]
-    for k, v in [("Subscriptions", s["subscriptions"]), ("New", s["new"]), ("Renewals", s["renewals"]),
-                 ("Paying students", s["students"]), ("Total paid by students (₹)", _rs(s["gross_paise"])),
-                 ("Durina share (₹)", _rs(s["durina_paise"])), ("Teacher share (₹)", _rs(s["teacher_paise"]))]:
+    lines = [("Subscriptions", s["subscriptions"]), ("New", s["new"]), ("Renewals", s["renewals"]),
+             ("Paying students", s["students"]), ("Total paid by students (₹)", _rs(s["gross_paise"]))]
+    if teacher:
+        lines += [("Your share (%)", s["your_percent"]), ("Your earnings (₹)", _rs(s["your_paise"]))]
+    else:
+        lines += [("Durina share (₹)", _rs(s["durina_paise"])), ("Teacher share (₹)", _rs(s["teacher_paise"]))]
+    for k, v in lines:
         ws.append([k, v])
         ws.cell(ws.max_row, 1).font = Font(bold=True)
-    ws.column_dimensions["A"].width = 30
+    ws.column_dimensions["A"].width = 32
     ws.column_dimensions["B"].width = 16
     ws.append([])
     ws.append(["Amounts are before payment-gateway fees. Settlement is done by Razorpay."])
 
     d = wb.create_sheet("Payments")
-    cols = ["Date", "Payment ID", "Student", "Plan", "Type", "Amount (₹)", "Durina %", "Durina (₹)", "Teacher (₹)"]
+    if teacher:
+        cols = ["Date", "Payment ID", "Student", "Plan", "Type", "Amount (₹)", "Your share %", "Your earnings (₹)"]
+        rows = [[i["date"], i["payment_id"], i["student"], i["plan"], i["type"], _rs(i["amount_paise"]),
+                 i["your_percent"], _rs(i["your_paise"])] for i in rep["items"]]
+        money_cols, sums = ("F", "H"), {"F": 6, "H": 8}
+    else:
+        cols = ["Date", "Payment ID", "Student", "Plan", "Type", "Amount (₹)", "Durina %", "Durina (₹)", "Teacher (₹)"]
+        rows = [[i["date"], i["payment_id"], i["student"], i["plan"], i["type"], _rs(i["amount_paise"]),
+                 i["durina_percent"], _rs(i["durina_paise"]), _rs(i["teacher_paise"])] for i in rep["items"]]
+        money_cols, sums = ("F", "H", "I"), {"F": 6, "H": 8, "I": 9}
     d.append(cols)
     for c in d[1]:
         c.font, c.fill, c.alignment = head, fill, Alignment(horizontal="center")
-    for i in rep["items"]:
-        d.append([i["date"], i["payment_id"], i["student"], i["plan"], i["type"], _rs(i["amount_paise"]),
-                  i["durina_percent"], _rs(i["durina_paise"]), _rs(i["teacher_paise"])])
+    for r in rows:
+        d.append(r)
     n = d.max_row
-    d.append(["Total", "", "", "", "", f"=SUM(F2:F{n})", "", f"=SUM(H2:H{n})", f"=SUM(I2:I{n})"])
+    total = ["Total"] + [""] * (len(cols) - 1)
+    for col, idx in sums.items():
+        total[idx - 1] = f"=SUM({col}2:{col}{n})"
+    d.append(total)
     for c in d[d.max_row]:
         c.font = Font(bold=True)
-    for col, w in zip("ABCDEFGHI", [12, 22, 16, 12, 10, 13, 10, 13, 13]):
-        d.column_dimensions[col].width = w
-    for row in d.iter_rows(min_row=2, min_col=6, max_col=9):
-        for c in row:
+    for k, col in enumerate("ABCDEFGHI"[:len(cols)]):
+        d.column_dimensions[col].width = [12, 22, 16, 12, 10, 13, 13, 16, 13][k]
+    for col in money_cols:
+        for c in d[col][1:]:
             c.number_format = "#,##0.00"
     d.freeze_panes = "A2"
     buf = io.BytesIO()
@@ -197,21 +252,38 @@ def report_xlsx(rep: dict) -> bytes:
 
 def report_html(rep: dict) -> str:
     s, e = rep["summary"], html.escape
-    rows = "".join(f"<tr><td>{e(i['date'])}</td><td>{e(i['student'])}</td><td>{e(i['plan'])}</td><td>{e(i['type'])}</td>"
-                   f"<td class=r>₹{_rs(i['amount_paise']):,.2f}</td><td class=r>{i['durina_percent']:g}%</td>"
-                   f"<td class=r>₹{_rs(i['durina_paise']):,.2f}</td><td class=r>₹{_rs(i['teacher_paise']):,.2f}</td></tr>"
-                   for i in rep["items"]) or "<tr><td colspan=8>No paid subscriptions this month.</td></tr>"
+    teacher = rep.get("audience") == "teacher"
+    money = lambda p: f"₹{_rs(p):,.2f}"  # noqa: E731
+    if teacher:
+        head = "<th>Date</th><th>Student</th><th>Plan</th><th>Type</th><th class=r>Amount</th><th class=r>Your share</th><th class=r>Your earnings</th>"
+        body = "".join(f"<tr><td>{e(i['date'])}</td><td>{e(i['student'])}</td><td>{e(i['plan'])}</td><td>{e(i['type'])}</td>"
+                       f"<td class=r>{money(i['amount_paise'])}</td><td class=r>{i['your_percent']:g}%</td><td class=r>{money(i['your_paise'])}</td></tr>"
+                       for i in rep["items"])
+        cols = 7
+        extra = [("Your share", f"{s['your_percent']:g}%" if s["your_percent"] is not None else "—"), ("Your earnings", money(s["your_paise"]))]
+    else:
+        head = ("<th>Date</th><th>Student</th><th>Plan</th><th>Type</th><th class=r>Amount</th><th class=r>Durina %</th>"
+                "<th class=r>Durina</th><th class=r>Teacher</th>")
+        body = "".join(f"<tr><td>{e(i['date'])}</td><td>{e(i['student'])}</td><td>{e(i['plan'])}</td><td>{e(i['type'])}</td>"
+                       f"<td class=r>{money(i['amount_paise'])}</td><td class=r>{i['durina_percent']:g}%</td>"
+                       f"<td class=r>{money(i['durina_paise'])}</td><td class=r>{money(i['teacher_paise'])}</td></tr>" for i in rep["items"])
+        cols = 8
+        extra = [("Durina share", money(s["durina_paise"])), ("Teacher share", money(s["teacher_paise"]))]
+    body = body or f"<tr><td colspan={cols}>No paid subscriptions in this period.</td></tr>"
     box = lambda k, v: f"<div class=box><span>{k}</span><b>{v}</b></div>"  # noqa: E731
+    boxes = (box("Subscriptions", s["subscriptions"]) + box("New / Renewals", f"{s['new']} / {s['renewals']}")
+             + box("Paying students", s["students"]) + box("Total paid", money(s["gross_paise"])) + "".join(box(k, v) for k, v in extra))
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Report {e(rep['month'])}</title><style>
 @page {{ size: A4; margin: 16mm; }} body {{ font-family: 'Noto Sans', sans-serif; color: #111827; font-size: 10.5pt; }}
-h1 {{ font-size: 17pt; margin: 0 0 2px; }} .muted {{ color: #5B6472; }}
-.grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0; }}
+h1 {{ font-size: 17pt; margin: 0 0 4px; }} .muted {{ color: #5B6472; }} .period {{ font-size: 11.5pt; font-weight: 700; margin-top: 2px; }}
+.grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }}
 .box {{ border: 1px solid #E3E6EB; border-radius: 8px; padding: 8px 10px; }} .box span {{ display: block; color: #5B6472; font-size: 9pt; }}
 .box b {{ font-size: 13pt; }} table {{ width: 100%; border-collapse: collapse; }}
 th {{ background: #0F766E; color: #fff; text-align: left; padding: 6px; font-size: 9pt; }}
 td {{ border-bottom: 1px solid #E3E6EB; padding: 5px 6px; }} .r {{ text-align: right; }}
-</style></head><body><h1>{e(rep['teacher'])} — earnings report</h1><div class=muted>Month {e(rep['month'])} · LiveTeach by Durina Ventures</div>
-<div class=grid>{box('Subscriptions', s['subscriptions'])}{box('New / Renewals', f"{s['new']} / {s['renewals']}")}{box('Paying students', s['students'])}
-{box('Total paid', f"₹{_rs(s['gross_paise']):,.2f}")}{box('Durina share', f"₹{_rs(s['durina_paise']):,.2f}")}{box('Teacher share', f"₹{_rs(s['teacher_paise']):,.2f}")}</div>
-<table><thead><tr><th>Date</th><th>Student</th><th>Plan</th><th>Type</th><th class=r>Amount</th><th class=r>Durina %</th><th class=r>Durina</th><th class=r>Teacher</th></tr></thead>
-<tbody>{rows}</tbody></table><p class=muted>Amounts are before payment-gateway fees. Settlement is done by Razorpay.</p></body></html>"""
+</style></head><body><h1>{e(rep['teacher'])} — earnings report</h1>
+<div class=period>Period: {e(rep['period_from'])} to {e(rep['period_to'])}</div>
+<div class=muted>Generated on {e(rep['generated_on'])} · LiveTeach</div>
+<div class=grid>{boxes}</div>
+<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>
+<p class=muted>Amounts are before payment-gateway fees. Settlement is done by Razorpay.</p></body></html>"""

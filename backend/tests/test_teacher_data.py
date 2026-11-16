@@ -70,4 +70,30 @@ def test_monthly_report_and_excel(db):
     pay = wb["Payments"]
     assert pay["A1"].value == "Date" and pay.max_row == 5 and pay["F5"].value.startswith("=SUM(")
     assert "Subhash Sir" in teacher_data.report_html(rep) and "pay_0" not in teacher_data.report_html(rep)
+    assert "Period: 01" in teacher_data.report_html(rep)
     assert teacher_data.monthly_report(db, "subhash", "2020-01")["summary"]["subscriptions"] == 0
+
+
+def test_teacher_report_never_shows_platform_share(db):
+    month = time.strftime("%Y-%m")
+    sid = accounts.get_or_create_student(db, "subhash", "+919876500001")
+    db.execute("INSERT INTO payments (student_id, plan_id, razorpay_order_id, razorpay_payment_id, amount_paise, platform_percent, status) "
+               "VALUES (?, 'subhash-monthly', 'o1', 'pay_1', 100000, 20, 'paid')", (sid,))
+    rep = teacher_data.monthly_report(db, "subhash", month, audience="teacher")
+    assert "durina" not in repr(rep).lower()
+    assert rep["summary"] == {"subscriptions": 1, "new": 1, "renewals": 0, "students": 1, "gross_paise": 100000,
+                              "your_paise": 80000, "your_percent": 80}
+    assert rep["items"][0]["your_percent"] == 80 and rep["items"][0]["your_paise"] == 80000
+    assert rep["period_from"].startswith("01 ") and rep["period_to"]
+    html_text = teacher_data.report_html(rep)
+    assert "Durina" not in html_text and "Period: 01" in html_text and "Your earnings" in html_text
+    wb = load_workbook(io.BytesIO(teacher_data.report_xlsx(rep)))
+    cells = " ".join(str(c.value) for ws in wb for row in ws.iter_rows() for c in row if c.value is not None)
+    assert "Durina" not in cells and "Period: 01" in cells and "Your earnings" in cells
+    admin = teacher_data.monthly_report(db, "subhash", month)
+    assert admin["summary"]["durina_paise"] == 20000      # the admin still sees the full split
+
+
+def test_past_month_period_runs_to_month_end(db):
+    rep = teacher_data.monthly_report(db, "subhash", "2026-02", audience="teacher")
+    assert rep["period_from"] == "01 Feb 2026" and rep["period_to"] == "28 Feb 2026"

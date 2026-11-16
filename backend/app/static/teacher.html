@@ -204,12 +204,16 @@ const DEMO = (() => {
       const counts = { active: 0, ending: 0, ended: 0, demo: 0 }; db.allStudents.forEach((x) => counts[x.status]++);
       const list = db.allStudents.filter((x) => (!P.status || x.status === P.status) && (!P.q || (x.name + ' ' + x.phone.slice(-4)).toLowerCase().includes(P.q.toLowerCase())));
       return { total: list.length, counts, items: list.slice(off, off + lim) }; }
-    if (url.pathname === '/report') { const [y, m] = P.month.split('-').map(Number); const seed = (y * 12 + m) % 7; const items = [];
-      for (let i = 0; i < 18 + seed * 3; i++) { const yearly = i % 4 === 0; const amt = yearly ? 399900 : 49900; const cut = Math.round(amt * (100 - db.me.split) / 100);
-        items.push({ date: `${P.month}-${String(1 + (i * 3) % 28).padStart(2, '0')}`, student: '•••••• ' + (1000 + (i * 7919) % 9000), plan: yearly ? 'Yearly' : 'Monthly', type: i % 3 ? 'New' : 'Renewal', amount_paise: amt, durina_percent: 100 - db.me.split, durina_paise: cut, teacher_paise: amt - cut }); }
-      items.sort((a, b) => a.date.localeCompare(b.date)); const gross = items.reduce((a, x) => a + x.amount_paise, 0), du = items.reduce((a, x) => a + x.durina_paise, 0);
-      return { teacher: db.me.name, month: P.month, items, summary: { subscriptions: items.length, new: items.filter((x) => x.type === 'New').length, renewals: items.filter((x) => x.type === 'Renewal').length,
-        students: items.length - 2, gross_paise: gross, durina_paise: du, teacher_paise: gross - du } }; }
+    if (url.pathname === '/report') { const [y, m] = P.month.split('-').map(Number); const seed = (y * 12 + m) % 7; const items = [], pct = db.me.split;
+      for (let i = 0; i < 18 + seed * 3; i++) { const yearly = i % 4 === 0; const amt = yearly ? 399900 : 49900;
+        items.push({ date: `${P.month}-${String(1 + (i * 3) % 28).padStart(2, '0')}`, student: '•••••• ' + (1000 + (i * 7919) % 9000), plan: yearly ? 'Yearly' : 'Monthly',
+          type: i % 3 ? 'New' : 'Renewal', amount_paise: amt, your_percent: pct, your_paise: Math.round(amt * pct / 100) }); }
+      items.sort((a, b) => a.date.localeCompare(b.date)); const gross = items.reduce((a, x) => a + x.amount_paise, 0), mine = items.reduce((a, x) => a + x.your_paise, 0);
+      const first = new Date(y, m - 1, 1), lastDay = new Date(y, m, 0), today = new Date(), to = lastDay > today && first <= today ? today : lastDay;
+      const f = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      return { teacher: db.me.name, month: P.month, period_from: f(first), period_to: f(to), generated_on: f(today), items,
+        summary: { subscriptions: items.length, new: items.filter((x) => x.type === 'New').length, renewals: items.filter((x) => x.type === 'Renewal').length,
+          students: items.length - 2, gross_paise: gross, your_percent: pct, your_paise: mine } }; }
     if (path === '/password') { if ((body.new_password || '').length < 8) throw new Error('Password must be at least 8 characters'); return {}; }
     throw new Error('Not found');
   };
@@ -373,7 +377,7 @@ async function studentsView() {
   const max = Math.max(1, ...D.months), labels = [...Array(6)].map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return d.toLocaleString('en', { month: 'short' }); });
   const bars = D.months.map((m, i) => `<div class="b"><div style="height:${Math.round(m / max * 140)}px" title="${rupees(m * D.me.split / 100)}"></div><span class="muted" style="font-size:12px">${labels[i]}</span></div>`).join('');
   return shell('students', `${head('Students & Earnings', 'Your share is ' + D.me.split + '%. Razorpay settles it to your bank account automatically.')}
-    <section class="card"><div class="row"><div><h2>Monthly report</h2><span class="sub">Subscriptions, new vs renewals, money received and the split — for your own accounts.</span></div>
+    <section class="card"><div class="row"><div><h2>Monthly report</h2><span class="sub">Subscriptions, new vs renewals, total received and your earnings — for your own accounts.</span></div>
       <div class="toolbar"><select id="rm" aria-label="Month">${months}</select><button class="btn ghost small" id="rv">View</button><button class="btn primary small" data-dl="xlsx">Download Excel</button><button class="btn primary small" data-dl="pdf">Download PDF</button></div></div>
       <div class="bars">${bars}</div></section>
     <section class="card" style="gap:12px"><div class="row"><h2>Students</h2><input type="search" id="sq" value="${esc(SV.q)}" placeholder="Search name or last 4 digits" aria-label="Search students" style="min-width:260px"></div>
@@ -385,11 +389,11 @@ async function studentsView() {
 
 async function showReport(month) {
   const r = await api('GET', '/report?month=' + month), s = r.summary;
-  const rows = r.items.map((i) => `<tr><td>${esc(i.date)}</td><td>${esc(i.student)}</td><td>${esc(i.plan)}</td><td>${esc(i.type)}</td><td>${rupees(i.amount_paise)}</td><td>${i.durina_percent}%</td><td>${rupees(i.durina_paise)}</td><td>${rupees(i.teacher_paise)}</td></tr>`).join('');
+  const rows = r.items.map((i) => `<tr><td>${esc(i.date)}</td><td>${esc(i.student)}</td><td>${esc(i.plan)}</td><td>${esc(i.type)}</td><td>${rupees(i.amount_paise)}</td><td>${i.your_percent}%</td><td><b>${rupees(i.your_paise)}</b></td></tr>`).join('');
   const m = document.createElement('div'); m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Monthly report');
-  m.innerHTML = `<div class="card"><div class="row"><div><h2>${esc(r.teacher)} — ${esc(r.month)}</h2><span class="sub">Before payment-gateway fees</span></div><button class="btn ghost small" id="mx">Close</button></div>
-    <div class="stats">${stat('Subscriptions', s.subscriptions, s.new + ' new · ' + s.renewals + ' renewals')}${stat('Total paid', rupees(s.gross_paise), 'by students')}${stat('Your share', rupees(s.teacher_paise), D.me.split + '%')}${stat('Durina', rupees(s.durina_paise), (100 - D.me.split) + '%')}</div>
-    <div class="scroll"><table><thead><tr><th>DATE</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>DURINA %</th><th>DURINA</th><th>YOU</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  m.innerHTML = `<div class="card"><div class="row"><div><h2>${esc(r.teacher)} — earnings report</h2><b>Period: ${esc(r.period_from)} to ${esc(r.period_to)}</b><div class="sub">Generated on ${esc(r.generated_on)} · before payment-gateway fees</div></div><button class="btn ghost small" id="mx">Close</button></div>
+    <div class="stats">${stat('Subscriptions', s.subscriptions, s.new + ' new · ' + s.renewals + ' renewals')}${stat('Total paid', rupees(s.gross_paise), 'by your students')}${stat('Your share', s.your_percent + '%', 'of every payment')}${stat('Your earnings', rupees(s.your_paise), 'settled by Razorpay')}</div>
+    <div class="scroll"><table><thead><tr><th>DATE</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>YOUR SHARE</th><th>YOUR EARNINGS</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   document.body.append(m); m.onclick = (e) => { if (e.target === m || e.target.id === 'mx') m.remove(); };
 }
 async function download(fmt, month) {
@@ -402,7 +406,7 @@ async function download(fmt, month) {
 function settingsView() {
   return shell('settings', `${head('Settings', 'Your profile and login.')}
     <section class="card"><div class="row" style="justify-content:flex-start;gap:16px">${D.me.avatar ? `<img class="av" style="width:64px;height:64px" src="${D.me.avatar}" alt="">` : ''}<div><b style="font-size:17px">${esc(D.me.name)}</b><div class="muted">${esc(D.me.subjects)}</div><div class="muted">App: ${esc(D.me.app)}</div></div></div>
-      <span class="muted" style="font-size:12px">To change your name, photo, subjects, prices or revenue split, contact Durina.</span></section>
+      <span class="muted" style="font-size:12px">To change your name, photo, subjects, prices or your share, contact LiveTeach support.</span></section>
     <section class="card"><h2>Change password</h2><div class="grid2"><label class="f">Current password<input id="p0" type="password" autocomplete="current-password"></label><label class="f">New password<input id="p1" type="password" autocomplete="new-password"></label></div>
       <div class="row"><span id="pm" class="muted"></span><button class="btn ghost" id="pb">Change password</button></div></section>`);
 }
