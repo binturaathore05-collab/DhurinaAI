@@ -27,3 +27,8 @@ real teachers (content, voice, YouTube) are added at the end, only through dashb
 
 Build note: this environment can install Python packages but cannot download the Flutter SDK, so the
 Android APK is built by GitHub Actions (cloud) and downloaded from the repository's Actions tab.
+
+## Human-like AI teacher (17 Nov 2026)
+Full requirements and phase plan: `docs/ai-teacher-requirements.md`. Every tutor answer carries
+emotion, emphasis and board points for the voice/avatar phase; Teaching Style (personality, how I
+explain, talking with students, avatar settings) is configured per teacher.

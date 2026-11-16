@@ -351,3 +351,54 @@ def test_old_database_gets_new_columns(tmp_path):
     d = Database(path)
     cols = {r["name"] for r in d.all("PRAGMA table_info(teachers)")}
     assert {"platform_commission_percent", "razorpay_key_secret", "razorpay_webhook_secret"} <= cols
+
+
+# ---------- teaching style, personality, level, human-like interaction ----------
+from app.services import style as style_mod  # noqa: E402
+
+
+def test_style_rules_follow_teacher_settings(db):
+    st = style_mod.save_style(db, "subhash", {
+        "personality": "strict", "personality_2": "funny",
+        "teaching": {"tricks": {"on": False}, "story": {"text": "Har topic ko ek Rajasthani kahani se shuru karo."}},
+        "interaction": {"use_name": True}, "avatar": {"gestures": False}})
+    assert st["avatar"]["gestures"] is False
+    rules = style_mod.style_rules(style_mod.get_style(db, "subhash"), "Rohit", "beginner")
+    assert "Strict" in rules and "Funny" in rules
+    assert "Rajasthani kahani" in rules and "Memory tricks" not in rules
+    assert "Rohit" in rules and "BEGINNER" in rules
+    style_mod.save_style(db, "subhash", {"interaction": {"use_name": False}, "personality": "nonsense"})
+    rules = style_mod.style_rules(style_mod.get_style(db, "subhash"), "Rohit", "advanced")
+    assert "Rohit" not in rules and "Strict" in rules and "ADVANCED" in rules
+
+
+def test_level_goes_up_and_down_with_answers(db):
+    sid = student(db)
+    assert style_mod.get_level(db, sid) == "intermediate"
+    for _ in range(3):
+        style_mod.record_check(db, sid, True)
+    assert style_mod.get_level(db, sid) == "advanced"
+    style_mod.record_check(db, sid, False)
+    style_mod.record_check(db, sid, False)
+    assert style_mod.get_level(db, sid) == "intermediate"
+
+
+def test_tutor_returns_emotion_board_and_checks_followup_answer(db):
+    sid = student(db)
+    db.execute("UPDATE students SET name = 'Rohit' WHERE id = ?", (sid,))
+    llm = FakeLLM([
+        {"query": "x"}, {"answer": "Haldighati 1576 mein hua…", "follow_up": "Pratap ke ghode ka naam?", "found_in_notes": False,
+                         "emotion": "excited", "emphasis": ["1576", "Haldighati"], "board": ["Haldighati – 1576", "Pratap vs Man Singh"]},
+        {"query": "x"}, {"answer": "Shabaash Rohit! Bilkul sahi, Chetak.", "follow_up": "", "answered_follow_up": True,
+                         "follow_up_correct": True, "found_in_notes": False, "emotion": "nonsense"},
+    ])
+    tutor = Tutor(db, KnowledgeBase(db), llm)
+    a1 = tutor.answer(sid, TEACHER, "Sir Haldighati ka yuddh kab hua?")
+    assert a1.emotion == "excited" and a1.board == ["Haldighati – 1576", "Pratap vs Man Singh"] and a1.emphasis == ["1576", "Haldighati"]
+    a2 = tutor.answer(sid, TEACHER, "Chetak")
+    assert a2.check == "correct" and a2.emotion == "smile" and not a2.needs_review
+    system, user = llm.calls[-1]
+    assert "Rohit" in system and "Friendly" in system           # name + default personality in the rules
+    assert "You asked: Pratap ke ghode ka naam?" in user        # recent conversation is passed as context
+    row = db.one("SELECT emotion, board, check_result FROM qa_history WHERE id = ?", (a1.qa_id,))
+    assert row["emotion"] == "excited" and "1576" in row["board"]

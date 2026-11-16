@@ -17,6 +17,7 @@ from .config import settings
 from .db import Database
 from .i18n import t
 from .services import accounts, admin, admin_auth, builds, notes_pdf, payments
+from .services import style as style_mod
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
 from .services.tutor import TeacherProfile, Tutor, approve_answer, is_save_command, review_queue
@@ -120,6 +121,18 @@ def _access(student_id: int) -> dict:
     tid = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))["teacher_id"]
     lim = _limits(tid)
     return accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"])
+
+
+class StudentName(BaseModel):
+    name: str
+
+
+@app.put("/me/name")
+def set_my_name(body: StudentName, student=Depends(current_student)):
+    """'What should Sir call you?' — the AI teacher uses it now and then."""
+    name = body.name.strip()[:40]
+    db.execute("UPDATE students SET name = ? WHERE id = ?", (name or None, student["id"]))
+    return {"name": name}
 
 
 @app.get("/me/access")
@@ -249,6 +262,18 @@ class Approval(BaseModel):
 def add_document(body: Document, teacher_id: str = Depends(teacher_admin)):
     n = kb.add_document(teacher_id, body.title, body.text, body.source_ref, body.language)
     return {"chunks": n}
+
+
+@app.get("/teacher/style")
+def teacher_style(teacher_id: str = Depends(teacher_admin)):
+    return {"style": style_mod.get_style(db, teacher_id), "personalities": style_mod.PERSONALITIES,
+            "interaction": {k: t for k, (t, _) in style_mod.INTERACTION.items()},
+            "avatar": {k: t for k, (t, _) in style_mod.AVATAR.items()}}
+
+
+@app.put("/teacher/style")
+async def teacher_style_save(request: Request, teacher_id: str = Depends(teacher_admin)):
+    return style_mod.save_style(db, teacher_id, await request.json())
 
 
 @app.get("/teacher/review")

@@ -52,6 +52,9 @@
   .trait { border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
   .trait textarea { width: 100%; min-height: 96px; border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; resize: vertical; outline: none; }
   .trait textarea:focus { border-color: var(--acc); }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .pcard { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; border: 2px solid var(--border); background: #fff; font: inherit; cursor: pointer; color: var(--text); }
+  .pcard.on { border-color: var(--acc); background: var(--accSoft); }
   .toggle { position: relative; width: 44px; height: 26px; flex: none; }
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle span { position: absolute; inset: 0; border-radius: 999px; background: #CBD2DC; cursor: pointer; transition: .15s; }
@@ -126,13 +129,20 @@ const DEMO = (() => {
         { title: 'Maharana Pratap ke 10 important facts', status: 'ready', note: 'Learned · 19 points', at: now - D },
         { title: 'Chambal Nadi – udgam se sangam tak', status: 'ready', note: 'Learned · 23 points', at: now - 2 * D },
         { title: 'Live Q&A – Sunday doubt session', status: 'failed', note: 'No captions — upload the video file instead', at: now - 3 * D } ] },
-    style: [
-      { key: 'greeting', title: 'How Sir starts', text: 'Begins with "Dekho bachho…" and a one-line question to grab attention.', on: true },
-      { key: 'language', title: 'Language mix', text: 'Hindi with common English words (Hinglish). Switches fully to English when the student asks in English.', on: true },
-      { key: 'explain', title: 'How Sir explains', text: 'Tells the topic as a short story first, then gives 3–5 exam points with years and names.', on: true },
-      { key: 'tricks', title: 'Memory tricks', text: 'Gives a short trick to remember lists, e.g. first letters of names joined into a word.', on: true },
-      { key: 'check', title: 'Checking understanding', text: 'Ends with one quick question: "Achha batao, … kaun tha?" and praises a right answer with "Shabaash!"', on: true },
-      { key: 'avoid', title: 'Never does', text: 'No politics or personal opinions. Says "Ye syllabus se bahar hai" for unrelated questions.', on: true } ],
+    style: {
+      personality: 'friendly', personality_2: 'motivational',
+      teaching: {
+        greeting: { title: 'How I start', on: true, text: 'Start with "Dekho bachho…" and a hook question — in different words every time.' },
+        language: { title: 'Language mix', on: true, text: 'Hindi with common English words (Hinglish). Fully English when the student asks in English.' },
+        story: { title: 'Story-based explanations', on: true, text: 'Tell history topics as a short story first, then the facts.' },
+        real_life: { title: 'Real-life examples', on: true, text: 'Use examples from village, market, cricket and daily life in Rajasthan.' },
+        step_by_step: { title: 'Step-by-step', on: true, text: 'Break hard topics and every calculation into small numbered steps.' },
+        board: { title: 'Board points', on: true, text: 'Write 2–5 key points on the board: names, years, places.' },
+        tricks: { title: 'Memory tricks', on: true, text: 'Give a short trick to remember lists — first letters joined into a word.' },
+        exam: { title: 'Exam-oriented points', on: true, text: 'End with "Exam mein ye zaroor aata hai…" and the most-asked facts.' },
+        avoid: { title: 'Never does', on: true, text: 'No politics or personal opinions. Says "Ye syllabus se bahar hai" for unrelated questions.' } },
+      interaction: { ask_questions: true, wait_for_answer: true, praise: true, correct_politely: true, motivate: true, use_name: true, adapt_level: true, natural_talk: true },
+      avatar: { expressions: true, gestures: true, eye_contact: true, look_at_board: true, voice_emotion: true, lip_sync: true, continuity: true } },
     review: [
       { id: 11, q: 'इस महीने राजस्थान में कौन-सी नई योजना शुरू हुई?', a: 'यह जवाब इंटरनेट की भरोसेमंद सरकारी साइटों से लिया गया है: …', src: 'Internet · pib.gov.in', lang: 'Hindi', at: now - 0.5 * H, asked: 3 },
       { id: 12, q: 'What is the difference between a lake and a reservoir?', a: 'A lake is a natural body of water, while a reservoir is usually man-made, created by building a dam across a river…', src: 'General AI', lang: 'English', at: now - 3 * H, asked: 1 },
@@ -162,7 +172,7 @@ const DEMO = (() => {
     if (path === '/notes' && method === 'POST') { db.files.unshift({ id: nextId++, name: body.title, kind: 'text', status: 'ready', points: Math.max(3, Math.round(body.text.length / 60)), lang: 'Hindi', at: Date.now(), size: body.text.length + ' chars' }); return {}; }
     if (path === '/youtube' && method === 'PUT') { Object.assign(db.yt, body); return db.yt; }
     if (path === '/youtube/sync') { db.yt.lastSync = Date.now(); return db.yt; }
-    if (path === '/style' && method === 'PUT') { db.style = body.style; return {}; }
+    if (path === '/style' && method === 'PUT') { db.style = body; return db.style; }
     if (path.startsWith('/review/')) { const id = +path.split('/')[2]; const item = db.review.find((r) => r.id === id); db.review = db.review.filter((r) => r.id !== id);
       if (body.action !== 'reject') db.approved.unshift({ id, q: item.q, a: body.answer || item.a, at: Date.now() }); return {}; }
     if (path === '/password') { if ((body.new_password || '').length < 8) throw new Error('Password must be at least 8 characters'); return {}; }
@@ -243,14 +253,31 @@ function youtubeView() {
     <section class="card"><h2>Recently learned</h2><div class="list">${vids}</div></section>`);
 }
 
+const PERSONALITIES = { friendly: ['Friendly', 'Warm, simple words, comfortable'], strict: ['Strict', 'Disciplined and precise, still respectful'],
+  motivational: ['Motivational', 'Builds confidence, talks about goals'], professional: ['Professional', 'Clear, structured, to the point'],
+  funny: ['Funny & Interactive', 'Light humour, facts stay exact'], calm: ['Calm & Patient', 'Slow, reassuring, never rushes'] };
+const INTERACTION = { ask_questions: 'Ask questions while teaching', wait_for_answer: 'Wait for the student’s answer', praise: 'Appreciate correct answers',
+  correct_politely: 'Correct wrong answers politely', motivate: 'Motivate the student', use_name: 'Use the student’s name (sometimes)',
+  adapt_level: 'Adapt to the student’s level (beginner → advanced)', natural_talk: 'Natural talk: pauses, self-correction, never robotic or repeated' };
+const AVATAR = { expressions: 'Facial expressions — smile, thinking, encouraging, surprise', gestures: 'Hand gestures & natural head movement',
+  eye_contact: 'Eye contact & natural blinking', look_at_board: 'Look at and point to the board while explaining', voice_emotion: 'Emotion in voice, natural pauses & emphasis',
+  lip_sync: 'Accurate lip-sync with your voice', continuity: 'Same face, clothes & background in every class' };
+const tog = (attr, key, on, label) => `<label class="row" style="border-top:1px solid var(--border);padding-top:10px;flex-wrap:nowrap"><span>${label}</span><span class="toggle"><input type="checkbox" ${attr}="${key}" ${on ? 'checked' : ''}><span></span></span></label>`;
 function styleView() {
-  const traits = D.style.map((t, i) => `<div class="trait"><div class="row"><b>${esc(t.title)}</b><label class="toggle" title="Use this"><input type="checkbox" data-on="${i}" ${t.on ? 'checked' : ''} aria-label="Use: ${esc(t.title)}"><span></span></label></div>
-      <textarea data-tx="${i}" aria-label="${esc(t.title)}">${esc(t.text)}</textarea></div>`).join('');
-  return shell('style', `${head('Teaching Style', 'Your AI learned this from your videos and notes. Edit anything — your AI will follow your words.', `<button class="btn primary" id="ss">Save style</button>`)}
-    <div class="note">Learned from <b>${D.yt.videos.filter((v) => v.status === 'ready').length} videos</b> and <b>${D.files.filter((f) => f.status === 'ready').length} files</b>. It updates as you add more — your edits are always kept.</div>
-    <div class="style-grid">${traits}</div>
-    <section class="card"><div class="row"><div><h2>${icon('mic', 18)} Your voice</h2><span class="sub">So students hear answers in your own voice. Coming in the next update.</span></div><span class="pill" style="color:var(--muted)">Coming soon</span></div>
-      <span class="muted" style="font-size:13px">You’ll record 10–30 minutes of clear speech and sign a consent form. Your voice is used only inside your own app.</span></section>`);
+  const S = D.style;
+  const pcards = Object.entries(PERSONALITIES).map(([k, [t, d]]) => `<button type="button" class="pcard ${S.personality === k ? 'on' : ''}" data-p="${k}" aria-pressed="${S.personality === k}"><b>${t}</b><span class="muted" style="font-size:12px">${d}</span></button>`).join('');
+  const p2 = Object.entries(PERSONALITIES).filter(([k]) => k !== S.personality).map(([k, [t]]) => `<button type="button" class="${S.personality_2 === k ? 'on' : ''}" data-p2="${k}">${t}</button>`).join('');
+  const traits = Object.entries(S.teaching).map(([k, t]) => `<div class="trait"><div class="row" style="flex-wrap:nowrap"><b>${esc(t.title)}</b><label class="toggle" title="Use this"><input type="checkbox" data-on="${k}" ${t.on ? 'checked' : ''} aria-label="Use: ${esc(t.title)}"><span></span></label></div>
+      <textarea data-tx="${k}" aria-label="${esc(t.title)}">${esc(t.text)}</textarea></div>`).join('');
+  return shell('style', `${head('Teaching Style', 'How your AI teacher behaves with every student. Your AI learned this from your videos and notes — change anything.', `<button class="btn primary" id="ss">Save style</button>`)}
+    <section class="card"><div><h2>1 · Personality</h2><span class="sub">Pick your main teaching personality.</span></div><div class="pgrid">${pcards}</div>
+      <div><b style="font-size:13px">Also a little bit of… <span class="muted" style="font-weight:400">(optional)</span></b><div class="tabs" style="margin-top:8px" id="p2">${p2}<button type="button" class="${!S.personality_2 ? 'on' : ''}" data-p2="">None</button></div></div></section>
+    <section class="card"><div><h2>2 · How I explain</h2><span class="sub">Switch on what you do in class and write it in your own words.</span></div><div class="style-grid">${traits}</div></section>
+    <section class="card"><div><h2>3 · Talking with students</h2><span class="sub">Makes the AI feel like a real teacher on a call — not a robot.</span></div>
+      ${Object.entries(INTERACTION).map(([k, l]) => tog('data-it', k, S.interaction[k], l)).join('')}</section>
+    <section class="card"><div class="row"><div><h2>4 · Video avatar &amp; voice</h2><span class="sub">Saved now, used when your video avatar and voice go live.</span></div><span class="pill" style="color:var(--warn)">Next phase</span></div>
+      ${Object.entries(AVATAR).map(([k, l]) => tog('data-av', k, S.avatar[k], l)).join('')}
+      <div class="note" style="margin-top:6px">${icon('mic', 16)} You’ll record 10–30 minutes of clear video and speech once and sign a consent form. Your face and voice are used only inside your own app.</div></section>`);
 }
 
 let reviewTab = 'pending', editing = null;
@@ -310,9 +337,16 @@ function bind(view) {
     $('#auto') && ($('#auto').onchange = async (e) => { await api('PUT', '/youtube', { autosync: e.target.checked }); toast(e.target.checked ? 'Auto-sync on' : 'Auto-sync off'); });
     $$('[data-pl]').forEach((c) => c.onchange = async () => { D.yt.playlists[+c.dataset.pl].on = c.checked; await api('PUT', '/youtube', { playlists: D.yt.playlists }); toast('Saved'); });
   }
-  if (view === 'style') $('#ss').onclick = async () => {
-    const style = D.style.map((t, i) => ({ ...t, text: $(`[data-tx="${i}"]`).value, on: $(`[data-on="${i}"]`).checked }));
-    await api('PUT', '/style', { style }); toast('Style saved — your AI will follow it'); };
+  if (view === 'style') {
+    const S = D.style;
+    $$('[data-p]').forEach((b) => b.onclick = () => { S.personality = b.dataset.p; if (S.personality_2 === S.personality) S.personality_2 = null; render(); });
+    $$('[data-p2]').forEach((b) => b.onclick = () => { S.personality_2 = b.dataset.p2 || null; $$('[data-p2]').forEach((x) => x.classList.toggle('on', x === b)); });
+    $('#ss').onclick = async () => {
+      for (const k in S.teaching) { S.teaching[k].text = $(`[data-tx="${k}"]`).value; S.teaching[k].on = $(`[data-on="${k}"]`).checked; }
+      $$('[data-it]').forEach((c) => S.interaction[c.dataset.it] = c.checked);
+      $$('[data-av]').forEach((c) => S.avatar[c.dataset.av] = c.checked);
+      await api('PUT', '/style', S); toast('Style saved — your AI will follow it'); };
+  }
   if (view === 'review') {
     $$('[data-tab]').forEach((b) => b.onclick = () => { reviewTab = b.dataset.tab; render(); });
     $$('[data-ok]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.ok, { action: 'approve' }); toast('Approved'); render(); });

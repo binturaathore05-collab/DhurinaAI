@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from ..db import Database
 from ..i18n import t
 from ..languages import LANGUAGES, detect_language, get_language
+from . import style as style_mod
 from .knowledge import Hit, KnowledgeBase
 from .llm import LLM
 
@@ -44,20 +45,40 @@ class TutorAnswer:
     sources: list[dict] = field(default_factory=list)
     language: str = "hi"
     needs_review: bool = False
+    emotion: str = "smile"            # drives the avatar's face and voice tone (Phase 5)
+    emphasis: list[str] = field(default_factory=list)   # words to stress when speaking
+    board: list[str] = field(default_factory=list)      # short points shown on the board
+    level: str = "intermediate"       # the student's current level
+    check: str | None = None          # "correct" / "wrong" when the student answered Sir's question
 
 
-def _system_prompt(teacher: TeacherProfile, language_name: str) -> str:
+def _system_prompt(teacher: TeacherProfile, language_name: str, rules: str) -> str:
     return f"""You are the AI avatar of {teacher.name}, a teacher{f' of {teacher.subject}' if teacher.subject else ''} in India.
-Speak like {teacher.name} talking to one student on a video call: warm, clear, simple sentences, short enough to say aloud.
+You are on a live video call with ONE student. Teach like a real human teacher, never like a robot.
 Reply in exactly the same language and script the student used (it looks like {language_name}).
-If they wrote Hindi in Roman letters (Hinglish), reply in Hinglish. Keep names and dates accurate.
-Rules:
-- Only help with studies. Politely decline anything unrelated to learning.
-- Never invent facts. If you are not sure, say so honestly.
-- For maths or calculations, work step by step and double-check the result.
-- End with ONE short question to check the student understood (the "follow_up").
-Return JSON: {{"answer": str, "follow_up": str, "found_in_notes": bool, "used_sources": [int],
-"language": the BCP-47 code of the language you replied in, e.g. "hi", "pa", "en", "hi-Latn"}}"""
+If they wrote Hindi in Roman letters (Hinglish), reply in Hinglish. Keep names, dates and numbers accurate.
+Only help with studies. Never invent facts; if you are not sure, say so honestly.
+
+{rules}
+
+Return JSON only:
+{{"answer": str, "follow_up": str,
+"answered_follow_up": bool (true if this message is the student's answer to your previous question),
+"follow_up_correct": bool or null (was that answer correct?),
+"found_in_notes": bool, "used_sources": [int],
+"emotion": one of {style_mod.EMOTIONS} (your face/voice for this reply),
+"emphasis": [up to 4 important words to stress when speaking],
+"board": [2-5 very short key points to write on the board, or [] for small talk],
+"language": BCP-47 code of the language you replied in, e.g. "hi", "pa", "en", "hi-Latn"}}"""
+
+
+def _history_block(recent: list) -> str:
+    if not recent:
+        return ""
+    parts = ["Recent conversation (oldest first) — continue naturally, don't repeat yourself:"]
+    for r in recent:
+        parts.append(f"Student: {r['question']}\nYou: {r['answer']}" + (f"\nYou asked: {r['follow_up']}" if r["follow_up"] else ""))
+    return "\n".join(parts) + "\n\n"
 
 
 def _notes_prompt(question: str, hits: list[Hit], verified: str | None) -> str:
@@ -89,14 +110,20 @@ class Tutor:
 
     def answer(self, student_id: int, teacher: TeacherProfile, question: str) -> TutorAnswer:
         lang = get_language(detect_language(question))
-        system = _system_prompt(teacher, lang.english_name)
+        st = self.db.one("SELECT name FROM students WHERE id = ?", (student_id,))
+        level = style_mod.get_level(self.db, student_id)
+        rules = style_mod.style_rules(style_mod.get_style(self.db, teacher.id), st["name"] if st else None, level)
+        system = _system_prompt(teacher, lang.english_name, rules)
+        recent = list(reversed(self.db.all("SELECT question, answer, follow_up FROM qa_history WHERE student_id = ? "
+                                           "ORDER BY id DESC LIMIT 3", (student_id,))))
+        context = _history_block(recent)
 
         verified = self.kb.find_verified(teacher.id, question)
         hits = [] if verified else self.kb.search(teacher.id, self._search_queries(question))
 
         origin, sources, reply = "general_ai", [], None
         if verified or hits:
-            reply = self.llm.chat_json(system, _notes_prompt(question, hits, verified["answer"] if verified else None))
+            reply = self.llm.chat_json(system, context + _notes_prompt(question, hits, verified["answer"] if verified else None))
             if verified:
                 origin = "verified"
                 sources = [{"title": t("source_teacher_notes", lang.code), "ref": "verified"}]
@@ -107,7 +134,7 @@ class Tutor:
             else:
                 reply = None  # notes did not cover it: fall through to general knowledge
         if reply is None:
-            reply = self.llm.chat_json(system, f"Student's question: {question}\n"
+            reply = self.llm.chat_json(system, context + f"Student's question: {question}\n"
                                                "This is not in the teacher's notes; answer from general knowledge.")
             sources = [{"title": t("source_general_ai", lang.code), "ref": None}]
 
@@ -119,13 +146,25 @@ class Tutor:
             elif origin == "verified":
                 sources = [{"title": t("source_teacher_notes", lang.code), "ref": "verified"}]
         needs_review = origin == "general_ai"
+        # did the student just answer Sir's question? → adapt the level
+        check = None
+        if recent and recent[-1]["follow_up"] and reply.get("answered_follow_up") \
+                and isinstance(reply.get("follow_up_correct"), bool):
+            check = "correct" if reply["follow_up_correct"] else "wrong"
+            level = style_mod.record_check(self.db, student_id, reply["follow_up_correct"])
+            needs_review = False  # a reply to Sir's own question, not a new fact to review
+        emotion = reply.get("emotion") if reply.get("emotion") in style_mod.EMOTIONS else (
+            "encouraging" if check == "wrong" else "smile")
+        board = [str(b)[:80] for b in (reply.get("board") or []) if str(b).strip()][:5]
+        emphasis = [str(w)[:40] for w in (reply.get("emphasis") or []) if str(w).strip()][:4]
         cur = self.db.execute(
-            "INSERT INTO qa_history (student_id, question, answer, follow_up, origin, sources, language, needs_review) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO qa_history (student_id, question, answer, follow_up, origin, sources, language, needs_review, "
+            "emotion, board, emphasis, check_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (student_id, question, reply.get("answer", ""), reply.get("follow_up", ""), origin,
-             json.dumps(sources, ensure_ascii=False), lang.code, int(needs_review)))
+             json.dumps(sources, ensure_ascii=False), lang.code, int(needs_review), emotion,
+             json.dumps(board, ensure_ascii=False), json.dumps(emphasis, ensure_ascii=False), check))
         return TutorAnswer(cur.lastrowid, reply.get("answer", ""), reply.get("follow_up", ""), origin, sources,
-                           lang.code, needs_review)
+                           lang.code, needs_review, emotion, emphasis, board, level, check)
 
 
 # ---------- teacher review queue ----------
