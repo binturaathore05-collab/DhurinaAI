@@ -55,6 +55,17 @@
   .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   .pcard { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; border: 2px solid var(--border); background: #fff; font: inherit; cursor: pointer; color: var(--text); }
   .pcard.on { border-color: var(--acc); background: var(--accSoft); }
+  .rank { background: var(--acc); color: #fff; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 8px; }
+  .pager { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .pager button { min-width: 38px; height: 36px; border-radius: 10px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .pager button.on { background: var(--text); color: #fff; border-color: var(--text); } .pager button:disabled { opacity: .4; cursor: default; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  select { height: 40px; border-radius: 12px; border: 1.5px solid var(--border); background: #fff; font: inherit; padding: 0 10px; }
+  .qa input[type=checkbox], th input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc); }
+  .chipf { height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--border); background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .chipf.on { background: var(--text); color: #fff; border-color: var(--text); }
+  .modal { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: grid; place-items: center; padding: 20px; z-index: 8; }
+  .modal .card { max-width: 900px; width: 100%; max-height: 90vh; overflow: auto; }
   .toggle { position: relative; width: 44px; height: 26px; flex: none; }
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle span { position: absolute; inset: 0; border-radius: 999px; background: #CBD2DC; cursor: pointer; transition: .15s; }
@@ -130,7 +141,7 @@ const DEMO = (() => {
         { title: 'Chambal Nadi – udgam se sangam tak', status: 'ready', note: 'Learned · 23 points', at: now - 2 * D },
         { title: 'Live Q&A – Sunday doubt session', status: 'failed', note: 'No captions — upload the video file instead', at: now - 3 * D } ] },
     style: {
-      personality: 'friendly', personality_2: 'motivational',
+      personalities: ['friendly', 'motivational'],
       teaching: {
         greeting: { title: 'How I start', on: true, text: 'Start with "Dekho bachho…" and a hook question — in different words every time.' },
         language: { title: 'Language mix', on: true, text: 'Hindi with common English words (Hinglish). Fully English when the student asks in English.' },
@@ -143,16 +154,22 @@ const DEMO = (() => {
         avoid: { title: 'Never does', on: true, text: 'No politics or personal opinions. Says "Ye syllabus se bahar hai" for unrelated questions.' } },
       interaction: { ask_questions: true, wait_for_answer: true, praise: true, correct_politely: true, motivate: true, use_name: true, adapt_level: true, natural_talk: true },
       avatar: { expressions: true, gestures: true, eye_contact: true, look_at_board: true, voice_emotion: true, lip_sync: true, continuity: true } },
-    review: [
-      { id: 11, q: 'इस महीने राजस्थान में कौन-सी नई योजना शुरू हुई?', a: 'यह जवाब इंटरनेट की भरोसेमंद सरकारी साइटों से लिया गया है: …', src: 'Internet · pib.gov.in', lang: 'Hindi', at: now - 0.5 * H, asked: 3 },
-      { id: 12, q: 'What is the difference between a lake and a reservoir?', a: 'A lake is a natural body of water, while a reservoir is usually man-made, created by building a dam across a river…', src: 'General AI', lang: 'English', at: now - 3 * H, asked: 1 },
-      { id: 13, q: 'Sir, Rajasthan ka sabse ooncha shikhar kaunsa hai?', a: 'Rajasthan ka sabse ooncha shikhar Guru Shikhar hai, jo Mount Abu (Sirohi) mein Aravali parvatmala mein hai. Iski oonchai lagbhag 1722 metre hai.', src: 'General AI', lang: 'Hinglish', at: now - 6 * H, asked: 7 } ],
-    approved: [{ id: 9, q: 'Chetak kaun tha?', a: 'Chetak Maharana Pratap ka vafadar ghoda tha…', at: now - 2 * D }],
-    students: [
-      { name: 'Student', phone: '•••••• 3210', plan: 'Yearly', ends: now + 300 * D, asked: 86, joined: now - 60 * D },
-      { name: 'Student', phone: '•••••• 7781', plan: 'Monthly', ends: now + 2 * D, asked: 41, joined: now - 28 * D },
-      { name: 'Student', phone: '•••••• 1092', plan: 'Monthly', ends: now - 1 * D, asked: 12, joined: now - 31 * D },
-      { name: 'Student', phone: '•••••• 5534', plan: 'Demo', ends: null, asked: 3, joined: now - 1 * D } ],
+    reviewGroups: (() => {   // ~500 waiting answers about 150 distinct questions
+      const base = [['इस महीने राजस्थान में कौन-सी नई योजना शुरू हुई?', 'यह जवाब भरोसेमंद सरकारी साइटों से लिया गया है: …', 'Internet · pib.gov.in', 'Hindi'],
+        ['What is the difference between a lake and a reservoir?', 'A lake is natural; a reservoir is usually man-made, created by a dam…', 'General AI', 'English'],
+        ['Sir, Rajasthan ka sabse ooncha shikhar kaunsa hai?', 'Guru Shikhar (Mount Abu, Sirohi), Aravali mein, lagbhag 1722 metre.', 'General AI', 'Hinglish'],
+        ['Ghoomar nritya kis kshetra ka hai?', 'Ghoomar Rajasthan ka lok nritya hai, khaaskar Bhil aur Rajput samuday se juda…', 'General AI', 'Hinglish'],
+        ['RAS exam mein kitne paper hote hain?', 'RAS Mains mein 4 paper hote hain…', 'Internet · rpsc.rajasthan.gov.in', 'Hinglish']];
+      const g = []; let id = 1000;
+      for (let k = 0; k < 150; k++) { const b = base[k % 5]; const asked = k < 5 ? [97, 64, 41, 23, 18][k] : 1 + (k * 7) % 4;
+        g.push({ ids: [...Array(asked)].map(() => id++), question: k < 5 ? b[0] : b[0].replace('?', '') + ' (' + (k + 1) + ')?', answer: b[1], source: b[2], language: b[3], asked, at: now - k * 0.4 * H }); }
+      return g; })(),
+    approvedGroups: [{ ids: [9], question: 'Chetak kaun tha?', answer: 'Chetak Maharana Pratap ka vafadar ghoda tha…', asked: 12, at: now - 2 * D, source: 'Approved', language: 'Hinglish' }],
+    allStudents: (() => { const names = ['Rohit', 'Pooja', 'Aman', 'Neha', '', 'Vikram', 'Kavita', '', 'Sunil', 'Priya']; const lv = ['beginner', 'intermediate', 'advanced'];
+      return [...Array(1000)].map((_, i) => { const k = i % 4; const ends = k === 0 ? null : k === 1 ? now + (30 + i % 300) * D : k === 2 ? now + (i % 3) * 0.9 * D : now - (1 + i % 40) * D;
+        return { id: i + 1, name: names[i % 10], phone: '•••••• ' + String(1000 + (i * 7919) % 9000), status: k === 0 ? 'demo' : k === 1 ? 'active' : k === 2 ? 'ending' : 'ended',
+          plan: k === 0 ? 'Demo' : i % 3 ? 'Monthly' : 'Yearly', valid_till: ends, joined: now - (i % 200 + 1) * D, last_active: now - (i % 72) * H,
+          questions: 3 + (i * 13) % 180, notes: (i * 3) % 25, level: lv[i % 3], paid_paise: k === 0 ? 0 : (i % 3 ? 49900 : 399900) * (1 + i % 3), renewals: k === 0 ? 0 : i % 3 }; }); })(),
     months: [24950, 34930, 29940, 44910, 39920, 49900].map((r) => r * 100),
     weekQuestions: 312, fromNotes: 0.86,
   };
@@ -173,12 +190,32 @@ const DEMO = (() => {
     if (path === '/youtube' && method === 'PUT') { Object.assign(db.yt, body); return db.yt; }
     if (path === '/youtube/sync') { db.yt.lastSync = Date.now(); return db.yt; }
     if (path === '/style' && method === 'PUT') { db.style = body; return db.style; }
-    if (path.startsWith('/review/')) { const id = +path.split('/')[2]; const item = db.review.find((r) => r.id === id); db.review = db.review.filter((r) => r.id !== id);
-      if (body.action !== 'reject') db.approved.unshift({ id, q: item.q, a: body.answer || item.a, at: Date.now() }); return {}; }
+    const url = new URL('http://x' + path), P = Object.fromEntries(url.searchParams), off = +(P.offset || 0), lim = +(P.limit || 20);
+    if (url.pathname === '/review') {
+      let list = (P.tab === 'approved' ? db.approvedGroups : db.reviewGroups).filter((g) => (!P.q || (g.question + g.answer).toLowerCase().includes(P.q.toLowerCase()))
+        && (!P.origin || (P.origin === 'internet' ? g.source.startsWith('Internet') : g.source === 'General AI')));
+      list = [...list].sort((a, b) => P.sort === 'newest' ? b.at - a.at : b.asked - a.asked || b.at - a.at);
+      return { total: list.length, total_answers: list.reduce((a, g) => a + g.asked, 0), items: list.slice(off, off + lim) }; }
+    if (url.pathname === '/review/bulk') { let n = 0;
+      for (const d of body.decisions) { const i = db.reviewGroups.findIndex((g) => g.ids[0] === d.ids[0]); if (i < 0) continue; const g = db.reviewGroups.splice(i, 1)[0]; n += g.asked;
+        if (d.action === 'approve') db.approvedGroups.unshift({ ...g, answer: d.answer || g.answer, at: Date.now() }); }
+      return { updated: n }; }
+    if (url.pathname === '/students') {
+      const counts = { active: 0, ending: 0, ended: 0, demo: 0 }; db.allStudents.forEach((x) => counts[x.status]++);
+      const list = db.allStudents.filter((x) => (!P.status || x.status === P.status) && (!P.q || (x.name + ' ' + x.phone.slice(-4)).toLowerCase().includes(P.q.toLowerCase())));
+      return { total: list.length, counts, items: list.slice(off, off + lim) }; }
+    if (url.pathname === '/report') { const [y, m] = P.month.split('-').map(Number); const seed = (y * 12 + m) % 7; const items = [];
+      for (let i = 0; i < 18 + seed * 3; i++) { const yearly = i % 4 === 0; const amt = yearly ? 399900 : 49900; const cut = Math.round(amt * (100 - db.me.split) / 100);
+        items.push({ date: `${P.month}-${String(1 + (i * 3) % 28).padStart(2, '0')}`, student: '•••••• ' + (1000 + (i * 7919) % 9000), plan: yearly ? 'Yearly' : 'Monthly', type: i % 3 ? 'New' : 'Renewal', amount_paise: amt, durina_percent: 100 - db.me.split, durina_paise: cut, teacher_paise: amt - cut }); }
+      items.sort((a, b) => a.date.localeCompare(b.date)); const gross = items.reduce((a, x) => a + x.amount_paise, 0), du = items.reduce((a, x) => a + x.durina_paise, 0);
+      return { teacher: db.me.name, month: P.month, items, summary: { subscriptions: items.length, new: items.filter((x) => x.type === 'New').length, renewals: items.filter((x) => x.type === 'Renewal').length,
+        students: items.length - 2, gross_paise: gross, durina_paise: du, teacher_paise: gross - du } }; }
     if (path === '/password') { if ((body.new_password || '').length < 8) throw new Error('Password must be at least 8 characters'); return {}; }
     throw new Error('Not found');
   };
 })();
+const IS_DEMO = true;   // set false when served by the LiveTeach server
+const AUTH = () => ({ Authorization: 'Bearer ' + TOKEN });
 async function api(method, path, body) { return DEMO(method, path, body); }
 
 // ------------------------------- LAYOUT ------------------------------------------
@@ -188,7 +225,7 @@ function shell(active, inner) {
   return `<div class="shell"><nav aria-label="Teacher">
     <div class="me">${D.me.avatar ? `<img src="${D.me.avatar}" alt="">` : `<span class="av"></span>`}<span style="display:flex;flex-direction:column;min-width:0"><b>${esc(D.me.name)}</b><span class="muted" style="font-size:12px">${esc(D.me.app)}</span></span></div>
     ${it('home', 'home', 'Home')}${it('knowledge', 'book', 'My Knowledge')}${it('youtube', 'yt', 'YouTube')}${it('style', 'spark', 'Teaching Style')}
-    ${it('review', 'check', 'Review answers', D.review.length || '')}${it('students', 'users', 'Students & Earnings')}${it('settings', 'gear', 'Settings')}
+    ${it('review', 'check', 'Review answers', D.reviewGroups.length || '')}${it('students', 'users', 'Students & Earnings')}${it('settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#logout">${icon('out')}Log out</a></nav><main>${inner}</main></div>`;
 }
 const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="n">${n}</span></div>`;
@@ -206,14 +243,14 @@ function loginView() {
 
 function homeView() {
   const ready = D.files.filter((f) => f.status === 'ready'), points = ready.reduce((a, f) => a + f.points, 0) + D.yt.videos.filter((v) => v.status === 'ready').length * 20;
-  const active = D.students.filter((s) => s.ends && s.ends > Date.now()).length;
+  const active = D.allStudents.filter((s) => s.status === 'active' || s.status === 'ending').length;
   const mine = D.months[5] * D.me.split / 100;
   return shell('home', `${head('Namaste, ' + esc(D.me.name), 'Here’s how your AI teacher is doing.')}
     <div class="stats">${stat('Questions this week', D.weekQuestions, 'asked by your students')}${stat('Answered from your content', Math.round(D.fromNotes * 100) + '%', 'the rest came from AI / internet')}
       ${stat('Active students', active, 'paying right now')}${stat('Your earnings this month', rupees(mine), D.me.split + '% share · paid by Razorpay')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:18px">
-      <section class="card" style="flex:1 1 340px"><div class="row"><h2>Waiting for your review</h2><a href="#review"><b>Open</b></a></div>
-        ${D.review.length ? D.review.slice(0, 3).map((r) => `<div style="border-top:1px solid var(--border);padding-top:10px"><b>${esc(r.q)}</b><div class="muted" style="font-size:12px">${esc(r.src)} · asked ${r.asked}× · ${ago(r.at)}</div></div>`).join('') : '<p class="muted">All caught up.</p>'}</section>
+      <section class="card" style="flex:1 1 340px"><div class="row"><h2>Waiting for your review (${D.reviewGroups.reduce((a, g) => a + g.asked, 0)})</h2><a href="#review"><b>Open</b></a></div>
+        ${D.reviewGroups.length ? [...D.reviewGroups].sort((a, b) => b.asked - a.asked).slice(0, 3).map((r) => `<div style="border-top:1px solid var(--border);padding-top:10px"><b>${esc(r.question)}</b><div class="muted" style="font-size:12px">${esc(r.source)} · asked ${r.asked}× · ${ago(r.at)}</div></div>`).join('') : '<p class="muted">All caught up.</p>'}</section>
       <section class="card" style="flex:1 1 340px"><h2>Your AI’s knowledge</h2>
         <div class="row"><span>Files learned</span><b>${ready.length} / ${D.files.length}</b></div>
         <div class="row"><span>YouTube videos learned</span><b>${D.yt.videos.filter((v) => v.status === 'ready').length}</b></div>
@@ -265,13 +302,13 @@ const AVATAR = { expressions: 'Facial expressions — smile, thinking, encouragi
 const tog = (attr, key, on, label) => `<label class="row" style="border-top:1px solid var(--border);padding-top:10px;flex-wrap:nowrap"><span>${label}</span><span class="toggle"><input type="checkbox" ${attr}="${key}" ${on ? 'checked' : ''}><span></span></span></label>`;
 function styleView() {
   const S = D.style;
-  const pcards = Object.entries(PERSONALITIES).map(([k, [t, d]]) => `<button type="button" class="pcard ${S.personality === k ? 'on' : ''}" data-p="${k}" aria-pressed="${S.personality === k}"><b>${t}</b><span class="muted" style="font-size:12px">${d}</span></button>`).join('');
-  const p2 = Object.entries(PERSONALITIES).filter(([k]) => k !== S.personality).map(([k, [t]]) => `<button type="button" class="${S.personality_2 === k ? 'on' : ''}" data-p2="${k}">${t}</button>`).join('');
+  const pcards = Object.entries(PERSONALITIES).map(([k, [t, d]]) => { const n = S.personalities.indexOf(k) + 1;
+    return `<button type="button" class="pcard ${n ? 'on' : ''}" data-p="${k}" aria-pressed="${!!n}"><span class="row" style="flex-wrap:nowrap"><b>${t}</b>${n ? `<span class="rank">${n === 1 ? 'Main' : '#' + n}</span>` : ''}</span><span class="muted" style="font-size:12px">${d}</span></button>`; }).join('');
   const traits = Object.entries(S.teaching).map(([k, t]) => `<div class="trait"><div class="row" style="flex-wrap:nowrap"><b>${esc(t.title)}</b><label class="toggle" title="Use this"><input type="checkbox" data-on="${k}" ${t.on ? 'checked' : ''} aria-label="Use: ${esc(t.title)}"><span></span></label></div>
       <textarea data-tx="${k}" aria-label="${esc(t.title)}">${esc(t.text)}</textarea></div>`).join('');
   return shell('style', `${head('Teaching Style', 'How your AI teacher behaves with every student. Your AI learned this from your videos and notes — change anything.', `<button class="btn primary" id="ss">Save style</button>`)}
-    <section class="card"><div><h2>1 · Personality</h2><span class="sub">Pick your main teaching personality.</span></div><div class="pgrid">${pcards}</div>
-      <div><b style="font-size:13px">Also a little bit of… <span class="muted" style="font-weight:400">(optional)</span></b><div class="tabs" style="margin-top:8px" id="p2">${p2}<button type="button" class="${!S.personality_2 ? 'on' : ''}" data-p2="">None</button></div></div></section>
+    <section class="card"><div><h2>1 · Personality</h2><span class="sub">Choose up to 3 — like a real teacher, you can be friendly <i>and</i> motivational. The first one you pick is the main one; the AI uses the others when they fit the moment.</span></div><div class="pgrid">${pcards}</div>
+      <span class="muted" style="font-size:12px">Selected: ${S.personalities.map((k) => PERSONALITIES[k][0]).join(' → ') || 'none'} · tap again to remove</span></section>
     <section class="card"><div><h2>2 · How I explain</h2><span class="sub">Switch on what you do in class and write it in your own words.</span></div><div class="style-grid">${traits}</div></section>
     <section class="card"><div><h2>3 · Talking with students</h2><span class="sub">Makes the AI feel like a real teacher on a call — not a robot.</span></div>
       ${Object.entries(INTERACTION).map(([k, l]) => tog('data-it', k, S.interaction[k], l)).join('')}</section>
@@ -280,32 +317,86 @@ function styleView() {
       <div class="note" style="margin-top:6px">${icon('mic', 16)} You’ll record 10–30 minutes of clear video and speech once and sign a consent form. Your face and voice are used only inside your own app.</div></section>`);
 }
 
-let reviewTab = 'pending', editing = null;
-function reviewView() {
-  const pending = D.review.map((r) => `<div class="qa"><div class="row"><span class="q">${esc(r.q)}</span><span class="muted" style="font-size:12px">${esc(r.lang)} · asked ${r.asked}× · ${ago(r.at)}</span></div>
-      <span class="pill" style="color:var(--warn);align-self:flex-start">${esc(r.src)}</span>
-      ${editing === r.id ? `<textarea id="ed">${esc(r.a)}</textarea>` : `<div class="a">${esc(r.a)}</div>`}
-      <div class="row" style="justify-content:flex-start;gap:8px">${editing === r.id
-        ? `<button class="btn primary small" data-save="${r.id}">Save &amp; approve</button><button class="btn ghost small" data-cancel>Cancel</button>`
-        : `<button class="btn primary small" data-ok="${r.id}">${icon('check', 16)}Approve</button><button class="btn ghost small" data-edit="${r.id}">Edit answer</button><button class="btn danger small" data-no="${r.id}">Wrong — don’t use</button>`}</div></div>`).join('');
-  const done = D.approved.map((r) => `<div class="qa"><span class="q">${esc(r.q)}</span><div class="a">${esc(r.a)}</div><span class="muted" style="font-size:12px">Approved ${ago(r.at)} · every student now gets this answer</span></div>`).join('');
-  return shell('review', `${head('Review answers', 'Answers that did not come from your own content. Approve or correct them once — after that, every student gets your version.')}
-    <div class="tabs" role="tablist"><button class="${reviewTab === 'pending' ? 'on' : ''}" data-tab="pending">Waiting (${D.review.length})</button><button class="${reviewTab === 'done' ? 'on' : ''}" data-tab="done">Approved (${D.approved.length})</button></div>
-    <div style="display:flex;flex-direction:column;gap:12px">${reviewTab === 'pending' ? (pending || '<p class="muted">Nothing to review. Great job!</p>') : done}</div>`);
+// ---------- shared pager ----------
+function pager(total, offset, limit, attr) {
+  const pages = Math.max(1, Math.ceil(total / limit)), cur = Math.floor(offset / limit) + 1;
+  const nums = [...new Set([1, cur - 1, cur, cur + 1, pages])].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  let out = '', last = 0;
+  for (const n of nums) { if (n - last > 1) out += '<span class="muted">…</span>'; out += `<button type="button" class="${n === cur ? 'on' : ''}" ${attr}="${(n - 1) * limit}" aria-label="Page ${n}">${n}</button>`; last = n; }
+  return `<div class="row"><span class="muted">Showing ${total ? offset + 1 : 0}–${Math.min(offset + limit, total)} of ${total.toLocaleString('en-IN')}</span>
+    <div class="pager"><button type="button" ${attr}="${Math.max(0, offset - limit)}" ${cur === 1 ? 'disabled' : ''}>‹ Prev</button>${out}<button type="button" ${attr}="${offset + limit}" ${cur === pages ? 'disabled' : ''}>Next ›</button></div></div>`;
 }
 
-function studentsView() {
-  const max = Math.max(1, ...D.months);
-  const labels = [...Array(6)].map((_, i) => { const d = new Date(); d.setMonth(d.getMonth() - 5 + i); return d.toLocaleString('en', { month: 'short' }); });
-  const bars = D.months.map((m, i) => `<div class="b"><div style="height:${Math.round(m * D.me.split / 100 / (max * D.me.split / 100) * 140)}px" title="${rupees(m * D.me.split / 100)}"></div><span class="muted" style="font-size:12px">${labels[i]}</span></div>`).join('');
-  const st = (s) => !s.ends ? ['Demo', 'var(--muted)'] : s.ends < Date.now() ? ['Plan ended', 'var(--bad)'] : s.ends - Date.now() < 3 * 864e5 ? ['Ends soon', 'var(--warn)'] : ['Active', 'var(--ok)'];
-  const rows = D.students.map((s) => { const [t, c] = st(s); return `<tr><td>${esc(s.phone)}</td><td>${esc(s.plan)}</td><td><span class="pill" style="color:${c}">${t}</span></td><td>${s.ends ? new Date(s.ends).toLocaleDateString('en-IN') : '—'}</td><td>${s.asked}</td></tr>`; }).join('');
+// ---------- Review answers (hundreds at once) ----------
+const RV = { tab: 'pending', q: '', origin: '', sort: 'most_asked', offset: 0, limit: 20, sel: new Set(), editing: null, data: null };
+async function reviewView() {
+  const qs = `?tab=${RV.tab}&q=${encodeURIComponent(RV.q)}&origin=${RV.origin}&sort=${RV.sort}&offset=${RV.offset}&limit=${RV.limit}`;
+  const r = RV.data = await api('GET', '/review' + qs);
+  const pendingTotal = D.reviewGroups.reduce((a, g) => a + g.asked, 0);
+  const cards = r.items.map((g) => { const key = g.ids[0];
+    return `<div class="qa"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">
+        ${RV.tab === 'pending' ? `<input type="checkbox" data-sel="${key}" ${RV.sel.has(key) ? 'checked' : ''} aria-label="Select this answer" style="margin-top:3px">` : ''}
+        <span class="q grow" style="white-space:normal">${esc(g.question)}</span><span class="muted" style="font-size:12px;white-space:nowrap">${esc(g.language)} · ${ago(g.at)}</span></div>
+      <div class="row" style="justify-content:flex-start;gap:8px"><span class="pill" style="color:var(--warn)">${esc(g.source)}</span>
+        <span class="pill" style="color:${g.asked >= 10 ? 'var(--bad)' : 'var(--muted)'}">asked by ${g.asked} student${g.asked > 1 ? 's' : ''}</span></div>
+      ${RV.editing === key ? `<textarea id="ed">${esc(g.answer)}</textarea>` : `<div class="a">${esc(g.answer)}</div>`}
+      ${RV.tab === 'pending' ? `<div class="row" style="justify-content:flex-start;gap:8px">${RV.editing === key
+        ? `<button class="btn primary small" data-save="${key}">Save &amp; approve</button><button class="btn ghost small" data-cancel>Cancel</button>`
+        : `<button class="btn primary small" data-ok="${key}">${icon('check', 16)}Approve</button><button class="btn ghost small" data-edit="${key}">Edit answer</button><button class="btn danger small" data-no="${key}">Wrong — don’t use</button>`}</div>` : ''}</div>`; }).join('');
+  return shell('review', `${head('Review answers', 'Same question from many students = one card. Approve or correct it once — every student gets your version.')}
+    <div class="tabs"><button class="${RV.tab === 'pending' ? 'on' : ''}" data-tab="pending">Waiting (${pendingTotal})</button><button class="${RV.tab === 'approved' ? 'on' : ''}" data-tab="approved">Approved (${D.approvedGroups.length})</button></div>
+    <section class="card" style="gap:12px"><div class="toolbar">
+      <input type="search" id="rq" placeholder="Search questions" value="${esc(RV.q)}" aria-label="Search questions" style="flex:1;min-width:220px">
+      <select id="ro" aria-label="Source"><option value="">All sources</option><option value="general_ai" ${RV.origin === 'general_ai' ? 'selected' : ''}>General AI</option><option value="internet" ${RV.origin === 'internet' ? 'selected' : ''}>Internet</option></select>
+      <select id="rs" aria-label="Sort"><option value="most_asked">Most asked first</option><option value="newest" ${RV.sort === 'newest' ? 'selected' : ''}>Newest first</option></select></div>
+      ${RV.tab === 'pending' ? `<div class="row" style="background:var(--surf);border-radius:12px;padding:8px 12px"><label class="row" style="gap:8px;justify-content:flex-start"><input type="checkbox" id="all" ${r.items.length && r.items.every((g) => RV.sel.has(g.ids[0])) ? 'checked' : ''}> <b>Select all on this page</b></label>
+        <span class="row" style="gap:8px"><span class="muted">${RV.sel.size} selected</span><button class="btn primary small" id="bok" ${RV.sel.size ? '' : 'disabled'}>Approve selected</button><button class="btn danger small" id="bno" ${RV.sel.size ? '' : 'disabled'}>Reject selected</button></span></div>` : ''}
+      <span class="muted" style="font-size:12px">${r.total} questions · ${r.total_answers} student answers</span></section>
+    <div style="display:flex;flex-direction:column;gap:12px">${cards || '<p class="muted">Nothing here. Great job!</p>'}</div>
+    ${r.total > RV.limit ? pager(r.total, RV.offset, RV.limit, 'data-rp') : ''}`);
+}
+
+// ---------- Students (thousands) ----------
+const SV = { q: '', status: '', offset: 0, limit: 25 };
+const SST = { active: ['Active', 'var(--ok)'], ending: ['Ends soon', 'var(--warn)'], ended: ['Plan ended', 'var(--bad)'], demo: ['Demo', 'var(--muted)'] };
+const dt = (ts) => ts ? new Date(ts).toLocaleDateString('en-IN') : '—';
+async function studentsView() {
+  const r = await api('GET', `/students?q=${encodeURIComponent(SV.q)}&status=${SV.status}&offset=${SV.offset}&limit=${SV.limit}`);
+  const c = r.counts, all = c.active + c.ending + c.ended + c.demo;
+  const f = (k, label, n) => `<button type="button" class="chipf ${SV.status === k ? 'on' : ''}" data-st="${k}">${label} · ${n.toLocaleString('en-IN')}</button>`;
+  const rows = r.items.map((x) => { const [t, col] = SST[x.status];
+    return `<tr><td><b>${esc(x.name || 'Student')}</b><div class="muted" style="font-size:12px">${esc(x.phone)}</div></td><td>${esc(x.plan)}</td><td><span class="pill" style="color:${col}">${t}</span></td>
+      <td>${dt(x.valid_till)}</td><td>${dt(x.joined)}</td><td>${ago(x.last_active)}</td><td>${x.questions}</td><td>${x.notes}</td><td style="text-transform:capitalize">${esc(x.level)}</td>
+      <td>${rupees(x.paid_paise)}${x.renewals ? `<div class="muted" style="font-size:11px">${x.renewals} renewal${x.renewals > 1 ? 's' : ''}</div>` : ''}</td></tr>`; }).join('');
+  const months = [...Array(12)].map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); const v = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    return `<option value="${v}">${d.toLocaleString('en', { month: 'long', year: 'numeric' })}</option>`; }).join('');
+  const max = Math.max(1, ...D.months), labels = [...Array(6)].map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return d.toLocaleString('en', { month: 'short' }); });
+  const bars = D.months.map((m, i) => `<div class="b"><div style="height:${Math.round(m / max * 140)}px" title="${rupees(m * D.me.split / 100)}"></div><span class="muted" style="font-size:12px">${labels[i]}</span></div>`).join('');
   return shell('students', `${head('Students & Earnings', 'Your share is ' + D.me.split + '%. Razorpay settles it to your bank account automatically.')}
-    <div class="stats">${stat('This month (your share)', rupees(D.months[5] * D.me.split / 100), 'after Durina’s ' + (100 - D.me.split) + '%')}${stat('Last 6 months', rupees(D.months.reduce((a, b) => a + b, 0) * D.me.split / 100), 'your share')}
-      ${stat('Active students', D.students.filter((s) => s.ends && s.ends > Date.now()).length, 'paying now')}${stat('Ending in 3 days', D.students.filter((s) => s.ends && s.ends > Date.now() && s.ends - Date.now() < 3 * 864e5).length, 'they get a renew reminder')}</div>
-    <section class="card"><h2>Your earnings, last 6 months</h2><div class="bars">${bars}</div></section>
-    <section class="card"><h2>Students</h2><span class="muted" style="font-size:12px">Phone numbers are hidden to protect students’ privacy.</span>
-      <div class="scroll"><table><thead><tr><th>STUDENT</th><th>PLAN</th><th>STATUS</th><th>VALID TILL</th><th>QUESTIONS ASKED</th></tr></thead><tbody>${rows}</tbody></table></div></section>`);
+    <section class="card"><div class="row"><div><h2>Monthly report</h2><span class="sub">Subscriptions, new vs renewals, money received and the split — for your own accounts.</span></div>
+      <div class="toolbar"><select id="rm" aria-label="Month">${months}</select><button class="btn ghost small" id="rv">View</button><button class="btn primary small" data-dl="xlsx">Download Excel</button><button class="btn primary small" data-dl="pdf">Download PDF</button></div></div>
+      <div class="bars">${bars}</div></section>
+    <section class="card" style="gap:12px"><div class="row"><h2>Students</h2><input type="search" id="sq" value="${esc(SV.q)}" placeholder="Search name or last 4 digits" aria-label="Search students" style="min-width:260px"></div>
+      <div class="toolbar">${f('', 'All', all)}${f('active', 'Active', c.active)}${f('ending', 'Ends in 3 days', c.ending)}${f('ended', 'Plan ended', c.ended)}${f('demo', 'Demo only', c.demo)}</div>
+      <span class="muted" style="font-size:12px">Phone numbers are hidden to protect students’ privacy. Students whose plan ends soon get a renew reminder automatically.</span>
+      <div class="scroll"><table style="min-width:980px"><thead><tr><th>STUDENT</th><th>PLAN</th><th>STATUS</th><th>VALID TILL</th><th>JOINED</th><th>LAST ACTIVE</th><th>QUESTIONS</th><th>NOTES SAVED</th><th>LEVEL</th><th>PAID</th></tr></thead><tbody>${rows || '<tr><td colspan="10" class="muted">No students found.</td></tr>'}</tbody></table></div>
+      ${pager(r.total, SV.offset, SV.limit, 'data-sp')}</section>`);
+}
+
+async function showReport(month) {
+  const r = await api('GET', '/report?month=' + month), s = r.summary;
+  const rows = r.items.map((i) => `<tr><td>${esc(i.date)}</td><td>${esc(i.student)}</td><td>${esc(i.plan)}</td><td>${esc(i.type)}</td><td>${rupees(i.amount_paise)}</td><td>${i.durina_percent}%</td><td>${rupees(i.durina_paise)}</td><td>${rupees(i.teacher_paise)}</td></tr>`).join('');
+  const m = document.createElement('div'); m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Monthly report');
+  m.innerHTML = `<div class="card"><div class="row"><div><h2>${esc(r.teacher)} — ${esc(r.month)}</h2><span class="sub">Before payment-gateway fees</span></div><button class="btn ghost small" id="mx">Close</button></div>
+    <div class="stats">${stat('Subscriptions', s.subscriptions, s.new + ' new · ' + s.renewals + ' renewals')}${stat('Total paid', rupees(s.gross_paise), 'by students')}${stat('Your share', rupees(s.teacher_paise), D.me.split + '%')}${stat('Durina', rupees(s.durina_paise), (100 - D.me.split) + '%')}</div>
+    <div class="scroll"><table><thead><tr><th>DATE</th><th>STUDENT</th><th>PLAN</th><th>TYPE</th><th>AMOUNT</th><th>DURINA %</th><th>DURINA</th><th>YOU</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  document.body.append(m); m.onclick = (e) => { if (e.target === m || e.target.id === 'mx') m.remove(); };
+}
+async function download(fmt, month) {
+  if (IS_DEMO) { toast(`In your live dashboard this downloads ${month}.${fmt}. Here is the report preview.`); return showReport(month); }
+  const res = await fetch(`/teacher/report?month=${month}&format=${fmt}`, { headers: AUTH() });
+  if (!res.ok) return toast('Could not create the report');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await res.blob()); a.download = `liveteach-${month}.${fmt}`; a.click();
 }
 
 function settingsView() {
@@ -339,8 +430,10 @@ function bind(view) {
   }
   if (view === 'style') {
     const S = D.style;
-    $$('[data-p]').forEach((b) => b.onclick = () => { S.personality = b.dataset.p; if (S.personality_2 === S.personality) S.personality_2 = null; render(); });
-    $$('[data-p2]').forEach((b) => b.onclick = () => { S.personality_2 = b.dataset.p2 || null; $$('[data-p2]').forEach((x) => x.classList.toggle('on', x === b)); });
+    $$('[data-p]').forEach((b) => b.onclick = () => { const k = b.dataset.p, i = S.personalities.indexOf(k);
+      if (i >= 0) { if (S.personalities.length > 1) S.personalities.splice(i, 1); else return toast('Keep at least one personality'); }
+      else if (S.personalities.length >= 3) return toast('Up to 3 personalities — remove one first'); else S.personalities.push(k);
+      render(); });
     $('#ss').onclick = async () => {
       for (const k in S.teaching) { S.teaching[k].text = $(`[data-tx="${k}"]`).value; S.teaching[k].on = $(`[data-on="${k}"]`).checked; }
       $$('[data-it]').forEach((c) => S.interaction[c.dataset.it] = c.checked);
@@ -348,12 +441,30 @@ function bind(view) {
       await api('PUT', '/style', S); toast('Style saved — your AI will follow it'); };
   }
   if (view === 'review') {
-    $$('[data-tab]').forEach((b) => b.onclick = () => { reviewTab = b.dataset.tab; render(); });
-    $$('[data-ok]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.ok, { action: 'approve' }); toast('Approved'); render(); });
-    $$('[data-no]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.no, { action: 'reject' }); toast('Marked wrong — AI won’t use it'); render(); });
-    $$('[data-edit]').forEach((b) => b.onclick = () => { editing = +b.dataset.edit; render(); setTimeout(() => $('#ed')?.focus(), 0); });
-    $$('[data-cancel]').forEach((b) => b.onclick = () => { editing = null; render(); });
-    $$('[data-save]').forEach((b) => b.onclick = async () => { await api('POST', '/review/' + b.dataset.save, { action: 'approve', answer: $('#ed').value }); editing = null; toast('Your answer is saved and approved'); render(); });
+    const re = () => { RV.offset = 0; render(); };
+    $$('[data-tab]').forEach((b) => b.onclick = () => { RV.tab = b.dataset.tab; RV.sel.clear(); re(); });
+    let t; $('#rq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { RV.q = e.target.value; re(); }, 350); };
+    $('#ro').onchange = (e) => { RV.origin = e.target.value; re(); }; $('#rs').onchange = (e) => { RV.sort = e.target.value; re(); };
+    $$('[data-rp]').forEach((b) => b.onclick = () => { RV.offset = +b.dataset.rp; render(); window.scrollTo(0, 0); });
+    $$('[data-sel]').forEach((c) => c.onchange = () => { c.checked ? RV.sel.add(+c.dataset.sel) : RV.sel.delete(+c.dataset.sel); render(); });
+    $('#all') && ($('#all').onchange = (e) => { RV.data.items.forEach((g) => e.target.checked ? RV.sel.add(g.ids[0]) : RV.sel.delete(g.ids[0])); render(); });
+    const group = (key) => RV.data.items.find((g) => g.ids[0] === key);
+    const decide = async (keys, action, answer) => { const r = await api('POST', '/review/bulk', { decisions: keys.map((k) => ({ ids: group(k)?.ids || [k], action, answer })) });
+      keys.forEach((k) => RV.sel.delete(k)); RV.editing = null; toast(`${r.updated} student answer${r.updated === 1 ? '' : 's'} ${action === 'approve' ? 'approved' : 'rejected'}`); render(); };
+    $('#bok') && ($('#bok').onclick = () => decide([...RV.sel], 'approve'));
+    $('#bno') && ($('#bno').onclick = () => decide([...RV.sel], 'reject'));
+    $$('[data-ok]').forEach((b) => b.onclick = () => decide([+b.dataset.ok], 'approve'));
+    $$('[data-no]').forEach((b) => b.onclick = () => decide([+b.dataset.no], 'reject'));
+    $$('[data-edit]').forEach((b) => b.onclick = () => { RV.editing = +b.dataset.edit; render(); });
+    $$('[data-cancel]').forEach((b) => b.onclick = () => { RV.editing = null; render(); });
+    $$('[data-save]').forEach((b) => b.onclick = () => decide([+b.dataset.save], 'approve', $('#ed').value));
+  }
+  if (view === 'students') {
+    let t; $('#sq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SV.q = e.target.value; SV.offset = 0; render().then(() => $('#sq').focus()); }, 350); };
+    $$('[data-st]').forEach((b) => b.onclick = () => { SV.status = b.dataset.st; SV.offset = 0; render(); });
+    $$('[data-sp]').forEach((b) => b.onclick = () => { SV.offset = +b.dataset.sp; render(); });
+    $('#rv').onclick = () => showReport($('#rm').value);
+    $$('[data-dl]').forEach((b) => b.onclick = () => download(b.dataset.dl, $('#rm').value));
   }
   if (view === 'settings') $('#pb').onclick = async () => { try { await api('POST', '/password', { current_password: $('#p0').value, new_password: $('#p1').value }); $('#pm').textContent = 'Password changed'; $('#pm').className = 'muted'; } catch (e) { $('#pm').textContent = e.message; $('#pm').className = 'err'; } };
 }
@@ -370,7 +481,7 @@ async function render() {
   if (h === 'logout') { TOKEN = ''; location.hash = ''; return render(); }
   D = await api('GET', '/home');
   const view = VIEWS[h] ? h : 'home';
-  app.innerHTML = VIEWS[view]();
+  app.innerHTML = await VIEWS[view]();
   bind(view);
 }
 window.onhashchange = render;

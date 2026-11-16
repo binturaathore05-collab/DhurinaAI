@@ -55,10 +55,12 @@ EMOTIONS = ["smile", "encouraging", "thinking", "serious", "excited", "calm", "s
 LEVELS = ["beginner", "intermediate", "advanced"]
 
 
+MAX_PERSONALITIES = 3
+
+
 def default_style() -> dict:
     return {
-        "personality": "friendly",
-        "personality_2": None,
+        "personalities": ["friendly"],     # 1–3, first = strongest
         "teaching": {k: {"title": t, "on": on, "text": txt} for k, (t, on, txt) in TEACHING.items()},
         "interaction": {k: on for k, (_, on) in INTERACTION.items()},
         "avatar": {k: on for k, (_, on) in AVATAR.items()},
@@ -69,10 +71,7 @@ def get_style(db: Database, teacher_id: str) -> dict:
     row = db.one("SELECT style FROM teachers WHERE id = ?", (teacher_id,))
     style = default_style()
     saved = json.loads(row["style"]) if row and row["style"] else {}
-    if saved.get("personality") in PERSONALITIES:
-        style["personality"] = saved["personality"]
-    if saved.get("personality_2") in PERSONALITIES and saved["personality_2"] != style["personality"]:
-        style["personality_2"] = saved["personality_2"]
+    style["personalities"] = _clean_personalities(saved) or style["personalities"]
     for key, item in (saved.get("teaching") or {}).items():
         if key in style["teaching"] and isinstance(item, dict):
             style["teaching"][key]["on"] = bool(item.get("on", True))
@@ -85,14 +84,24 @@ def get_style(db: Database, teacher_id: str) -> dict:
     return style
 
 
+def _clean_personalities(data: dict) -> list[str]:
+    """Accepts the list form, or the older personality / personality_2 form."""
+    raw = data.get("personalities")
+    if not isinstance(raw, list):
+        raw = [data.get("personality"), data.get("personality_2")]
+    out = []
+    for p in raw:
+        if p in PERSONALITIES and p not in out:
+            out.append(p)
+    return out[:MAX_PERSONALITIES]
+
+
 def save_style(db: Database, teacher_id: str, data: dict) -> dict:
     merged = get_style(db, teacher_id)
     incoming = copy.deepcopy(data or {})
-    if incoming.get("personality") in PERSONALITIES:
-        merged["personality"] = incoming["personality"]
-    if "personality_2" in incoming:
-        p2 = incoming["personality_2"]
-        merged["personality_2"] = p2 if p2 in PERSONALITIES and p2 != merged["personality"] else None
+    chosen = _clean_personalities(incoming)
+    if chosen:
+        merged["personalities"] = chosen
     for key, item in (incoming.get("teaching") or {}).items():
         if key in merged["teaching"] and isinstance(item, dict):
             if "on" in item:
@@ -110,9 +119,12 @@ def save_style(db: Database, teacher_id: str, data: dict) -> dict:
 def style_rules(style: dict, student_name: str | None, level: str) -> str:
     """The part of the system prompt that makes the model teach like THIS teacher, for THIS student."""
     s = style
-    lines = [f"Personality: {PERSONALITIES[s['personality']]}"]
-    if s.get("personality_2"):
-        lines.append(f"Also a little: {PERSONALITIES[s['personality_2']]}")
+    ps = s["personalities"]
+    lines = [f"Personality: {PERSONALITIES[ps[0]]}"]
+    if len(ps) > 1:
+        lines.append("Blend in naturally, a little less strongly:")
+        lines += [f"- {PERSONALITIES[p]}" for p in ps[1:]]
+        lines.append("Choose the side that fits the moment (e.g. patient after a mistake, funny when the student is relaxed).")
     lines.append("How you teach:")
     lines += [f"- {v['title']}: {v['text']}" for v in s["teaching"].values() if v["on"]]
     it = s["interaction"]

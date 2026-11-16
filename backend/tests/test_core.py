@@ -359,15 +359,15 @@ from app.services import style as style_mod  # noqa: E402
 
 def test_style_rules_follow_teacher_settings(db):
     st = style_mod.save_style(db, "subhash", {
-        "personality": "strict", "personality_2": "funny",
+        "personalities": ["strict", "funny", "strict", "bogus"],
         "teaching": {"tricks": {"on": False}, "story": {"text": "Har topic ko ek Rajasthani kahani se shuru karo."}},
         "interaction": {"use_name": True}, "avatar": {"gestures": False}})
-    assert st["avatar"]["gestures"] is False
+    assert st["avatar"]["gestures"] is False and st["personalities"] == ["strict", "funny"]
     rules = style_mod.style_rules(style_mod.get_style(db, "subhash"), "Rohit", "beginner")
     assert "Strict" in rules and "Funny" in rules
     assert "Rajasthani kahani" in rules and "Memory tricks" not in rules
     assert "Rohit" in rules and "BEGINNER" in rules
-    style_mod.save_style(db, "subhash", {"interaction": {"use_name": False}, "personality": "nonsense"})
+    style_mod.save_style(db, "subhash", {"interaction": {"use_name": False}, "personalities": ["nonsense"]})
     rules = style_mod.style_rules(style_mod.get_style(db, "subhash"), "Rohit", "advanced")
     assert "Rohit" not in rules and "Strict" in rules and "ADVANCED" in rules
 
@@ -402,3 +402,11 @@ def test_tutor_returns_emotion_board_and_checks_followup_answer(db):
     assert "You asked: Pratap ke ghode ka naam?" in user        # recent conversation is passed as context
     row = db.one("SELECT emotion, board, check_result FROM qa_history WHERE id = ?", (a1.qa_id,))
     assert row["emotion"] == "excited" and "1576" in row["board"]
+
+
+def test_up_to_three_personalities_and_old_format(db):
+    st = style_mod.save_style(db, "subhash", {"personalities": ["friendly", "motivational", "funny", "calm"]})
+    assert st["personalities"] == ["friendly", "motivational", "funny"]
+    rules = style_mod.style_rules(st, None, "intermediate")
+    assert "Friendly" in rules and "Motivational" in rules and "Funny" in rules and "Calm" not in rules
+    assert style_mod.save_style(db, "subhash", {"personality": "calm", "personality_2": "strict"})["personalities"] == ["calm", "strict"]

@@ -147,3 +147,18 @@ def test_teacher_with_several_subjects(setup):
     c, _ = setup
     t = c.post("/admin/api/teachers", json={"id": "anita", "name": "Anita", "subjects": ["History", "Geography", "History", " Polity "]}).json()
     assert t["subject"] == "History, Geography, Polity" and t["subjects"] == ["History", "Geography", "Polity"]
+
+
+def test_admin_downloads_teacher_report(setup, monkeypatch):
+    import time as _t
+    c, main = setup
+    c.post("/admin/api/teachers", json={"id": "meena", "name": "Meena", "platform_percent": 25, "monthly_price": 1000})
+    month = _t.strftime("%Y-%m")
+    j = c.get(f"/admin/api/teachers/meena/report?month={month}").json()
+    assert j["summary"]["subscriptions"] == 0
+    x = c.get(f"/admin/api/teachers/meena/report?month={month}&format=xlsx")
+    assert x.status_code == 200 and x.content[:2] == b"PK" and "meena" in x.headers["content-disposition"]
+    monkeypatch.setattr(main.notes_pdf, "render_pdf", lambda html, path: (open(path, "wb").write(b"%PDF-1.7"), path)[1])
+    p = c.get(f"/admin/api/teachers/meena/report?month={month}&format=pdf")
+    assert p.status_code == 200 and p.content.startswith(b"%PDF")
+    assert c.get("/admin/api/teachers/meena/report?month=nov").status_code == 400

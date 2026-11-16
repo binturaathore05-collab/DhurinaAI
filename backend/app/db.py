@@ -153,7 +153,7 @@ class Database:
         ("teachers", "style", "TEXT"), ("students", "name", "TEXT"),
         ("students", "level", "TEXT NOT NULL DEFAULT 'intermediate'"), ("students", "streak", "INTEGER NOT NULL DEFAULT 0"),
         ("qa_history", "emotion", "TEXT"), ("qa_history", "board", "TEXT"), ("qa_history", "emphasis", "TEXT"),
-        ("qa_history", "check_result", "TEXT"),
+        ("qa_history", "check_result", "TEXT"), ("qa_history", "review_status", "TEXT"),
     ]
 
     def _migrate(self) -> None:

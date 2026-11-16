@@ -7,6 +7,7 @@ import base64
 import copy
 import hmac
 import os
+import re
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -18,6 +19,8 @@ from .db import Database
 from .i18n import t
 from .services import accounts, admin, admin_auth, builds, notes_pdf, payments
 from .services import style as style_mod
+from .services import teacher_data
+from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
 from .services.tutor import TeacherProfile, Tutor, approve_answer, is_save_command, review_queue
@@ -277,8 +280,44 @@ async def teacher_style_save(request: Request, teacher_id: str = Depends(teacher
 
 
 @app.get("/teacher/review")
-def teacher_review(teacher_id: str = Depends(teacher_admin)):
-    return review_queue(db, teacher_id)
+def teacher_review(offset: int = 0, limit: int = 20, q: str = "", origin: str = "", sort: str = "most_asked",
+                   teacher_id: str = Depends(teacher_admin)):
+    return teacher_data.review_page(db, teacher_id, offset, limit, q, origin, sort)
+
+
+@app.post("/teacher/review/bulk")
+async def teacher_review_bulk(request: Request, teacher_id: str = Depends(teacher_admin)):
+    body = await request.json()
+    return teacher_data.review_decide(db, teacher_id, body.get("decisions", []))
+
+
+@app.get("/teacher/students")
+def teacher_students(offset: int = 0, limit: int = 25, q: str = "", status: str = "",
+                     teacher_id: str = Depends(teacher_admin)):
+    return teacher_data.students_page(db, teacher_id, offset, limit, q, status)
+
+
+def _report_response(tid: str, month: str, fmt: str):
+    if not re.fullmatch(r"\d{4}-\d{2}", month or ""):
+        raise HTTPException(400, "month must look like 2026-11")
+    rep = teacher_data.monthly_report(db, tid, month, _default_pct())
+    name = f"liveteach-{tid}-{month}"
+    if fmt == "xlsx":
+        return Response(teacher_data.report_xlsx(rep), headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'},
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if fmt == "pdf":
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = notes_pdf.render_pdf(teacher_data.report_html(rep), os.path.join(d, "r.pdf"))
+            with open(path, "rb") as f:
+                data = f.read()
+        return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'})
+    return rep
+
+
+@app.get("/teacher/report")
+def teacher_report(month: str, format: str = "json", teacher_id: str = Depends(teacher_admin)):
+    return _report_response(teacher_id, month, format)
 
 
 @app.post("/teacher/review/{qa_id}/approve")
@@ -428,6 +467,11 @@ def admin_builds(tid: str):
         return builds.list_builds(tid)
     except builds.BuildError as exc:
         return {"error": str(exc), "builds": []}
+
+
+@app.get("/admin/api/teachers/{tid}/report", dependencies=[Depends(require_admin)])
+def admin_teacher_report(tid: str, month: str, format: str = "json"):
+    return _report_response(tid, month, format)
 
 
 @app.get("/admin/api/settings", dependencies=[Depends(require_admin)])
