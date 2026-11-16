@@ -57,4 +57,30 @@ Owner's brief (17 Nov 2026): `docs/safety-requirements-owner-brief.md` (24 secti
 Owner's instruction: don't build everything yet — first audit the existing app.
 Audit + gap analysis + phased plan: **`docs/safety-gap-analysis.md`**. S1 is folded into its Phase A (A3).
 
-<!-- Next points from the owner go below as S3, S4, … -->
+## S3 · Cyber security: hacking, OTP abuse, attacks on app and admin — before launch · status: **noted, not started**
+Owner (17 Nov 2026): app ya admin par kahin bhi cyber attack / hacking — jaise OTP bypass karna ya bahut zyada OTP
+mangwana — in sab ko dhyan mein rakhte hue chalna hai. Falls under the launch rule: done before launch.
+
+**Already in place:** OTP stored hashed, expires, max wrong tries per code · OTP checked only on the server ·
+admin lockout after 5 wrong passwords · tokens expire (admin 12 h) and end on password change · all database
+queries parameterised (no SQL injection) · page text escaped (XSS) · Razorpay signatures + webhook verified ·
+secrets encrypted, never in code.
+
+**To build (simple version first):**
+| Area | What | 
+|---|---|
+| OTP flooding | Limits per phone, per device and per IP (e.g. 3 per 10 min, 10 per day); cooldown timer in app; block numbers/IPs that abuse; SMS cost alert |
+| OTP bypass / guessing | Lock the phone after repeated wrong codes across codes, not just per code; short expiry; one code valid at a time; check the app talks to the real teacher id |
+| Login & tokens | Student tokens expire + can be revoked (logout everywhere, blocked students); admin 2-step login (OTP / authenticator) for owner & safety roles; new-device login alert |
+| API abuse / bots | Rate limits on every endpoint (questions, payments, reports); Play Integrity check that requests come from our real app; bot / scraping detection |
+| Admin & teacher panels | IP / country alert on unusual admin logins; session list with "log out other devices"; strict security headers (CSP, HSTS, no framing); audit log of every admin action |
+| Server & network | HTTPS only; firewall; DDoS protection in front (e.g. Cloudflare); database not reachable from the internet; daily encrypted backups + restore test |
+| App (APK) | Code obfuscation; no secrets inside the app; certificate pinning; warn on rooted / tampered devices |
+| Uploads | File type + size checks; virus scan for teacher uploads; never run uploaded files |
+| Monitoring | Alerts for spikes (OTP requests, failed logins, errors); security log kept safely; dependency updates and vulnerability scan in CI |
+| Before launch | Independent security test (penetration test) of app, APIs and panels; fix all high issues first |
+
+Touches: backend (limits, checks, logging), app (cooldown, integrity, pinning), admin (security page: blocked
+numbers/IPs, login alerts, sessions), server setup (Step 6).
+
+<!-- Next points from the owner go below as S4, S5, … -->
