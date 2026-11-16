@@ -7,6 +7,13 @@ Priority: **P1** = before launch · **P2** = before server go-live · **P3** = a
 
 ---
 
+## Launch rule (owner, 17 Nov 2026)
+**All safety work must be finished before launch** — Phase A *and* Phase B of `docs/safety-gap-analysis.md`,
+plus Phase C for any voice / photo / video feature that is in the launch version. The 12 acceptance criteria in
+section 24 of the owner's brief are the launch checklist. No real student uses the app until every item passes.
+
+---
+
 ## Already in place
 - Admin login: email + password, lock for 15 min after 5 wrong tries, 12-hour sessions, login history.
 - Teacher panel never shows Dhurina's % or amount.

@@ -15,7 +15,9 @@
 | Missing | 12 — Safety Center, Content filters, Age policies, Input/Output moderation, Warnings, Auto-block, Safety dashboard, Safety test lab, Failure detection, Kill switch, Policy versions, Alerts |
 | Not built yet in the app at all (design safety in when built) | Voice, image, video, file questions from students |
 
-**Plain verdict:** today the only safety in the AI is one line in its instructions ("Only help with studies. Never invent facts"). That is not enough for students who are minors. **The app must not go to real students until Phase A below is done.**
+**Plain verdict:** today the only safety in the AI is one line in its instructions ("Only help with studies. Never invent facts"). That is not enough for students who are minors.
+
+**Owner's launch rule:** every item in Phases A and B, plus Phase C for any voice / photo / video feature in the launch version, must be done **before launch**. The 12 acceptance criteria in section 24 of the brief are the launch checklist.
 
 ### Most important findings
 1. **"Topics the AI must not answer" is saved in Admin Settings but never used.** The AI never reads it. An admin would believe something is blocked when it is not. *(Fix first — small.)*
@@ -105,7 +107,7 @@ Student message (text now; voice → text later; photo → text + image check la
 
 ## 4. Suggested plan — three simple phases
 
-### Phase A — must be done before any real student uses the app
+### Phase A — before launch (build first)
 | # | Item | Why first |
 |---|---|---|
 | A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) | Small, removes a false sense of safety |
@@ -117,7 +119,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
 | A8 | Safety test set (~150 cases in Hindi, Hinglish, English, Punjabi), run automatically on every code / prompt / model change; launch blocked if it fails (15) | Proof it works |
 
-### Phase B — before going live at scale
+### Phase B — also before launch
 | # | Item |
 |---|---|
 | B1 | Age / class at signup + parent consent by OTP to the parent's phone for under-18s (4, 14). **Legal review needed:** India's DPDP Act 2023 treats everyone under 18 as a child, requires verifiable parental consent, and limits tracking or behavioural monitoring of children. Monitoring for safety must be checked against this with a lawyer. |
@@ -129,7 +131,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) |
 | B8 | Safety policy versions with compare and rollback (18) |
 
-### Phase C — together with voice, photo and video features (Step 5 of the roadmap)
+### Phase C — before launch for any voice / photo / video feature that ships
 - Voice: speech-to-text, then the same input check; output check before speaking; AI disclosure spoken at call start.
 - Photo questions: image safety check before reading the photo.
 - Teacher uploads (PDF / notes / YouTube): scan on upload. A flagged file needs admin approval.

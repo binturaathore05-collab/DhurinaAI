@@ -46,3 +46,9 @@ Nothing that is hard to undo happens on one tap. A popup asks first; **Cancel** 
   leaving Teaching Style / a note / an edit unsaved · change password · log out.
 - Student app: End class · phone back button (leave class) · closing the screen while a payment is in progress.
 Any new risky action must use the same `ask()` (web) / `confirmAction()` (app).
+
+
+## Launch rule (owner, 17 Nov 2026)
+**All safety work must be finished before launch** — Phase A *and* Phase B of `docs/safety-gap-analysis.md`,
+plus Phase C for any voice / photo / video feature that is in the launch version. The 12 acceptance criteria in
+section 24 of the owner's brief are the launch checklist. No real student uses the app until every item passes.
