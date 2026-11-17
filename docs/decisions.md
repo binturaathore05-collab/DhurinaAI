@@ -103,3 +103,8 @@ Built with Claude's choices: every student message and every AI text is checked 
 can't run, nothing goes out ("please try again"). Default checker = our own AI (small model) because it understands
 Hindi / Hinglish and study context; the free OpenAI moderation endpoint is ready as an option. **Owner to decide**
 the final provider after testing on the A8 Hindi / Hinglish set (open question 6).
+
+## Emergency switches — A4 (17 Nov 2026)
+Any admin can switch off AI chat (all / one teacher / one model) and voice / photo at once; turning back on needs a
+note of what was checked. Optional backup model (`LLM_BACKUP_MODEL`) takes over when the main model is off. Limiting
+the switches to certain roles waits for Team & roles (B5).
