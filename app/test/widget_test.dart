@@ -126,4 +126,32 @@ void main() {
     expect(testModeIn('सर मौखिक टेस्ट लो'), 'oral');
     expect(testModeIn('Sir test lo'), isNull);
   });
+
+  test('multi-teacher: answers carry the teacher, a switch carries a handover line', () async {
+    final api = DemoApi(cfg);
+    await api.verifyOtp('9876543210', '123456');
+    final a = await api.ask('Haldighati kab hua?');
+    expect(a.faculty?.name, 'Test Sir');
+    expect(a.switched, false);
+    final b = await api.ask('Maths wale sir ko bulao, 25 percent kitna hai');
+    expect(b.faculty?.name, 'Gupta Sir');
+    expect(b.switched, true);
+    expect(b.handover, contains('Gupta Sir'));
+    expect(api.mediaUrl('/faculty/2/avatar'), isNull); // offline demo: no server photos
+  });
+
+  test('multi-teacher: server replies are read (answer, access, test)', () {
+    final f = Faculty.fromJson({'id': 3, 'name': 'Gupta Sir', 'avatar_url': '/faculty/3/avatar', 'subjects': ['Mathematics']});
+    expect(f!.avatarUrl, '/faculty/3/avatar');
+    final a = Answer.fromJson({'qa_id': 1, 'answer': 'x', 'faculty': {'id': 3, 'name': 'Gupta Sir'}, 'switched': true,
+        'handover': 'Yeh Maths ka sawal hai', 'state': 'demo', 'demo_questions_left': 2,
+        'active_faculty': {'id': 3, 'name': 'Gupta Sir'}});
+    expect(a.faculty?.id, 3);
+    expect(a.switched, true);
+    expect(a.access.activeFaculty?.name, 'Gupta Sir');
+    expect(Faculty.fromJson(null), isNull);
+    final api = HttpApi('https://x.test', 'demo');
+    expect(api.mediaUrl('/faculty/3/avatar'), 'https://x.test/faculty/3/avatar');
+    expect(api.mediaUrl(null), isNull);
+  });
 }

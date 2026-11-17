@@ -246,7 +246,7 @@ class _TestScreenState extends State<TestScreen> {
       Text(r.scoreText, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
       Text('${r.percent}%', style: const TextStyle(color: LT.muted, fontWeight: FontWeight.w700)),
       const SizedBox(height: 16),
-      Text('${cfg.teacherName} says', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
+      Text('${widget.test.teacherName ?? cfg.teacherName} says', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
       const SizedBox(height: 6),
       Text(r.message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w600)),
       const SizedBox(height: 22),

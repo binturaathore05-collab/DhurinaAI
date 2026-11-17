@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../config.dart';
 import '../main.dart';
 import '../share.dart';
 import '../theme.dart';
@@ -80,6 +81,10 @@ class _LiveScreenState extends State<LiveScreen> {
   SavedNote? _note;   // this class's notes PDF
   bool _thinking = false;
   bool _typing = false;
+  /// Multi-teacher: the teacher on the call now (null = the app's own teacher) and, during a switch, the short
+  /// line the old teacher says before the new face appears (like a call transfer).
+  Faculty? _teacher;
+  String? _transfer;
 
   @override
   void initState() {
@@ -99,7 +104,10 @@ class _LiveScreenState extends State<LiveScreen> {
       final a = await AppScope.of(context).api.access();
       if (!mounted) return;
       if (a.setupNeeded) return goTo(context, a); // B1: class / parent's OK still missing
-      setState(() => _access = a);
+      setState(() {
+        _access = a;
+        if (a.activeFaculty != null && _transfer == null) _teacher = a.activeFaculty;
+      });
     } catch (_) {}
   }
 
@@ -174,10 +182,19 @@ class _LiveScreenState extends State<LiveScreen> {
     });
     try {
       final a = await AppScope.of(context).api.ask(text);
+      if (!mounted) return;
+      if (a.switched && a.handover.isNotEmpty) {
+        // call transfer: the old teacher says one short line, then the new face and name come in
+        setState(() => _transfer = a.handover);
+        await Future.delayed(const Duration(milliseconds: 1800));
+        if (!mounted) return;
+      }
       setState(() {
         _last = a;
         _saved = false;
         _access = a.access;
+        _transfer = null;
+        if (a.faculty != null) _teacher = a.faculty;
       });
     } on CommandException catch (c) {
       if (mounted) setState(() => _thinking = false);
@@ -310,6 +327,7 @@ class _LiveScreenState extends State<LiveScreen> {
       _lastQuestion = 'Please teach me again';
       _saved = false;
       _access = again.access;
+      if (again.faculty != null) _teacher = again.faculty;
     });
     return true;
   }
@@ -371,9 +389,13 @@ class _LiveScreenState extends State<LiveScreen> {
                         : null,
                     // only the teacher's name (owner): one line; a long name gets a little smaller instead of
                     // breaking mid-word ("Subhas / h Sir"). No subject or class timer under it.
-                    child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
-                        child: Text(cfg.teacherName, maxLines: 1, softWrap: false,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 500),
+                      layoutBuilder: (cur, prev) => Stack(alignment: Alignment.centerLeft, children: [...prev, if (cur != null) cur]),
+                      child: FittedBox(key: ValueKey(_teacherName(cfg)), fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                          child: Text(_teacherName(cfg), maxLines: 1, softWrap: false,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                    ),
                   ),
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
@@ -395,11 +417,13 @@ class _LiveScreenState extends State<LiveScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
                   child: Stack(fit: StackFit.expand, children: [
-                    Image.asset(cfg.avatar, fit: BoxFit.cover, alignment: const Alignment(0, -0.7)),
-                    if (_thinking)
-                      const Align(
+                    AnimatedSwitcher(duration: const Duration(milliseconds: 700), child: _face(cfg, scope.api)),
+                    if (_transfer != null)
+                      Align(alignment: Alignment.bottomCenter, child: _TransferCard(text: _transfer!, accent: cfg.accent)),
+                    if (_thinking && _transfer == null)
+                      Align(
                         alignment: Alignment.bottomCenter,
-                        child: Padding(padding: EdgeInsets.all(14), child: _ThinkingDots()),
+                        child: Padding(padding: const EdgeInsets.all(14), child: _ThinkingDots(name: _teacherName(cfg))),
                       ),
                   ]),
                 ),
@@ -410,7 +434,7 @@ class _LiveScreenState extends State<LiveScreen> {
               flex: 4,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-                child: _last == null ? _welcome(cfg.teacherName) : _answerView(_last!),
+                child: _last == null ? _welcome(_teacherName(cfg)) : _answerView(_last!),
               ),
             ),
             if (_typing) _textInput(cfg.accent),
@@ -458,6 +482,23 @@ class _LiveScreenState extends State<LiveScreen> {
         Expanded(child: Text(a.notice!, style: const TextStyle(fontSize: 13, height: 1.35))),
       ]),
     );
+  }
+
+  String _teacherName(TeacherConfig cfg) => _teacher?.name ?? cfg.teacherName;
+
+  /// The face on the call: the teacher's photo from the server; the app's own photo for the app's own teacher;
+  /// otherwise the first letter of the name (never another teacher's face).
+  Widget _face(TeacherConfig cfg, Api api) {
+    final t = _teacher;
+    final own = t == null || t.name == cfg.teacherName;
+    Widget asset() => Image.asset(cfg.avatar, fit: BoxFit.cover, alignment: const Alignment(0, -0.7));
+    Widget letter() => _Initials(name: t?.name ?? cfg.teacherName, accent: cfg.accent);
+    final url = api.mediaUrl(t?.avatarUrl);
+    final Widget img = url != null
+        ? Image.network(url, fit: BoxFit.cover, alignment: const Alignment(0, -0.7),
+            errorBuilder: (_, __, ___) => own ? asset() : letter())
+        : own ? asset() : letter();
+    return SizedBox.expand(key: ValueKey(t?.id ?? 0), child: img);
   }
 
   Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -574,16 +615,60 @@ class _LiveScreenState extends State<LiveScreen> {
       );
 }
 
+/// A teacher without a photo yet: the first letter of the name on the app's colour.
+class _Initials extends StatelessWidget {
+  final String name;
+  final Color accent;
+  const _Initials({required this.name, required this.accent});
+  @override
+  Widget build(BuildContext context) {
+    final clean = name.replaceAll(RegExp(r'^(mr|mrs|ms|dr)\.?\s+', caseSensitive: false), '').trim();
+    final letter = clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
+    return Container(
+      decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              colors: [accent.withValues(alpha: 0.35), LT.bg])),
+      alignment: Alignment.center,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        CircleAvatar(radius: 56, backgroundColor: accent,
+            child: Text(letter, style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w800, color: LT.onAccent))),
+        const SizedBox(height: 12),
+        Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+/// The call-transfer moment: "…main aapko Gupta Sir se jod raha hoon" over the old teacher's face.
+class _TransferCard extends StatelessWidget {
+  final String text;
+  final Color accent;
+  const _TransferCard({required this.text, required this.accent});
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: LT.bg.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accent)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.swap_calls_rounded, color: accent, size: 20),
+          const SizedBox(width: 10),
+          Flexible(child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.35))),
+        ]),
+      );
+}
+
 class _ThinkingDots extends StatelessWidget {
-  const _ThinkingDots();
+  final String name;
+  const _ThinkingDots({required this.name});
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(color: LT.bg, borderRadius: BorderRadius.circular(999)),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: LT.accentText)),
-          SizedBox(width: 8),
-          Text('Sir is thinking…', style: TextStyle(fontSize: 12, color: LT.text)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: LT.accentText)),
+          const SizedBox(width: 8),
+          Text('$name is thinking…', style: const TextStyle(fontSize: 12, color: LT.text)),
         ]),
       );
 }
