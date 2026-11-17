@@ -112,3 +112,7 @@ the switches to certain roles waits for Team & roles (B5).
 ## Proof & audit — A5 (17 Nov 2026)
 Every answer shows a small reference code (LT-XXXX-XXXX) in the app, so a viral clip can be checked in admin →
 Audit. Every admin / teacher-panel change and every look at flagged student messages is logged (no passwords or keys).
+
+## AI disclosure — A7 (17 Nov 2026)
+The app always shows that Sir is an AI ("AI" tag, "AI Teacher" on the video, opening line "an AI, not a real
+person"); every notes PDF says "AI Teacher", has a faint watermark and an "AI can make mistakes" note.

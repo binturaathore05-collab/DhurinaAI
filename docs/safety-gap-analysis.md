@@ -116,7 +116,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) — **built 17 Nov 2026** (see note below) | Emergency control |
 | A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) — **built 17 Nov 2026** (see note below) | Prove what the AI really said if a recording goes viral |
 | A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) — **built 17 Nov 2026** (see note below) | Abuse + cost |
-| A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
+| A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) — **built 17 Nov 2026** (see note below) | Honest disclosure |
 | A8 | Safety test set (~150 cases in Hindi, Hinglish, English, Punjabi), run automatically on every code / prompt / model change; launch blocked if it fails (15) | Proof it works |
 
 **A1 as built:** every AI reply now carries a `scope` (study / off_topic / blocked). The admin's blocked
@@ -200,6 +200,15 @@ from which address, what (passwords, keys and codes are never stored); the log i
 intact" or where it was changed. `AUDIT_SECRET` (set once, never change). Limits: an admin with server access could
 still rebuild seals with the secret; for stronger proof the seals can later be published / time-stamped outside our
 server. Test answers and notes PDFs are not sealed yet (A7 adds the AI badge to PDFs).
+
+**A7 as built:** call screen — an "AI" tag next to the teacher's name and an "AI Teacher" label on Sir's video
+(so it is in every screenshot and screen recording); the opening line says plainly "I'm the AI teacher of …, an AI,
+not a real person". Notes PDFs (single answer and whole class, every language) — "AI Teacher" label at the top, a
+note "Made by the AI teacher of … AI can make mistakes — check important facts with your textbook or teacher", a
+faint "AI Teacher" watermark on every page and "AI Teacher" in the footer; a single-answer PDF also carries the
+answer's reference code (A5). `/teacher` returns the same disclosure text from the server, ready to be spoken at the
+start of a voice / video call (Phase C). Limit: as the brief says, labels can be cropped out of a recording — the
+reference code + A5 check is the real proof.
 
 ### Phase B — also before launch
 | # | Item |

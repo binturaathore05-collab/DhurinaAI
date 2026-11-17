@@ -369,7 +369,12 @@ class _LiveScreenState extends State<LiveScreen> {
                           }
                         : null,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(cfg.teacherName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      Row(children: [
+                        Flexible(child: Text(cfg.teacherName, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                        const SizedBox(width: 6),
+                        const _AiBadge(), // A7: always clear that this is an AI teacher
+                      ]),
                       Text('${cfg.subject} · $_elapsed', style: const TextStyle(fontSize: 12, color: LT.muted)),
                     ]),
                   ),
@@ -394,6 +399,8 @@ class _LiveScreenState extends State<LiveScreen> {
                   borderRadius: BorderRadius.circular(28),
                   child: Stack(fit: StackFit.expand, children: [
                     Image.asset(cfg.avatar, fit: BoxFit.cover, alignment: const Alignment(0, -0.7)),
+                    // A7: stays on the video, so any screen recording shows it is an AI teacher
+                    const Positioned(left: 12, top: 12, child: _AiBadge(large: true)),
                     if (_thinking)
                       const Align(
                         alignment: Alignment.bottomCenter,
@@ -459,7 +466,7 @@ class _LiveScreenState extends State<LiveScreen> {
   Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('SIR IS LISTENING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
         const SizedBox(height: 8),
-        Text('Namaste! Ask $teacher anything — in Hindi, English, Punjabi or any language.',
+        Text('Namaste! I’m the AI teacher of $teacher — an AI, not a real person. Ask me anything, in Hindi, English, Punjabi or any language.',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ]);
 
@@ -579,6 +586,28 @@ class _ThinkingDots extends StatelessWidget {
           SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: LT.accentText)),
           SizedBox(width: 8),
           Text('Sir is thinking…', style: TextStyle(fontSize: 12, color: LT.text)),
+        ]),
+      );
+}
+
+/// "AI Teacher" label (A7). Small next to the name; larger on the video.
+class _AiBadge extends StatelessWidget {
+  final bool large;
+  const _AiBadge({this.large = false});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: EdgeInsets.symmetric(horizontal: large ? 10 : 7, vertical: large ? 5 : 2),
+        decoration: BoxDecoration(
+          color: large ? const Color(0xCC04201C) : LT.accentSoft,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: LT.accentText.withAlpha(140)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.auto_awesome, size: large ? 14 : 11, color: LT.accentText),
+          const SizedBox(width: 4),
+          Text(large ? 'AI Teacher' : 'AI',
+              style: TextStyle(fontSize: large ? 12 : 10, fontWeight: FontWeight.w800, color: LT.accentText, letterSpacing: 0.3)),
         ]),
       );
 }
