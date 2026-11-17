@@ -45,7 +45,7 @@ Owner's brief: `docs/multi-teacher-owner-brief.md`. This file is the plan Claude
      click.
    - The student never sees where content came from: it is always that teacher's voice. Attach and detach are
      written to the audit log.
-   - Rule (Claude's suggestion, owner to confirm): only Dhurina's own content, or content whose uploader ticked
+   - Rule (owner confirmed 17 Nov 2026): only Dhurina's own content, or content whose uploader ticked
      "allow in Common Library", goes into it.
 5. **Cross-institute de-duplication (owner, 18:23).**
    - Every file gets a fingerprint of its bytes and one of its normalized extracted text. If the fingerprint already
@@ -97,6 +97,7 @@ Owner's brief: `docs/multi-teacher-owner-brief.md`. This file is the plan Claude
 2. Money goes to the institute's Razorpay; Dhurina's share is split as today.
 3. Content is uploaded by the institute (Institute panel) and by Dhurina admin.
 4. The Common Library holds only Dhurina content and content shared with the uploader's permission.
+   (All four: yes. Recorded in `docs/decisions.md`.)
 
 If a Common Library user should pay Dhurina more, use the existing per-teacher split; nothing new is needed.
 
