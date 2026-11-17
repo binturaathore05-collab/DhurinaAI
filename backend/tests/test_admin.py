@@ -192,3 +192,9 @@ def test_admin_reports_api(setup):
     assert c.get("/admin/api/teachers/meena/report?date_from=2027-03-31&date_to=2026-04-01").status_code == 400
     x = c.get(f"/admin/api/teachers/meena/report?date_from=2026-04-01&date_to={today}&format=xlsx")
     assert x.status_code == 200 and "2026-04-01-to-" in x.headers["content-disposition"]
+
+
+def test_teacher_panel_page_is_served(setup):
+    c = setup[0] if isinstance(setup, tuple) else setup
+    r = c.get("/teacher-panel")
+    assert r.status_code == 200 and "<html" in r.text.lower()

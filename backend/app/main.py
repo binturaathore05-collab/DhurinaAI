@@ -766,6 +766,13 @@ def _default_pct() -> float:
     return float(admin.get_settings(db)["defaults"]["platform_percent"])
 
 
+@app.get("/teacher-panel", response_class=HTMLResponse)
+def teacher_panel_page():
+    """The teacher dashboard (log in with the teacher id + teacher key)."""
+    with open(os.path.join(STATIC_DIR, "teacher.html"), encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page():
     with open(os.path.join(STATIC_DIR, "admin.html"), encoding="utf-8") as f:
