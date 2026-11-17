@@ -60,6 +60,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "इस नंबर पर बहुत ज़्यादा गलत कोड डाले गए। {wait} बाद फिर कोशिश करें।",
         "pa": "ਇਸ ਨੰਬਰ 'ਤੇ ਬਹੁਤ ਜ਼ਿਆਦਾ ਗਲਤ ਕੋਡ ਪਾਏ ਗਏ। {wait} ਬਾਅਦ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
     },
+    "safety_warning": {
+        "en": "Please keep our class about studies. If off-limit questions continue, your AI Teacher access will be paused for a while.",
+        "hi": "कृपया क्लास को पढ़ाई तक ही रखें। मना किए गए सवाल जारी रहे तो AI Teacher कुछ समय के लिए बंद हो जाएगा।",
+        "pa": "ਕਿਰਪਾ ਕਰਕੇ ਕਲਾਸ ਨੂੰ ਪੜ੍ਹਾਈ ਤੱਕ ਹੀ ਰੱਖੋ। ਮਨ੍ਹਾ ਕੀਤੇ ਸਵਾਲ ਜਾਰੀ ਰਹੇ ਤਾਂ AI Teacher ਕੁਝ ਸਮੇਂ ਲਈ ਬੰਦ ਹੋ ਜਾਵੇਗਾ।",
+    },
+    "safety_suspended": {
+        "en": "Your AI Teacher access has been temporarily suspended due to a safety policy violation. It opens again in {wait}. Your notes are still available. For help, contact your parent or Dhurina support.",
+        "hi": "सुरक्षा नियम तोड़ने के कारण आपका AI Teacher कुछ समय के लिए बंद किया गया है। यह {wait} बाद फिर खुलेगा। आपके नोट्स खुले हैं। मदद के लिए अपने माता-पिता या Dhurina support से संपर्क करें।",
+        "pa": "ਸੁਰੱਖਿਆ ਨਿਯਮ ਤੋੜਨ ਕਾਰਨ ਤੁਹਾਡਾ AI Teacher ਕੁਝ ਸਮੇਂ ਲਈ ਬੰਦ ਕੀਤਾ ਗਿਆ ਹੈ। ਇਹ {wait} ਬਾਅਦ ਫਿਰ ਖੁੱਲ੍ਹੇਗਾ। ਤੁਹਾਡੇ ਨੋਟਸ ਖੁੱਲ੍ਹੇ ਹਨ। ਮਦਦ ਲਈ ਆਪਣੇ ਮਾਪਿਆਂ ਜਾਂ Dhurina support ਨਾਲ ਸੰਪਰਕ ਕਰੋ।",
+    },
+    "safety_review": {
+        "en": "Your AI Teacher access has been suspended due to a safety policy violation and is being reviewed by our team. Your notes are still available. For help, contact your parent or Dhurina support.",
+        "hi": "सुरक्षा नियम तोड़ने के कारण आपका AI Teacher बंद किया गया है और हमारी टीम इसकी जाँच कर रही है। आपके नोट्स खुले हैं। मदद के लिए अपने माता-पिता या Dhurina support से संपर्क करें।",
+        "pa": "ਸੁਰੱਖਿਆ ਨਿਯਮ ਤੋੜਨ ਕਾਰਨ ਤੁਹਾਡਾ AI Teacher ਬੰਦ ਕੀਤਾ ਗਿਆ ਹੈ ਅਤੇ ਸਾਡੀ ਟੀਮ ਇਸ ਦੀ ਜਾਂਚ ਕਰ ਰਹੀ ਹੈ। ਤੁਹਾਡੇ ਨੋਟਸ ਖੁੱਲ੍ਹੇ ਹਨ। ਮਦਦ ਲਈ ਆਪਣੇ ਮਾਪਿਆਂ ਜਾਂ Dhurina support ਨਾਲ ਸੰਪਰਕ ਕਰੋ।",
+    },
+    "safety_disabled": {
+        "en": "This account has been disabled. For help, contact your parent or Dhurina support.",
+        "hi": "यह अकाउंट बंद कर दिया गया है। मदद के लिए अपने माता-पिता या Dhurina support से संपर्क करें।",
+        "pa": "ਇਹ ਅਕਾਊਂਟ ਬੰਦ ਕਰ ਦਿੱਤਾ ਗਿਆ ਹੈ। ਮਦਦ ਲਈ ਆਪਣੇ ਮਾਪਿਆਂ ਜਾਂ Dhurina support ਨਾਲ ਸੰਪਰਕ ਕਰੋ।",
+    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},

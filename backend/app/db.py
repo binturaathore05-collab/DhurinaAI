@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS students (
     language TEXT NOT NULL DEFAULT 'hi',
     demo_questions_used INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'active',      -- A3: active | warning | suspended | review | disabled
+    status_until REAL,
+    status_reason TEXT,
     UNIQUE (teacher_id, phone)
 );
 CREATE TABLE IF NOT EXISTS otp_codes (
@@ -167,6 +170,30 @@ CREATE TABLE IF NOT EXISTS tests (
     finished_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS student_violations (  -- A3: what moved a student up the warnings ladder (evidence)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    teacher_id TEXT NOT NULL,
+    qa_id INTEGER,
+    severity TEXT NOT NULL,                     -- minor | serious
+    category TEXT,
+    question TEXT,
+    at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS student_violations_student ON student_violations (student_id, severity, at);
+
+CREATE TABLE IF NOT EXISTS student_status_log (  -- A3: every block / unblock, by the system or an admin
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    old_status TEXT,
+    new_status TEXT NOT NULL,
+    by_who TEXT NOT NULL,                       -- auto | system | admin email
+    reason TEXT,
+    remarks TEXT,
+    until REAL,
+    at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
@@ -200,6 +227,8 @@ class Database:
         ("qa_history", "session_id", "INTEGER"), ("qa_history", "topic", "TEXT"),
         ("qa_history", "notes_worthy", "INTEGER"), ("teachers", "play_store_url", "TEXT"),
         ("saved_notes", "qa_upto", "INTEGER"),
+        ("students", "status", "TEXT NOT NULL DEFAULT 'active'"), ("students", "status_until", "REAL"),
+        ("students", "status_reason", "TEXT"),
         ("verified_answers", "active", "INTEGER NOT NULL DEFAULT 1"), ("verified_answers", "updated_at", "TEXT"),
     ]
 

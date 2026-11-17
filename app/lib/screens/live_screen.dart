@@ -193,6 +193,7 @@ class _LiveScreenState extends State<LiveScreen> {
         _openPlans();
       } else {
         _toast(e.message);
+        if (e.status == 403) _refreshAccess(); // AI paused for safety: show the notice on the call screen
       }
     } catch (_) {
       _toast('No internet connection. Please try again.');
@@ -382,6 +383,8 @@ class _LiveScreenState extends State<LiveScreen> {
                     background: LT.surface, onPressed: () => shareApp(context)),
               ]),
             ),
+            // ---- safety notice from the server (warning / AI paused) ----
+            if (access?.accountMessage != null) _safetyNotice(access!),
             // ---- teacher video (Phase 2: live avatar video replaces the photo) ----
             Expanded(
               flex: 5,
@@ -432,6 +435,25 @@ class _LiveScreenState extends State<LiveScreen> {
         ),
       ),
     ));
+  }
+
+  Widget _safetyNotice(Access a) {
+    final paused = a.aiPaused;
+    final color = paused ? LT.danger : const Color(0xFFF59E0B);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withAlpha(36),
+        border: Border.all(color: color.withAlpha(150)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(paused ? Icons.block_rounded : Icons.warning_amber_rounded, color: color, size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Text(a.accountMessage!, style: const TextStyle(fontSize: 13, height: 1.35))),
+      ]),
+    );
   }
 
   Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

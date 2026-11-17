@@ -134,6 +134,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
@@ -227,7 +228,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -526,6 +527,11 @@ async function settingsView() {
       ${f('limits', 'otp_per_phone_day', 'Codes per number per day', s.limits.otp_per_phone_day, 'number')}${f('limits', 'otp_per_device_day', 'Codes per phone (device) per day', s.limits.otp_per_device_day, 'number')}
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
       ${f('limits', 'otp_wrong_per_phone_day', 'Wrong codes before a number is locked for the day', s.limits.otp_wrong_per_phone_day, 'number')}</div>`)}
+    ${card('Student safety (warnings &amp; auto-block)', 'Off-topic chat never counts. A blocked topic is a small problem; a clearly harmful request (sexual, weapons, crime, breaking the rules, threats) is serious.', `<div class="grid2">
+      <label class="f">Auto-block<select data-sec="safety" name="auto_block"><option value="true" ${s.safety.auto_block ? 'selected' : ''}>On (recommended)</option><option value="false" ${s.safety.auto_block ? '' : 'selected'}>Off — only record problems</option></select><span class="h">On: the system warns and suspends by itself. Off: admins decide.</span></label>
+      ${f('safety', 'suspend_hours', 'Suspension length (hours)', s.safety.suspend_hours, 'number', 'Notes and library stay open while suspended')}
+      ${f('safety', 'minor_warn', 'Blocked-topic questions in 7 days → warning', s.safety.minor_warn, 'number')}${f('safety', 'minor_suspend', 'Blocked-topic questions in 7 days → suspension', s.safety.minor_suspend, 'number')}
+      ${f('safety', 'serious_suspend', 'Serious requests in 30 days → suspension', s.safety.serious_suspend, 'number', '1 = at once')}${f('safety', 'serious_review', 'Serious requests in 30 days → stopped until an admin reviews', s.safety.serious_review, 'number')}</div>`)}
     ${card('Legal', 'Shown in every app; required by Play Store', `<div class="grid2">${f('legal', 'privacy_url', 'Privacy Policy URL', s.legal.privacy_url)}${f('legal', 'terms_url', 'Terms URL', s.legal.terms_url)}</div>`)}
     ${card('Your account', esc(me.email) + ' · ' + esc(me.role), `<div class="grid2"><label class="f">Current password<input id="pw0" type="password" autocomplete="current-password"></label>
       <label class="f">New password<input id="pw1" type="password" autocomplete="new-password"><span class="h">At least 8 characters, letters and numbers</span></label></div>
@@ -563,6 +569,91 @@ function bindSettings() {
   };
 }
 
+// ---------- Student safety (A3) ----------
+const SST = { active: ['Active', 'var(--ok)'], warning: ['Warning', 'var(--warn)'], suspended: ['Suspended', 'var(--bad)'],
+  review: ['Under review', 'var(--bad)'], disabled: ['Disabled', 'var(--muted)'] };
+const spill = (st) => { const [t, c] = SST[st] || SST.active; return `<span class="pill" style="color:${c}">${t}</span>`; };
+const when = (ts) => ts ? new Date(ts * 1000).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+const SF = { status: '', q: '', offset: 0 };
+
+async function safetyView() {
+  const p = new URLSearchParams({ status: SF.status, q: SF.q, offset: SF.offset, limit: 25 });
+  const d = await api('GET', '/students?' + p);
+  const tab = (st, label) => `<button type="button" data-st="${st}" class="${SF.status === st ? 'on' : ''}">${label}${st && st !== 'all' ? ' · ' + d.counts[st] : ''}</button>`;
+  const rows = d.items.map((x) => `<tr><td><a class="who" href="#/s/${x.id}"><span style="display:flex;flex-direction:column"><b>${esc(x.name || 'No name')}</b><span class="muted" style="font-size:12px">${esc(x.phone)} · ID ${x.id}</span></span></a></td>
+    <td>${esc(x.teacher_name)}</td><td>${spill(x.status)}${x.status === 'suspended' ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(x.status_until)}</div>` : ''}</td>
+    <td>${esc(x.status_reason || '—')}</td><td>${x.violations}</td><td>${when(x.last_violation)}</td><td style="text-align:right"><a href="#/s/${x.id}"><b>Open</b></a></td></tr>`).join('');
+  const pages = Math.ceil(d.total / 25), cur = Math.floor(SF.offset / 25);
+  return shell('Student safety', `<div class="row"><div><h1>Student safety</h1><span class="sub">Warnings, suspensions and blocks for students of every teacher. Every change is recorded with who did it and why.</span></div></div>
+    <section class="card" style="gap:12px"><div class="presets">${tab('', 'Needs attention')}${tab('review', 'Under review')}${tab('suspended', 'Suspended')}${tab('warning', 'Warning')}${tab('disabled', 'Disabled')}${tab('all', 'All students')}</div>
+      <input type="search" id="sq" placeholder="Search by name, phone or student ID" value="${esc(SF.q)}" aria-label="Search students"></section>
+    <section class="card"><div class="scroll">${d.items.length ? `<table><thead><tr><th>STUDENT</th><th>TEACHER</th><th>STATUS</th><th>REASON</th><th>PROBLEMS</th><th>LAST PROBLEM</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<p class="muted">${SF.q ? 'No student matches this search.' : 'No students here. Everyone is learning normally.'}</p>`}</div>
+      ${pages > 1 ? `<div class="pager"><button type="button" data-pg="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>‹</button><span class="muted">Page ${cur + 1} of ${pages}</span><button type="button" data-pg="${cur + 1}" ${cur + 1 >= pages ? 'disabled' : ''}>›</button></div>` : ''}</section>`);
+}
+function bindSafety() {
+  document.querySelectorAll('[data-st]').forEach((b) => b.onclick = async () => { SF.status = b.dataset.st; SF.offset = 0; $('#app').innerHTML = await safetyView(); bindSafety(); });
+  document.querySelectorAll('[data-pg]').forEach((b) => b.onclick = async () => { SF.offset = Number(b.dataset.pg) * 25; $('#app').innerHTML = await safetyView(); bindSafety(); });
+  let timer; const q = $('#sq');
+  q.oninput = () => { clearTimeout(timer); timer = setTimeout(async () => { SF.q = q.value.trim(); SF.offset = 0; $('#app').innerHTML = await safetyView(); bindSafety();
+    const n = $('#sq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 400); };
+}
+
+const SACT = {
+  warn: { label: 'Give a warning', ok: 'Give warning', text: 'The student can still learn; the app shows a warning.' },
+  suspend: { label: 'Suspend for a while', ok: 'Suspend', text: 'Sir’s AI stops until the time ends. Notes, library and payments stay open.' },
+  review: { label: 'Stop until reviewed', ok: 'Stop access', text: 'Sir’s AI and new payments stop until an admin unblocks. Notes stay open.' },
+  disable: { label: 'Disable account', ok: 'Disable account', text: 'The student can’t log in or open anything, including notes. Use only after a proper review.', danger: true },
+  unblock: { label: 'Unblock', ok: 'Unblock', text: 'The student can learn with Sir again straight away.' },
+};
+function actionDialog(action, reasons, name) {
+  const a = SACT[action];
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', a.label);
+    m.innerHTML = `<form class="box"><h3>${esc(a.label)} · ${esc(name)}</h3><p>${esc(a.text)}</p>
+      <label class="f">Reason<select id="ar" required><option value="">Choose a reason</option>${(action === 'unblock' ? ['Mistake by the system', 'Spoke to the student / parent', 'Time served', 'Other'] : reasons).map((r) => `<option>${esc(r)}</option>`).join('')}</select></label>
+      ${action === 'suspend' ? `<label class="f">For how long<select id="ah"><option value="24">1 day</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label>` : ''}
+      <label class="f">Remarks (only admins see this)<textarea id="am" maxlength="1000" placeholder="What happened, who you spoke to…"></textarea></label>
+      <span class="err" id="ae"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="submit" class="btn ${a.danger ? 'risk' : 'primary'}">${esc(a.ok)}</button></div></form>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m || e.target.closest('[data-c="0"]')) close(null); };
+    m.querySelector('form').onsubmit = (e) => { e.preventDefault(); const reason = m.querySelector('#ar').value;
+      if (!reason) { m.querySelector('#ae').textContent = 'Choose a reason'; return; }
+      close({ action, reason, remarks: m.querySelector('#am').value.trim(), hours: action === 'suspend' ? Number(m.querySelector('#ah').value) : null }); };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('#ar').focus();
+  });
+}
+
+async function studentView(id) {
+  const x = await api('GET', '/students/' + encodeURIComponent(id));
+  const kv = (k, v) => `<span class="muted">${k}</span><b>${v}</b>`;
+  const st = x.status;
+  const acts = (st === 'active' ? ['warn', 'suspend', 'review', 'disable'] : st === 'warning' ? ['unblock', 'suspend', 'review', 'disable']
+    : st === 'disabled' ? ['unblock'] : ['unblock', 'disable']);
+  const btns = acts.map((a, i) => `<button type="button" class="btn ${i === 0 && a === 'unblock' ? 'primary' : 'ghost'}" data-act="${a}" ${a === 'disable' ? 'style="color:var(--bad)"' : ''}>${SACT[a].label}</button>`).join('');
+  const viol = x.violations.map((v) => `<tr><td>${when(v.at)}</td><td><span class="pill" style="color:${v.severity === 'serious' ? 'var(--bad)' : 'var(--warn)'}">${v.severity === 'serious' ? 'Serious' : 'Blocked topic'}</span></td>
+    <td>${esc(v.category || '—')}</td><td style="max-width:420px">${esc(v.question || '')}</td></tr>`).join('');
+  const hist = x.history.map((h) => `<tr><td>${when(h.at)}</td><td>${spill(h.old_status)} → ${spill(h.new_status)}${h.until ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(h.until)}</div>` : ''}</td>
+    <td>${esc(h.by_who === 'auto' ? 'Automatic' : h.by_who === 'system' ? 'System' : h.by_who)}</td><td>${esc(h.reason || '')}${h.remarks ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(h.remarks)}</div>` : ''}</td></tr>`).join('');
+  return shell('Student safety', `<div class="row"><div style="display:flex;gap:14px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="#/safety" aria-label="Back to student safety">${icon('back')}</a>
+      <div><h1>${esc(x.name || 'No name')}</h1><span class="sub">${esc(x.phone)} · ID ${x.id} · ${esc(x.teacher_name)}</span></div></div><div class="row">${btns}</div></div>
+    <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
+      ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
+    <section class="card"><div class="row"><h2>Problems found</h2><span class="muted" style="font-size:12px">What the student wrote · admins only</span></div><div class="scroll">${viol ? `<table><thead><tr><th>WHEN</th><th>TYPE</th><th>ABOUT</th><th>STUDENT WROTE</th></tr></thead><tbody>${viol}</tbody></table>` : '<p class="muted">No problems recorded.</p>'}</div></section>
+    <section class="card"><h2>Block / unblock history</h2><div class="scroll">${hist ? `<table><thead><tr><th>WHEN</th><th>CHANGE</th><th>BY</th><th>REASON · REMARKS</th></tr></thead><tbody>${hist}</tbody></table>` : '<p class="muted">No changes yet.</p>'}</div></section>`);
+}
+async function bindStudent(id) {
+  const x = await api('GET', '/students/' + encodeURIComponent(id));
+  document.querySelectorAll('[data-act]').forEach((b) => b.onclick = async () => {
+    const body = await actionDialog(b.dataset.act, x.reasons, x.name || x.phone); if (!body) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/status`, body); toast('Saved: ' + SACT[body.action].label); $('#app').innerHTML = await studentView(id); bindStudent(id); }
+    catch (e) { toast(e.message); }
+  });
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -589,6 +680,8 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/safety') { app.innerHTML = await safetyView(); bindSafety(); }
+    else if (h.startsWith('#/s/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await studentView(id); bindStudent(id); }
     else {
       app.innerHTML = await teachersView();
       const q = $('#q'); if (q) q.oninput = () => document.querySelectorAll('tbody tr').forEach((r) => r.style.display = r.dataset.name.includes(q.value.toLowerCase()) ? '' : 'none');
