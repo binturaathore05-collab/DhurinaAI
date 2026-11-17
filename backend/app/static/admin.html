@@ -134,6 +134,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
@@ -229,7 +230,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -725,6 +726,46 @@ function bindEmergency() {
   });
 }
 
+// ---------- Audit (A5): verify a reported conversation + who changed what ----------
+const AU = { q: '', vq: '', offset: 0 };
+function verifyResults(v) {
+  if (!AU.vq) return '';
+  if (!v.items.length) return `<p class="muted">No conversation found for “${esc(AU.vq)}”. If a recording shows this code or these words, it may be edited or fake.</p>`;
+  return v.items.map((x) => {
+    const seal = !x.sealed ? ['Recorded before sealing started', 'var(--muted)']
+      : x.untouched && x.chain_ok ? ['Genuine · unchanged since it was sent', 'var(--ok)'] : ['Changed in the database after it was sent', 'var(--bad)'];
+    return `<div class="split" style="gap:8px"><div class="row"><b>${esc(x.code || 'No code')} · ${esc(x.at)} UTC</b><span class="pill" style="color:${seal[1]}">${seal[0]}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px;font-size:13px">
+        <span><span class="muted">Teacher</span> <b>${esc(x.teacher)}</b></span><span><span class="muted">Student</span> <a href="#/s/${x.student_id}">${esc(x.student || x.phone)}</a> ${esc(x.student ? x.phone : '')}</span>
+        <span><span class="muted">Class session</span> <b>${x.session_id ?? '—'}</b></span><span><span class="muted">AI model</span> <b>${esc(x.model || '—')}</b></span>
+        <span><span class="muted">Safety rules</span> <b>${esc(x.policy_version || '—')}</b></span><span><span class="muted">Type</span> <b>${esc(x.origin)}${x.scope && x.scope !== 'study' ? ' · ' + esc(x.scope) : ''}</b></span></div>
+      <div><span class="muted" style="font-size:12px">STUDENT ASKED</span><div>${esc(x.question)}</div></div>
+      <div><span class="muted" style="font-size:12px">SIR ANSWERED (exactly as sent)</span><div style="white-space:pre-wrap">${esc(x.answer)}${x.follow_up ? '\n\n' + esc(x.follow_up) : ''}</div></div></div>`;
+  }).join('');
+}
+async function auditView() {
+  const v = AU.vq ? await api('GET', '/verify?' + new URLSearchParams({ q: AU.vq })) : { items: [] };
+  const d = await api('GET', '/audit?' + new URLSearchParams({ q: AU.q, offset: AU.offset, limit: 50 }));
+  const rows = d.items.map((x) => `<tr><td>${when(x.at)}</td><td>${esc(x.who || '?')}</td><td><b>${esc(x.what)}</b>${x.status >= 400 ? ` <span class="pill" style="color:var(--bad)">refused ${x.status}</span>` : ''}</td>
+    <td class="muted">${esc(x.ip || '')}</td><td style="max-width:360px;font-size:12px;word-break:break-word" class="muted">${esc((x.details || '').slice(0, 240))}</td></tr>`).join('');
+  const pages = Math.ceil(d.total / 50), cur = Math.floor(AU.offset / 50);
+  return shell('Audit', `<div class="row"><div><h1>Audit</h1><span class="sub">Prove what Sir really said, and see who changed what.</span></div></div>
+    <section class="card"><div><h2>Check a reported conversation</h2><span class="sub">Every answer has a code like LT-7F3K-92QD under it in the app. Paste the code from a screenshot or recording — or some of the words.</span></div>
+      <form id="vf" class="row" style="flex-wrap:nowrap"><input type="search" id="vq" style="flex:1" placeholder="LT-XXXX-XXXX or words from the question / answer" value="${esc(AU.vq)}" aria-label="Code or words"><button class="btn primary">Check</button></form>
+      ${verifyResults(v)}</section>
+    <section class="card"><div class="row"><div><h2>Activity log</h2><span class="sub">Every change in the admin panel and teacher dashboards, and every look at a student’s flagged messages. Passwords and keys are never stored.</span></div>
+      <span class="pill" style="color:${d.chain.ok ? 'var(--ok)' : 'var(--bad)'}">${d.chain.ok ? 'Log intact · ' + d.chain.entries + ' entries' : 'Log was changed at entry ' + d.chain.broken_at}</span></div>
+      <input type="search" id="aq" placeholder="Search by person, page or detail" value="${esc(AU.q)}" aria-label="Search the log">
+      <div class="scroll">${rows ? `<table><thead><tr><th>WHEN</th><th>WHO</th><th>WHAT</th><th>FROM</th><th>DETAILS</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Nothing recorded yet.</p>'}</div>
+      ${pages > 1 ? `<div class="pager"><button type="button" data-ap="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>‹</button><span class="muted">Page ${cur + 1} of ${pages}</span><button type="button" data-ap="${cur + 1}" ${cur + 1 >= pages ? 'disabled' : ''}>›</button></div>` : ''}</section>`);
+}
+function bindAudit() {
+  const again = async (focus) => { $('#app').innerHTML = await auditView(); bindAudit(); if (focus) { const n = $(focus); n.focus(); n.setSelectionRange(n.value.length, n.value.length); } };
+  $('#vf').onsubmit = (e) => { e.preventDefault(); AU.vq = $('#vq').value.trim(); again(); };
+  let timer; $('#aq').oninput = () => { clearTimeout(timer); timer = setTimeout(() => { AU.q = $('#aq').value.trim(); AU.offset = 0; again('#aq'); }, 400); };
+  document.querySelectorAll('[data-ap]').forEach((b) => b.onclick = () => { AU.offset = Number(b.dataset.ap) * 50; again(); });
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -751,6 +792,7 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/audit') { $('#app').innerHTML = await auditView(); bindAudit(); }
     else if (h === '#/emergency') { $('#app').innerHTML = await emergencyView(); bindEmergency(); }
     else if (h === '#/safety') { app.innerHTML = await safetyView(); bindSafety(); }
     else if (h.startsWith('#/s/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await studentView(id); bindStudent(id); }

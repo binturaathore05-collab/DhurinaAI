@@ -26,6 +26,8 @@ from .services import limits
 from .services import student_safety
 from .services import moderation
 from .services import switches
+from .services import audit
+import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
@@ -50,7 +52,7 @@ def _client(model: str, timeout: float = 60):
 _fake = None if settings.llm_api_key else FakeLLM()   # local development / tests without an AI key
 _main, _small, _backup = settings.llm_model, settings.llm_small_model, settings.llm_backup_model
 # A4: every job goes to the first model in line that is not switched off in admin → Emergency
-raw_llm = switches.ModelRouter(db, [(_main, _client(_main) or _fake), (_backup, _client(_backup))])
+raw_llm = switches.ModelRouter(db, [(_main, _client(_main) or _fake), (_backup, _client(_backup))], track=True)
 # optional cheaper model for small helper jobs (search keywords, safety check); answers, notes and tests use the
 # main model. Search keywords are never shown to the student, so they skip the output check.
 side_llm = switches.ModelRouter(db, [(_small, _client(_small)), (_main, _client(_main) or _fake), (_backup, _client(_backup))])
@@ -70,8 +72,47 @@ moderator = moderation.Moderator(
 llm = moderation.ModeratedLLM(raw_llm, moderator)
 tutor = Tutor(db, kb, llm, side_llm)
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
+AUDIT_SECRET = settings.audit_secret or hashlib.sha256(f"audit|{settings.jwt_secret}".encode()).hexdigest()
 
 app = FastAPI(title="LiveTeach API", version="0.1.0")
+
+
+# ---------- A5: admin / teacher audit log ----------
+
+_WATCH_GET = re.compile(r"^/admin/api/(students/\d+|verify)$")
+
+
+@app.middleware("http")
+async def _audit_middleware(request: Request, call_next):
+    path, method = request.url.path, request.method
+    watched = (path.startswith("/admin/api/") and (method != "GET" or _WATCH_GET.match(path))) or \
+              (path.startswith("/teacher/") and method != "GET")
+    if not watched:
+        return await call_next(request)
+    body = await request.body() if method != "GET" else b""
+    if path.startswith("/teacher/"):   # who it is, read before the action (a password change ends the old login)
+        who, role = f"teacher:{request.headers.get('x-teacher-id', '?')}", "teacher"
+    else:
+        role, who = "admin", "?"
+        token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if token and path != "/admin/api/login":
+            try:
+                who = admin_auth.read_session(db, token, settings.jwt_secret)["email"]
+            except Exception:
+                who = "invalid login"
+        elif path == "/admin/api/login":
+            try:
+                import json as _json
+                who = str(_json.loads(body).get("email", "?"))[:120]
+            except Exception:
+                pass
+    response = await call_next(request)
+    try:
+        details = audit.details_from_body(body) if body else (str(request.url.query)[:500] if method == "GET" else "")
+        audit.log_action(db, AUDIT_SECRET, who, role, method, path, response.status_code, _client_ip(request), details)
+    except Exception as exc:   # the log must never break the panel; but say so loudly
+        print(f"[audit] could not log {method} {path}: {exc}")
+    return response
 
 
 @app.exception_handler(switches.AIPaused)
@@ -303,6 +344,13 @@ def _check_input(text: str) -> moderation.Verdict:
         raise _retry()
 
 
+def _seal(result, model: str):
+    """A5: stamp the delivered answer with model + policy version + a tamper-evident seal; give it a reference code."""
+    policy = audit.policy_version(db, moderation.POLICY_VERSION, admin.get_settings(db))
+    result.verify_code = audit.stamp_answer(db, AUDIT_SECRET, result.qa_id, model, policy)
+    return result
+
+
 def _safe_reply(student_id: int, teacher: TeacherProfile, question: str, v: moderation.Verdict, session_id):
     """A message the input check stopped: no AI call. Care for a student in distress; a kind refusal for a harmful
     request (serious, counts in A3); a study redirect for a small problem (minor, counts in A3)."""
@@ -315,7 +363,7 @@ def _safe_reply(student_id: int, teacher: TeacherProfile, question: str, v: mode
     else:
         result = tutor._redirect(student_id, question, lang, "blocked", v.category, level, session_id)
     _after_answer(student_id, teacher.id, question, result)
-    return result
+    return _seal(result, "none (fixed reply, no AI)")
 
 
 def _refund(student_id: int) -> None:
@@ -326,12 +374,14 @@ def _refund(student_id: int) -> None:
 
 def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, session_id):
     """A2 stage 2 happens inside the model wrapper: an unsafe AI answer is never stored or shown."""
+    audit.used_model.set("")
     try:
         result = tutor.answer(student_id, teacher, question, session_id)
     except moderation.UnsafeOutput:
         lang = detect_language(question)
-        return tutor._redirect(student_id, question, lang, "stopped", None, style_mod.get_level(db, student_id),
-                               session_id, "safety_replaced")
+        result = tutor._redirect(student_id, question, lang, "stopped", None, style_mod.get_level(db, student_id),
+                                 session_id, "safety_replaced")
+        return _seal(result, f"none (fixed reply; answer of {audit.used_model.get() or 'AI'} stopped)")
     except moderation.Unavailable:
         _refund(student_id)
         raise _retry()
@@ -339,7 +389,7 @@ def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, sess
         _refund(student_id)
         raise HTTPException(503, t("ai_paused", "en"))
     _after_answer(student_id, teacher.id, question, result)
-    return result
+    return _seal(result, audit.used_model.get() or "none (fixed reply, no AI)")
 
 
 @app.post("/class/ask")
@@ -925,6 +975,17 @@ def admin_emergency_set(body: SwitchChange, user=Depends(require_admin)):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return admin_emergency()
+
+
+@app.get("/admin/api/verify", dependencies=[Depends(require_admin)])
+def admin_verify(q: str = ""):
+    """A5: look up a reported conversation by its reference code (LT-XXXX-XXXX) or by its words."""
+    return audit.find(db, AUDIT_SECRET, q)
+
+
+@app.get("/admin/api/audit", dependencies=[Depends(require_admin)])
+def admin_audit_log(q: str = "", offset: int = 0, limit: int = 50):
+    return {**audit.audit_log(db, AUDIT_SECRET, q, offset, limit), "chain": audit.check_audit_chain(db, AUDIT_SECRET)}
 
 
 @app.get("/admin/api/safety-events", dependencies=[Depends(require_admin)])

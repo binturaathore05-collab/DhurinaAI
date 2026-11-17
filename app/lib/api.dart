@@ -83,7 +83,10 @@ class Answer {
   final List<String> sources;
   final String language;
   final Access access;
-  Answer(this.qaId, this.answer, this.followUp, this.origin, this.sources, this.language, this.access);
+  /// Reference code of this answer (e.g. LT-7F3K-92QD): lets Dhurina prove what Sir really said.
+  final String verifyCode;
+  Answer(this.qaId, this.answer, this.followUp, this.origin, this.sources, this.language, this.access,
+      {this.verifyCode = ''});
   factory Answer.fromJson(Map<String, dynamic> j) => Answer(
         (j['qa_id'] as num).toInt(),
         j['answer'] as String? ?? '',
@@ -92,6 +95,7 @@ class Answer {
         ((j['sources'] as List?) ?? []).map((s) => (s as Map)['title'].toString()).toList(),
         j['language'] as String? ?? 'en',
         Access.fromJson(j),
+        verifyCode: j['verify_code'] as String? ?? '',
       );
 }
 

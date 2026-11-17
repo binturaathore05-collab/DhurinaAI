@@ -56,14 +56,17 @@ def ai_paused_for(db: Database, teacher_id: str | None) -> bool:
 class ModelRouter:
     """Calls the first AI model in line that is not switched off. Raises AIPaused when none is left."""
 
-    def __init__(self, db: Database, models: list[tuple[str, object]]):
-        self.db = db
+    def __init__(self, db: Database, models: list[tuple[str, object]], track: bool = False):
+        self.db, self.track = db, track
         self.models = [(name, client) for name, client in models if client is not None]
 
     def pick(self):
         off = off_keys(self.db)
         for name, client in self.models:
             if not name or f"model:{name}" not in off:
+                if self.track:   # A5: remember which model wrote this reply
+                    from .audit import used_model
+                    used_model.set(name or "dev-fake")
                 return client
         raise AIPaused("no AI model available")
 
@@ -81,7 +84,7 @@ class ModelRouter:
         return getattr(self.models[0][1], name)
 
     def __setattr__(self, name, value):
-        if name in ("db", "models"):
+        if name in ("db", "models", "track"):
             object.__setattr__(self, name, value)
         else:
             setattr(self.models[0][1], name, value)

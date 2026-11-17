@@ -62,6 +62,7 @@ class TutorAnswer:
     level: str = "intermediate"       # the student's current level
     check: str | None = None          # "correct" / "wrong" when the student answered Sir's question
     scope: str = "study"              # study | off_topic | blocked | unsafe (education-only mode, A3 ladder)
+    verify_code: str = ""             # A5: reference code shown under the answer (LT-XXXX-XXXX)
 
 
 SCOPES = ("study", "off_topic", "blocked", "unsafe")

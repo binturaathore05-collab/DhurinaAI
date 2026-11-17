@@ -108,3 +108,7 @@ the final provider after testing on the A8 Hindi / Hinglish set (open question 6
 Any admin can switch off AI chat (all / one teacher / one model) and voice / photo at once; turning back on needs a
 note of what was checked. Optional backup model (`LLM_BACKUP_MODEL`) takes over when the main model is off. Limiting
 the switches to certain roles waits for Team & roles (B5).
+
+## Proof & audit — A5 (17 Nov 2026)
+Every answer shows a small reference code (LT-XXXX-XXXX) in the app, so a viral clip can be checked in admin →
+Audit. Every admin / teacher-panel change and every look at flagged student messages is logged (no passwords or keys).
