@@ -248,10 +248,10 @@ class Tutor:
 
 
     def _redirect(self, student_id: int, question: str, lang: str, scope: str, topic, level: str,
-                  session_id: int | None = None) -> TutorAnswer:
+                  session_id: int | None = None, text_key: str = "redirect_study") -> TutorAnswer:
         """Off-topic or blocked: the model's text is never shown. A fixed, polite study redirect goes out instead;
         it is not queued for teacher review and cannot become a verified answer."""
-        text = t("redirect_study", lang)
+        text = t(text_key, lang)
         topic = str(topic).strip()[:80] if scope in ("blocked", "unsafe") and topic else None
         cur = self.db.execute(
             "INSERT INTO qa_history (student_id, question, answer, follow_up, origin, sources, language, needs_review, "

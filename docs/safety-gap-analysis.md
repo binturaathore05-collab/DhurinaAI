@@ -111,7 +111,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | # | Item | Why first |
 |---|---|---|
 | A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) — **built 17 Nov 2026** (see note below) | Small, removes a false sense of safety |
-| A2 | Input & output moderation with fail-safe (section 6, 16) | Core protection |
+| A2 | Input & output moderation with fail-safe (section 6, 16) — **built 17 Nov 2026** (see note below) | Core protection |
 | A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) — **built 17 Nov 2026** (see note below) | Stop misuse |
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) | Emergency control |
 | A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) | Prove what the AI really said if a recording goes viral |
@@ -158,6 +158,24 @@ a student who shares sadness, bullying or thoughts of self-harm is never marked 
 them to talk to a parent / trusted adult and gives Tele-MANAS 14416. Limit: this still relies on the AI's own
 judgement; A2 adds an independent check. Not yet: teacher view of flags (owner decision 5), parent notification
 (Phase B), a separate admin audit log (A5).
+
+**A2 as built:** an independent safety check (`services/moderation.py`) sits on both sides of the AI teacher.
+**Student message:** first free phrase rules (Hindi / Hinglish / English / Punjabi: rule-breaking attempts, porn,
+bomb-making, drug-making, clear self-harm words), then the safety model. Harmful → a kind, firm refusal, no AI call,
+no demo question used, counts as serious in A3; small problems (insults, someone's private details, risky advice) →
+study redirect, minor in A3; sadness / self-harm → a warm fixed reply with Tele-MANAS 14416, never a violation. The
+student's chosen name and written / oral test answers are checked the same way. **AI text:** every answer, class
+notes, test question and test feedback is checked before it is stored or shown; unsafe → never shown, replaced by a
+safe reply ("let me explain in a better way"), logged as "AI answer stopped" (not counted against the student; unsafe
+class notes fall back to Sir's already-checked answers). **Fail-safe:** if the checker is down, slow or answers
+nonsense, nothing unchecked goes out — "Sir will answer in a moment, please try again", and the demo question is
+given back. **Cost:** the same text is never checked twice (cache); provider is chosen by `MODERATION_PROVIDER`:
+`llm` (our own AI, cheap small model, understands study context — default when an AI key is set) or `openai` (free
+moderation endpoint; "violence" alone is ignored on student messages so history questions aren't blocked). Owner
+decision 6 (provider) is still to be made after the A8 Hindi/Hinglish test set. Every event keeps model + policy
+version. **Admin → Student safety → "Safety check":** counts for the last 24 h and the latest events (what, result,
+category, student, text); a red line warns if the safety model is off. Not yet: per-filter on/off and strict /
+medium / relaxed (Safety Center, section 3), alerts to the safety team (B7), incident review workflow (B4).
 
 ### Phase B — also before launch
 | # | Item |

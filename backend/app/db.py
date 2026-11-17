@@ -194,6 +194,29 @@ CREATE TABLE IF NOT EXISTS student_status_log (  -- A3: every block / unblock, b
     at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS safety_events (     -- A2: every input / output the safety check stopped, or failed on
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    student_id INTEGER,
+    teacher_id TEXT,
+    stage TEXT NOT NULL,                        -- input | output
+    category TEXT,
+    severity TEXT,
+    source TEXT,                                -- rules | model | cache
+    action TEXT NOT NULL,                       -- refused | redirected | care_reply | replaced | retry
+    excerpt TEXT,
+    model TEXT,
+    policy_version TEXT
+);
+CREATE INDEX IF NOT EXISTS safety_events_at ON safety_events (at);
+
+CREATE TABLE IF NOT EXISTS moderation_cache (  -- A2: the same text is never checked (paid for) twice
+    key TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
