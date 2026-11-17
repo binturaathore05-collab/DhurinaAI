@@ -30,6 +30,7 @@ from .services import audit
 from . import ai_setup
 from . import safety_lab
 from .services import consent
+from .services import safety_dashboard
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -1076,6 +1077,12 @@ def admin_verify(q: str = ""):
 @app.get("/admin/api/audit", dependencies=[Depends(require_admin)])
 def admin_audit_log(q: str = "", offset: int = 0, limit: int = 50):
     return {**audit.audit_log(db, AUDIT_SECRET, q, offset, limit), "chain": audit.check_audit_chain(db, AUDIT_SECRET)}
+
+
+@app.get("/admin/api/safety-dashboard", dependencies=[Depends(require_admin)])
+def admin_safety_dashboard(days: int = 30, teacher: str = ""):
+    """B3: safety numbers for a date range (and optionally one teacher)."""
+    return safety_dashboard.build(db, days, teacher)
 
 
 @app.get("/admin/api/safety-events", dependencies=[Depends(require_admin)])

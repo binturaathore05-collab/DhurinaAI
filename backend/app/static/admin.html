@@ -34,6 +34,14 @@
   .btn.ghost { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
   .btn:disabled { opacity: .6; cursor: wait; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+  .chart { display: flex; flex-direction: column; gap: 8px; }
+  .dbars { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 1px solid var(--border); }
+  .dcol { flex: 1 1 0; min-width: 2px; height: 100%; display: flex; align-items: flex-end; position: relative; outline: none; }
+  .dfill { width: 100%; background: #0D9488; border-radius: 4px 4px 0 0; }
+  .dcol:hover .dfill, .dcol:focus .dfill { background: #0F766E; }
+  .dtip { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #111827; color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; z-index: 5; }
+  .dcol:hover .dtip, .dcol:focus .dtip { display: block; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
   .stat { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.05); padding: 18px; display: flex; flex-direction: column; gap: 6px; }
   .stat .k { color: var(--muted); font-size: 13px; } .stat .v { font-size: 26px; font-weight: 800; } .stat .n { color: var(--muted); font-size: 12px; }
@@ -134,6 +142,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  dash: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   lab: '<path d="M9 3h6M10 3v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
   audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
@@ -231,7 +240,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety-dash', 'dash', 'Safety dashboard')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -819,6 +828,52 @@ function bindTests() {
   };
 }
 
+// ---------- Safety dashboard (B3) ----------
+const DF = { days: 30, teacher: '' };
+const BAR = '#0D9488';   // validated chart colour (chroma + contrast on white)
+function barChart(title, rows, key, note) {
+  const max = Math.max(1, ...rows.map((r) => r[key]));
+  const total = rows.reduce((a, r) => a + r[key], 0);
+  const label = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const bars = rows.map((r) => `<div class="dcol" tabindex="0" aria-label="${label(r.day)}: ${r[key]}"><div class="dfill" style="height:${Math.max(r[key] ? 4 : 0, Math.round(r[key] / max * 100))}%"></div><span class="dtip">${label(r.day)} · <b>${r[key]}</b></span></div>`).join('');
+  return `<div class="chart"><div class="row" style="align-items:baseline"><b>${esc(title)}</b><span class="muted" style="font-size:13px">${total} in all${note ? ' · ' + note : ''}</span></div>
+    <div class="dbars" role="img" aria-label="${esc(title)} per day, highest ${max}">${bars}</div>
+    <div class="row muted" style="font-size:11px"><span>${label(rows[0].day)}</span><span>max ${max}/day</span><span>${label(rows[rows.length - 1].day)}</span></div>
+    <details><summary class="muted" style="font-size:12px;cursor:pointer">Show as table</summary><div class="scroll" style="max-height:220px"><table><tbody>${rows.slice().reverse().map((r) => `<tr><td>${label(r.day)}</td><td>${r[key]}</td></tr>`).join('')}</tbody></table></div></details></div>`;
+}
+async function dashView() {
+  const d = await api('GET', '/safety-dashboard?' + new URLSearchParams({ days: DF.days, teacher: DF.teacher }));
+  const c = d.conversations, ai = d.ai, st = d.students;
+  const pct = ai.tried ? Math.round(ai.stopped / ai.tried * 100) : 100;
+  const period = [7, 30, 90].map((n) => `<button type="button" data-days="${n}" class="${DF.days === n ? 'on' : ''}">Last ${n} days</button>`).join('');
+  const maxCat = Math.max(1, ...d.categories.map((x) => x.total));
+  const cats = d.categories.map((x) => `<tr><td>${esc(x.label)}</td><td style="width:40%"><div style="display:flex;align-items:center;gap:8px"><div style="height:10px;border-radius:0 4px 4px 0;background:${BAR};width:${Math.max(2, Math.round(x.total / maxCat * 100))}%"></div><b>${x.total}</b></div></td>
+    <td>${x.students}</td><td>${x.serious}</td><td>${x.ai}</td></tr>`).join('');
+  const models = d.models.map((m) => `<tr><td><b>${esc(m.model)}</b></td><td>${m.answers}</td><td>${m.tried}</td><td>${m.stopped}</td>
+    <td><span class="pill" style="color:${m.tried === m.stopped ? 'var(--ok)' : 'var(--bad)'}">${m.tried ? Math.round(m.stopped / m.tried * 100) + '%' : '—'}</span></td></tr>`).join('');
+  const t = d.tests;
+  return shell('Safety dashboard', `<div class="row"><div><h1>Safety dashboard</h1><span class="sub">What the safety system did — for every teacher, or one.</span></div></div>
+    <section class="card" style="gap:10px"><div class="row" style="justify-content:flex-start;gap:12px"><div class="presets">${period}</div>
+      <select id="dteach" aria-label="Teacher" style="max-width:260px"><option value="">All teachers</option>${d.teachers.map((x) => `<option value="${esc(x.id)}" ${DF.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div></section>
+    <section class="card" style="border-color:${ai.reported_failures ? 'var(--bad)' : 'var(--ok)'};background:${ai.reported_failures ? '#FEF2F2' : '#F0FDF4'}">
+      <span class="muted" style="font-size:13px;font-weight:600">MOST IMPORTANT</span>
+      <b style="font-size:22px">The AI tried to answer unsafely ${ai.tried} ${ai.tried === 1 ? 'time' : 'times'} — the safety check stopped ${ai.stopped} (${pct}%).</b>
+      <span class="muted">Every answer is checked before the student sees it. Unsafe answers reported after reaching a student: <b>${ai.reported_failures}</b> (the review center will collect these).</span></section>
+    <div class="stats">${stat('Questions to Sir', c.questions, c.students + ' students')}${stat('Blocked questions', c.blocked, 'harmful or blocked topics')}${stat('Care replies', c.care, 'upset students given help')}
+      ${stat('Off-topic, steered back', c.off_topic, 'not punished')}${stat('Safety check could not run', ai.check_failed, 'nothing unchecked was sent')}</div>
+    <div class="stats">${stat('Flagged messages', st.flagged, 'counted for warnings / blocks')}${stat('Warnings', st.warnings, 'automatic')}${stat('Automatic blocks', st.auto_blocks, 'suspended or sent for review')}
+      ${stat('Blocked by admins', st.admin_blocks, '')}${stat('Unblocked by admins', st.unblocks, '')}${stat('Waiting for review', st.review_pending, 'right now · <a href="#/safety">open</a>')}</div>
+    <section class="card"><h2>Day by day</h2><div class="charts">${barChart('Questions to Sir', d.daily, 'questions')}${barChart('Blocked questions', d.daily, 'blocked')}${barChart('AI answers stopped (never shown)', d.daily, 'ai_stopped')}</div></section>
+    <section class="card"><h2>By category</h2><div class="scroll">${cats ? `<table><thead><tr><th>CATEGORY</th><th>TOTAL</th><th>FROM STUDENTS</th><th>OF WHICH SERIOUS</th><th>AI ANSWERS STOPPED</th></tr></thead><tbody>${cats}</tbody></table>` : '<p class="muted">Nothing stopped in this period.</p>'}</div></section>
+    <section class="card"><h2>By AI model</h2><div class="scroll">${models ? `<table><thead><tr><th>MODEL</th><th>ANSWERS GIVEN</th><th>TRIED UNSAFE</th><th>STOPPED</th><th>STOPPED %</th></tr></thead><tbody>${models}</tbody></table>` : '<p class="muted">No answers in this period.</p>'}</div></section>
+    <section class="card"><div class="row"><h2>Safety tests</h2><a href="#/tests">Open</a></div>${t ? `<span><span class="pill" style="color:${t.passed ? 'var(--ok)' : 'var(--bad)'}">${t.passed ? 'Passed' : 'Failed'}</span> <span class="muted">${when(t.at)} · ${t.total - t.failed}/${t.total} checks passed</span></span>` : '<p class="muted">Not run with a real AI model yet (needs the AI key on the server).</p>'}</section>`);
+}
+function bindDash() {
+  const again = async () => { $('#app').innerHTML = await dashView(); bindDash(); };
+  document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { DF.days = Number(b.dataset.days); again(); });
+  $('#dteach').onchange = (e) => { DF.teacher = e.target.value; again(); };
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -845,6 +900,7 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/safety-dash') { $('#app').innerHTML = await dashView(); bindDash(); }
     else if (h === '#/tests') { $('#app').innerHTML = await testsView(); bindTests(); }
     else if (h === '#/audit') { $('#app').innerHTML = await auditView(); bindAudit(); }
     else if (h === '#/emergency') { $('#app').innerHTML = await emergencyView(); bindEmergency(); }

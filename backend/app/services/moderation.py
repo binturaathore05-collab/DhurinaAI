@@ -230,11 +230,13 @@ class Moderator:
 
     def log(self, stage: str, v: Verdict, text: str, action: str) -> None:
         ctx = request_ctx.get()
+        from .audit import used_model   # B3: which AI model wrote the answer that was stopped
         self.db.execute(
             "INSERT INTO safety_events (at, student_id, teacher_id, stage, category, severity, source, action, excerpt, "
-            "model, policy_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "model, policy_version, answer_model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (time.time(), ctx.get("student_id"), ctx.get("teacher_id"), stage, v.category, v.severity, v.source,
-             action, (text or "")[:1000], self.model_name or self.provider, POLICY_VERSION))
+             action, (text or "")[:1000], self.model_name or self.provider, POLICY_VERSION,
+             (used_model.get() or None) if stage == "output" else None))
 
 
 def _strings(value, skip=("scope", "blocked_topic", "language", "emotion")) -> list[str]:

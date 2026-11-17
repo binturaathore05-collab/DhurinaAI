@@ -324,6 +324,7 @@ class Database:
         ("saved_notes", "qa_upto", "INTEGER"),
         ("students", "status", "TEXT NOT NULL DEFAULT 'active'"), ("students", "status_until", "REAL"),
         ("students", "status_reason", "TEXT"),
+        ("safety_events", "answer_model", "TEXT"),
         ("students", "class_level", "TEXT"), ("students", "is_adult", "INTEGER"),
         ("students", "consent_status", "TEXT"), ("students", "parent_phone", "TEXT"), ("students", "consent_at", "REAL"),
         ("qa_history", "model", "TEXT"), ("qa_history", "policy_version", "TEXT"), ("qa_history", "prev_hash", "TEXT"),

@@ -250,7 +250,16 @@ explained, not whether. Rules changes change the policy version (A5) and re-run 
 include 6 age-group cases. With the free OpenAI checker the age guidance can't be given (fixed categories); the
 phrase rules and Sir's own instructions still apply. App: wakes the server while the student types the number and
 says "Connecting to Sir…" if it takes long.
-| B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) |
+
+**B3 as built (17 Nov 2026):** admin → **Safety dashboard**, for the last 7 / 30 / 90 days and all teachers or one.
+Top: the most important number — "The AI tried to answer unsafely X times — the safety check stopped X (100%)" plus
+unsafe answers reported after reaching a student (filled by the review center, B4). Tiles: questions to Sir,
+students, blocked questions, care replies, off-topic steered back, times the check could not run; flagged messages,
+warnings, automatic blocks, blocks / unblocks by admins, waiting for review. Day-by-day charts (questions, blocked,
+AI answers stopped) with hover values and a table view; by category (from students vs. AI answers stopped, how many
+serious); by AI model (answers given, tried unsafe, stopped %); latest safety-test result. Each stopped AI answer now
+records which model wrote it.
+| B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model. |
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21) |
