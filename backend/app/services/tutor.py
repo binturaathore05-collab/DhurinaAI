@@ -55,9 +55,14 @@ def is_save_command(text: str) -> bool:
 
 @dataclass
 class TeacherProfile:
-    id: str
+    id: str                      # the institute / app (teachers.id)
     name: str
     subject: str = ""
+    faculty: object | None = None        # multi-teacher: the AI teacher answering now (faculty.Faculty)
+    taken_over_from: str | None = None   # name of the teacher who just handed the student over
+
+    def as_faculty(self, f, taken_over_from: str | None = None) -> "TeacherProfile":
+        return TeacherProfile(self.id, f.name, f.subject_text or self.subject, f, taken_over_from)
 
 
 @dataclass
@@ -76,6 +81,9 @@ class TutorAnswer:
     check: str | None = None          # "correct" / "wrong" when the student answered Sir's question
     scope: str = "study"              # study | off_topic | blocked | unsafe (education-only mode, A3 ladder)
     verify_code: str = ""             # A5: reference code shown under the answer (LT-XXXX-XXXX)
+    faculty: dict | None = None       # multi-teacher: who is answering (id, name, avatar_url, voice_id, subjects)
+    handover: str = ""                # fixed line said before a switch ("…main aapko Maths Sir se jod raha hoon")
+    switched: bool = False
 
 
 SCOPES = ("study", "off_topic", "blocked", "unsafe")
@@ -207,13 +215,26 @@ class Tutor:
         policy = age_policy.for_student(self.db, student_id, admin_mod.get_settings(self.db))
         if policy:
             rules += "\n" + age_policy.TEACH[policy["strictness"]]
+        f = teacher.faculty
+        if f is not None and f.instructions:
+            rules += "\nYour own teaching instructions (from your institute):\n" + f.instructions
+        if teacher.taken_over_from:
+            rules += (f"\nThe student was just handed over to you from {teacher.taken_over_from} (the institute's other "
+                      "teacher). Greet them in one short line as the new teacher, then answer.")
         system = _system_prompt(teacher, lang.english_name, rules, _scope_rules(teacher, self.blocked_topics() + (policy["blocked_topics"] if policy else [])))
         recent = list(reversed(self.db.all("SELECT question, answer, follow_up FROM qa_history WHERE student_id = ? "
                                            "ORDER BY id DESC LIMIT 3", (student_id,))))
         context = _history_block(recent)
 
-        verified = self.kb.find_verified(teacher.id, question)
-        hits = [] if verified else self.kb.search(teacher.id, self._search_queries(question))
+        verified = self.kb.find_verified(teacher.id, question, faculty_id=f.id if f is not None else None)
+        where = "own"
+        if verified:
+            hits = []
+        elif f is not None:   # multi-teacher: only this teacher's content, then the attached Common Library
+            from . import library
+            hits, where = library.search(self.db, f, self._search_queries(question))
+        else:
+            hits = self.kb.search(teacher.id, self._search_queries(question))
 
         origin, sources, reply = "general_ai", [], None
         if verified or hits:
@@ -225,6 +246,8 @@ class Tutor:
                 origin = "teacher_notes"
                 used = [i for i in reply.get("used_sources", []) if isinstance(i, int) and 1 <= i <= len(hits)] or [1]
                 sources = [{"title": hits[i - 1].source_title, "ref": hits[i - 1].source_ref} for i in used]
+                if where == "common":   # the student never sees where content came from: it is this teacher's
+                    sources = [{"title": t("source_teacher_notes", lang.code), "ref": None}]
             else:
                 reply = None  # notes did not cover it: fall through to general knowledge
         if reply is None:
@@ -297,6 +320,6 @@ def approve_answer(db: Database, teacher_id: str, qa_id: int, corrected_answer: 
     if row is None:
         raise KeyError(qa_id)
     answer = corrected_answer or row["answer"]
-    db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language) VALUES (?, ?, ?, ?)",
-               (teacher_id, row["question"], answer, row["language"]))
+    db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language, faculty_id) VALUES (?, ?, ?, ?, ?)",
+               (teacher_id, row["question"], answer, row["language"], row["faculty_id"]))
     db.execute("UPDATE qa_history SET needs_review = 0 WHERE id = ?", (qa_id,))

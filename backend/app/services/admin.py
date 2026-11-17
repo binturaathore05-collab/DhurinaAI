@@ -136,6 +136,8 @@ def save_teacher(db: Database, data: dict, creating: bool) -> dict:
     tid = str(data.get("id", "")).strip().lower()
     if not _ID.match(tid):
         raise AdminError("Teacher id: lower-case letters, numbers and '-' only, starting with a letter")
+    if tid == "common":   # reserved for Dhurina's Common Library (multi-teacher content library)
+        raise AdminError("This id is reserved; please choose another")
     exists = db.one("SELECT * FROM teachers WHERE id = ?", (tid,))
     if creating and exists:
         raise AdminError(f"A teacher with id '{tid}' already exists")

@@ -68,8 +68,9 @@ def review_decide(db: Database, teacher_id: str, decisions: list[dict]) -> dict:
         marks = ",".join("?" * len(own))
         if d.get("action") == "approve":
             answer = (d.get("answer") or "").strip() or rows[0]["answer"]
-            cur = db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language) VALUES (?, ?, ?, ?)",
-                             (teacher_id, rows[0]["question"], answer, rows[0]["language"]))
+            cur = db.execute("INSERT INTO verified_answers (teacher_id, question, answer, language, faculty_id) "
+                             "VALUES (?, ?, ?, ?, ?)",
+                             (teacher_id, rows[0]["question"], answer, rows[0]["language"], rows[0]["faculty_id"]))
             db.execute(f"UPDATE qa_history SET needs_review = 0, review_status = 'approved', reviewed_at = CURRENT_TIMESTAMP, "
                        f"verified_id = ? WHERE id IN ({marks})", (cur.lastrowid, *own))
         elif d.get("action") == "reject":
