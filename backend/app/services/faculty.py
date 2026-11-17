@@ -169,10 +169,10 @@ def ensure_default(db: Database, institute_id: str) -> None:
     t = db.one("SELECT name, subject, avatar_url FROM teachers WHERE id = ?", (institute_id,))
     if t is None:
         return
-    subj = guess_subject_key(t["subject"] or "") or GENERAL
+    subjects = subject_candidates(t["subject"] or "") or [GENERAL]   # "Rajasthan History" → history + rajasthan
     db.execute("INSERT INTO faculty (teacher_id, name, subjects, keywords, avatar_url, active, sort, created_at) "
                "VALUES (?, ?, ?, '[]', ?, 1, 0, ?)",
-               (institute_id, t["name"], json.dumps([subj]), t["avatar_url"], time.time()))
+               (institute_id, t["name"], json.dumps(subjects), t["avatar_url"], time.time()))
 
 
 def ensure_all(db: Database) -> None:

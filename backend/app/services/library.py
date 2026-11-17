@@ -17,6 +17,7 @@ import json
 import re
 import time
 import zipfile
+from dataclasses import dataclass
 
 from ..db import Database
 from . import faculty as fac
@@ -41,27 +42,119 @@ def kind_of(filename: str) -> str:
     return k
 
 
-def extract_text(kind: str, data: bytes) -> str:
+@dataclass
+class Extracted:
+    text: str
+    pages: int = 0          # pages in the PDF (0 for Word / text)
+    pages_read: int = 0     # pages that gave text
+    unclear: float = 0.0    # share of broken characters (�, boxes, a vowel sign with no letter before it)
+
+
+# Hindi PDFs: the plain PDF readers drop or scramble matras and joined letters (क्ष, ज्ञ, प्र …).
+# So every reader that is there is tried, and the one that gives the cleanest, most complete text wins:
+# poppler (pdftotext, in the server image: best for Hindi) → pdfium → pypdf.
+_BAD = re.compile(r"[\ufffd\ue000-\uf8ff\x00-\x08\x0b\x0e-\x1f\u2261]")
+_SIGN = "\u0901-\u0903\u093e-\u094d\u0962\u0963"
+_ORPHAN = re.compile(rf"(?:^|(?<=[\s(\"'“‘\-]))[{_SIGN}]", re.M)
+_CONS = "\u0915-\u0939\u0958-\u095f"
+_I_BEFORE = re.compile(rf"(?<![{_CONS}\u093c])\u093f\s?([{_CONS}]\u093c?(?:\u094d[{_CONS}]\u093c?)*)")
+_LETTER = re.compile(r"[\w\u0900-\u0a7f]")
+
+
+def unclear_share(text: str) -> float:
+    letters = len(_LETTER.findall(text))
+    return (len(_BAD.findall(text)) + len(_ORPHAN.findall(text))) / letters if letters else 0.0
+
+
+def clean_text(text: str) -> str:
+    """Tidy what a PDF reader gave: "ि" written before its letter goes after it (िकया → किया), markdown marks
+    left in AI-made notes (**bold**, ## headings) go, extra spaces go."""
+    text = _I_BEFORE.sub(lambda m: m.group(1) + "\u093f", text)
+    text = re.sub(r"\*\*|__", "", text)
+    text = re.sub(r"(?m)^\s*#{1,6}\s+", "", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _pages_poppler(data: bytes) -> list[str] | None:
+    import shutil
+    import subprocess
+    import tempfile
+    exe = shutil.which("pdftotext")
+    if not exe:
+        return None
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+        f.write(data)
+        f.flush()
+        try:
+            out = subprocess.run([exe, "-q", "-enc", "UTF-8", f.name, "-"], capture_output=True, timeout=120)
+        except Exception:
+            return None
+    if out.returncode != 0:
+        return None
+    pages = out.stdout.decode("utf-8", "replace").split("\f")
+    return pages[:-1] if pages and not pages[-1].strip() else pages
+
+
+def _pages_pdfium(data: bytes) -> list[str] | None:
+    try:
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(data)
+        return [doc[i].get_textpage().get_text_range() for i in range(len(doc))]
+    except Exception:
+        return None
+
+
+def _pages_pypdf(data: bytes) -> list[str] | None:
+    try:
+        from pypdf import PdfReader
+        return [(p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages]
+    except Exception:
+        return None
+
+
+def read_pdf(data: bytes) -> Extracted:
+    found = []
+    for rank, reader in enumerate((_pages_poppler, _pages_pdfium, _pages_pypdf)):
+        pages = reader(data)
+        if pages is None:
+            continue
+        text = clean_text("\n\n".join(p.strip() for p in pages))
+        letters = len(_LETTER.findall(text))
+        bad = unclear_share(text)
+        found.append((letters * (1 - 5 * bad), rank, Extracted(text, len(pages), sum(1 for p in pages if p.strip()), bad)))
+    if not found:
+        raise LibraryError("Could not open this PDF")
+    best = max(f[0] for f in found)
+    # near the best (within 1%), the better reader wins: poppler keeps Hindi words and spaces right
+    return min((f for f in found if f[0] >= best * 0.99), key=lambda f: f[1])[2]
+
+
+def read_file(kind: str, data: bytes) -> Extracted:
+    if kind == "pdf":
+        return read_pdf(data)
     if kind == "txt":
         for enc in ("utf-8-sig", "utf-16", "cp1252"):
             try:
-                return data.decode(enc)
+                text = clean_text(data.decode(enc))
+                return Extracted(text, unclear=unclear_share(text))
             except UnicodeDecodeError:
                 continue
         raise LibraryError("Could not read this text file")
-    if kind == "docx":
-        try:
-            xml = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml").decode("utf-8")
-        except Exception:
-            raise LibraryError("Could not open this Word file")
-        xml = re.sub(r"</w:p>", "\n\n", xml)
-        return re.sub(r"<[^>]+>", "", xml).replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     try:
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join((p.extract_text() or "") for p in reader.pages)
+        xml = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml").decode("utf-8")
     except Exception:
-        raise LibraryError("Could not open this PDF")
+        raise LibraryError("Could not open this Word file")
+    xml = re.sub(r"</w:p>", "\n\n", xml)
+    text = clean_text(re.sub(r"<[^>]+>", "", xml).replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">"))
+    return Extracted(text, unclear=unclear_share(text))
+
+
+def extract_text(kind: str, data: bytes) -> str:
+    return read_file(kind, data).text
+
+
+UNCLEAR_LIMIT = 0.02   # more than 2 in 100 letters broken → the file waits for a person ("Text unclear")
 
 
 def normalized(text: str) -> str:
@@ -119,11 +212,15 @@ def safety_scan(moderator, text: str) -> tuple[str, str | None]:
 
 # ---------- upload ----------
 
-def _status(subject: str | None, safety: str) -> str:
-    if safety == "blocked":
+def _status(subject: str | None, file_row, accepted=0) -> str:
+    """blocked (safety) > checking (safety check could not run) > unclear (broken text, until a person accepts it)
+    > pending (subject not decided) > live."""
+    if file_row["safety"] == "blocked":
         return "blocked"
-    if safety == "retry":
+    if file_row["safety"] == "retry":
         return "checking"
+    if (file_row["unclear"] or 0) > UNCLEAR_LIMIT and not accepted:
+        return "unclear"
     return "live" if subject else "pending"
 
 
@@ -144,7 +241,8 @@ def upload(db: Database, owner: str, filename: str, data: bytes, *, subject: str
     sha = hashlib.sha256(data).hexdigest()
     row = db.one("SELECT * FROM content_files WHERE sha256 = ?", (sha,))
     if row is None:
-        text = extract_text(kind, data)
+        got = read_file(kind, data)
+        text = got.text
         if len(normalized(text)) < 20:
             raise LibraryError("No readable text in this file (a scanned PDF needs typed text for now)")
         _, th = fingerprints(data, text)
@@ -153,8 +251,9 @@ def upload(db: Database, owner: str, filename: str, data: bytes, *, subject: str
             safety, note = safety_scan(moderator, text)
             with db.tx() as c:
                 cur = c.execute("INSERT INTO content_files (sha256, text_hash, size, kind, text, safety, safety_note, "
-                                "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                (sha, th, len(data), kind, text, safety, note, time.time()))
+                                "created_at, pages, pages_read, unclear) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                (sha, th, len(data), kind, text, safety, note, time.time(), got.pages, got.pages_read,
+                                 round(got.unclear, 4)))
                 fid = cur.lastrowid
                 for ch in chunk_text(text):
                     c.execute("INSERT INTO content_chunks (file_id, text) VALUES (?, ?)", (fid, ch))
@@ -182,13 +281,13 @@ def upload(db: Database, owner: str, filename: str, data: bytes, *, subject: str
     cur = db.execute(
         "INSERT INTO content_links (file_id, owner, title, subject, faculty_id, assigned_by, status, allow_common, "
         "uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (row["id"], owner, title, chosen, f_given.id if f_given else None, how, _status(chosen, row["safety"]),
+        (row["id"], owner, title, chosen, f_given.id if f_given else None, how, _status(chosen, row),
          int(bool(allow_common)), by, time.time()))
     return link_view(db, cur.lastrowid)
 
 
 def link_view(db: Database, link_id: int) -> dict:
-    r = db.one("SELECT l.*, f.kind, f.size, f.safety, f.safety_note FROM content_links l "
+    r = db.one("SELECT l.*, f.kind, f.size, f.safety, f.safety_note, f.pages, f.pages_read, f.unclear FROM content_links l "
                "JOIN content_files f ON f.id = l.file_id WHERE l.id = ?", (link_id,))
     if r is None:
         raise KeyError(link_id)
@@ -196,6 +295,8 @@ def link_view(db: Database, link_id: int) -> dict:
                              "kind", "size", "created_at")}
     out["subject_label"] = fac.subject_label(r["subject"]) if r["subject"] else None
     out["safety_note"] = r["safety_note"] if r["status"] in ("blocked", "checking") else None
+    out.update(pages=r["pages"] or 0, pages_read=r["pages_read"] or 0, unclear_percent=round((r["unclear"] or 0) * 100, 1),
+               accepted=bool(r["accepted"]))
     return out
 
 
@@ -209,7 +310,7 @@ def _link(db: Database, owner: str, link_id: int):
 def list_links(db: Database, owner: str, status: str = "", subject: str = "", q: str = "") -> dict:
     rows = db.all("SELECT id FROM content_links WHERE owner = ? ORDER BY id DESC", (owner,))
     items = [link_view(db, r["id"]) for r in rows]
-    counts = {s: sum(1 for i in items if i["status"] == s) for s in ("live", "pending", "blocked", "checking")}
+    counts = {s: sum(1 for i in items if i["status"] == s) for s in ("live", "pending", "unclear", "blocked", "checking")}
     if status:
         items = [i for i in items if i["status"] == status]
     if subject:
@@ -230,16 +331,30 @@ def assign(db: Database, owner: str, link_id: int, subject: str | None, faculty_
         subject = f.subjects[0]
     if not subject:
         raise LibraryError("Choose a subject or a teacher")
-    safety = db.one("SELECT safety FROM content_files WHERE id = ?", (r["file_id"],))["safety"]
+    frow = db.one("SELECT * FROM content_files WHERE id = ?", (r["file_id"],))
     db.execute("UPDATE content_links SET subject = ?, faculty_id = ?, assigned_by = 'admin', status = ? WHERE id = ?",
-               (subject, f.id if f else None, _status(subject, safety), link_id))
+               (subject, f.id if f else None, _status(subject, frow, r["accepted"]), link_id))
     return link_view(db, link_id)
 
 
-def preview(db: Database, owner: str, link_id: int, chars: int = 4000) -> dict:
+def preview(db: Database, owner: str, link_id: int, offset: int = 0, chars: int = 60000) -> dict:
+    """The file's text as the teachers use it — the whole of it, in parts for very big books."""
     r = _link(db, owner, link_id)
     f = db.one("SELECT text FROM content_files WHERE id = ?", (r["file_id"],))
-    return {**link_view(db, link_id), "text": f["text"][:chars], "more": len(f["text"]) > chars}
+    total = len(f["text"])
+    offset = max(0, min(int(offset), total))
+    end = min(total, offset + max(1000, min(int(chars), 200000)))
+    return {**link_view(db, link_id), "text": f["text"][offset:end], "offset": offset, "total_chars": total,
+            "next_offset": end if end < total else None, "more": end < total}
+
+
+def accept(db: Database, owner: str, link_id: int) -> dict:
+    """A person read the "Text unclear" file and says it is good enough: it can go live."""
+    r = _link(db, owner, link_id)
+    frow = db.one("SELECT * FROM content_files WHERE id = ?", (r["file_id"],))
+    db.execute("UPDATE content_links SET accepted = 1, status = ? WHERE id = ?",
+               (_status(r["subject"], frow, 1), link_id))
+    return link_view(db, link_id)
 
 
 def _drop_file_if_unused(db: Database, file_id: int) -> None:
@@ -283,8 +398,9 @@ def recheck(db: Database, link_id: int, moderator) -> dict:
     if f["safety"] == "retry":
         safety, note = safety_scan(moderator, f["text"])
         db.execute("UPDATE content_files SET safety = ?, safety_note = ? WHERE id = ?", (safety, note, f["id"]))
-        for l in db.all("SELECT id, subject FROM content_links WHERE file_id = ?", (f["id"],)):
-            db.execute("UPDATE content_links SET status = ? WHERE id = ?", (_status(l["subject"], safety), l["id"]))
+        f = db.one("SELECT * FROM content_files WHERE id = ?", (f["id"],))
+        for l in db.all("SELECT id, subject, accepted FROM content_links WHERE file_id = ?", (f["id"],)):
+            db.execute("UPDATE content_links SET status = ? WHERE id = ?", (_status(l["subject"], f, l["accepted"]), l["id"]))
     return link_view(db, link_id)
 
 
@@ -298,11 +414,11 @@ def promote(db: Database, institute: str, link_id: int, by: str) -> dict:
     old = db.one("SELECT id FROM content_links WHERE file_id = ? AND owner = ?", (r["file_id"], COMMON))
     if old:
         return link_view(db, old["id"])
-    safety = db.one("SELECT safety FROM content_files WHERE id = ?", (r["file_id"],))["safety"]
+    frow = db.one("SELECT * FROM content_files WHERE id = ?", (r["file_id"],))
     cur = db.execute("INSERT INTO content_links (file_id, owner, title, subject, assigned_by, status, uploaded_by, "
-                     "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                     (r["file_id"], COMMON, r["title"], r["subject"], r["assigned_by"], _status(r["subject"], safety),
-                      by, time.time()))
+                     "created_at, accepted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     (r["file_id"], COMMON, r["title"], r["subject"], r["assigned_by"],
+                      _status(r["subject"], frow, r["accepted"]), by, time.time(), r["accepted"]))
     return link_view(db, cur.lastrowid)
 
 
@@ -337,8 +453,16 @@ def common_subjects(db: Database) -> list[dict]:
 
 # ---------- search for one teacher ----------
 
+def _only_teacher(db: Database, f: fac.Faculty) -> bool:
+    """A solo teacher (an institute with one active teacher) uses the whole library, whatever the subject."""
+    return len(fac.list_faculty(db, f.institute_id)) == 1
+
+
 def _own_rows(db: Database, f: fac.Faculty) -> list:
     """This teacher's content: files fixed to them, files of their subjects with no fixed teacher, and general."""
+    if _only_teacher(db, f):
+        return db.all("SELECT c.id, c.text, l.title FROM content_chunks c JOIN content_links l ON l.file_id = c.file_id "
+                      "WHERE l.owner = ? AND l.status = 'live'", (f.institute_id,))
     subs = list(f.subjects) + [fac.GENERAL]
     marks = ",".join("?" * len(subs))
     return db.all(
@@ -374,7 +498,12 @@ def search(db: Database, f: fac.Faculty, queries: list[str], k: int = 4) -> tupl
 def faculty_stats(db: Database, institute: str) -> dict[int, int]:
     """Number of live files each teacher answers from (own library only)."""
     out = {}
+    solo = len(fac.list_faculty(db, institute)) == 1
     for f in fac.list_faculty(db, institute, active_only=False):
+        if solo and f.active:
+            out[f.id] = db.one("SELECT COUNT(*) AS n FROM content_links WHERE owner = ? AND status = 'live'",
+                               (institute,))["n"]
+            continue
         subs = list(f.subjects) + [fac.GENERAL]
         marks = ",".join("?" * len(subs))
         out[f.id] = db.one(f"SELECT COUNT(*) AS n FROM content_links WHERE owner = ? AND status = 'live' AND "

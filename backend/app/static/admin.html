@@ -462,7 +462,7 @@ async function loadBuilds(id) {
 // ---------- Multi-teacher: AI teachers of an institute + one content library ----------
 const fileB64 = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',', 2)[1] || ''); r.onerror = () => bad(new Error('Could not read ' + file.name)); r.readAsDataURL(file); });
 const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
-const LSTAT = { live: ['Live', 'var(--ok)'], pending: ['Pending check', 'var(--warn)'], blocked: ['Blocked (safety)', 'var(--bad)'], checking: ['Safety check again', 'var(--warn)'] };
+const LSTAT = { live: ['Live', 'var(--ok)'], pending: ['Pending check', 'var(--warn)'], unclear: ['Text unclear', 'var(--warn)'], blocked: ['Blocked (safety)', 'var(--bad)'], checking: ['Safety check again', 'var(--warn)'] };
 const lpill = (s) => { const [t, c] = LSTAT[s] || [s, 'var(--muted)']; return `<span class="pill" style="color:${c};white-space:nowrap">${t}</span>`; };
 const HOW = { upload: 'chosen at upload', name: 'from the file name', ai: 'found by AI', admin: 'set by admin' };
 let FAC = { items: [], subjects: [] }, LIB = { status: '' };
@@ -536,16 +536,49 @@ document.addEventListener('click', async (e) => {   // "Remove this teacher" ins
 });
 
 function libBase(owner) { return owner === 'common' ? '/common' : `/teachers/${encodeURIComponent(owner)}/library`; }
+// Upload with a progress bar per file (a panel that stays at the bottom right while you keep working)
+function apiUpload(path, body, onProgress) {
+  return new Promise((ok, bad) => {
+    const x = new XMLHttpRequest(); x.open('POST', '/admin/api' + path);
+    x.setRequestHeader('Content-Type', 'application/json'); x.setRequestHeader('Authorization', 'Bearer ' + KEY);
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)); };
+    x.upload.onload = () => onProgress(100);
+    x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} x.status < 300 ? ok(d) : bad(new Error(d.detail || 'Upload failed (' + x.status + ')')); };
+    x.onerror = () => bad(new Error('No connection — upload stopped')); x.ontimeout = () => bad(new Error('Took too long'));
+    x.send(JSON.stringify(body));
+  });
+}
+function upPanel() {
+  let p = $('#uppanel'); if (p) return p;
+  p = document.createElement('section'); p.id = 'uppanel'; p.className = 'card'; p.setAttribute('role', 'status'); p.setAttribute('aria-live', 'polite');
+  p.style.cssText = 'position:fixed;right:20px;bottom:20px;width:380px;max-height:60vh;overflow:auto;z-index:15;gap:10px;box-shadow:0 16px 40px rgba(17,24,39,.18)';
+  document.body.append(p); return p;
+}
+let UPBUSY = false;
 async function uploadFiles(owner, files, extra, done) {
-  let ok = 0, fail = [];
-  for (const [i, file] of [...files].entries()) {
-    toast(`Uploading ${i + 1} of ${files.length}: ${file.name}`);
-    try { await api('POST', libBase(owner), { filename: file.webkitRelativePath || file.name, data_base64: await fileB64(file), ...extra }); ok++; }
-    catch (e) { fail.push(file.name + ': ' + e.message); }
+  if (!files.length) { toast('No PDF, Word or text files there'); return; }
+  if (UPBUSY) { toast('Please wait — the last upload is still running'); return; }
+  UPBUSY = true; GUARD = () => 'Files are still uploading. Leaving now stops the upload.';
+  const p = upPanel(); const list = [...files];
+  p.innerHTML = `<div class="row"><b id="upsum">Uploading 0 of ${list.length}</b><button type="button" class="btn ghost" id="upx" style="height:32px;padding:0 10px" hidden>Close</button></div>` +
+    list.map((f, i) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row" style="gap:6px;flex-wrap:nowrap"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13px">${esc(f.name)}</span><span class="muted" id="ups${i}" style="font-size:12px;white-space:nowrap">Waiting · ${kb(f.size)}</span></div><div class="sbar"><div id="upb${i}" style="width:0"></div></div></div>`).join('');
+  let ok = 0, fail = 0;
+  for (const [i, file] of list.entries()) {
+    const st = $('#ups' + i), bar = $('#upb' + i);
+    const set = (txt, pct, color) => { st.textContent = txt; if (pct != null) bar.style.width = pct + '%'; if (color) { bar.style.background = color; st.style.color = color; } };
+    try {
+      set('Preparing…', 2);
+      const data = await fileB64(file);
+      const r = await apiUpload(libBase(owner), { filename: file.webkitRelativePath || file.name, data_base64: data, ...extra },
+        (pct) => set(pct < 100 ? `Uploading ${pct}%` : 'Reading & checking…', Math.max(2, Math.round(pct * 0.9))));
+      const [label, color] = LSTAT[r.status] || [r.status, 'var(--ok)'];
+      set((r.status === 'live' ? '✓ ' : '') + label + (r.pages ? ` · ${r.pages_read}/${r.pages} pages read` : ''), 100, color); ok++;
+    } catch (e) { set('✗ ' + e.message, 100, 'var(--bad)'); st.style.whiteSpace = 'normal'; fail++; }
+    $('#upsum').textContent = `Uploading ${ok + fail} of ${list.length}`;
   }
-  toast(`${ok} uploaded${fail.length ? ' · ' + fail.length + ' not uploaded' : ''}`);
-  if (fail.length) await ask({ title: 'Some files were not uploaded', text: fail.map(esc).join('<br>'), ok: 'OK' });
-  done();
+  $('#upsum').textContent = fail ? `Done · ${ok} uploaded · ${fail} not uploaded` : `Done · all ${ok} uploaded`;
+  const x = $('#upx'); x.hidden = false; x.onclick = () => p.remove();
+  UPBUSY = false; GUARD = null; done();
 }
 
 async function loadLibrary(owner) {
@@ -554,10 +587,10 @@ async function loadLibrary(owner) {
   let d; try { d = await api('GET', libBase(owner) + (LIB.status ? '?status=' + LIB.status : '')); } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   const edit = common ? can('library_common') : can('teachers_edit');
   const tab = (k, label) => `<button type="button" data-ls="${k}" class="${LIB.status === k ? 'on' : ''}">${label}</button>`;
-  const rows = d.items.map((x) => `<tr><td><b>${esc(x.title)}</b><div class="muted" style="font-size:12px">${x.kind.toUpperCase()} · ${kb(x.size)}${x.assigned_by ? ' · ' + (HOW[x.assigned_by] || '') : ''}</div></td>
+  const rows = d.items.map((x) => `<tr><td><b>${esc(x.title)}</b><div class="muted" style="font-size:12px">${x.kind.toUpperCase()} · ${kb(x.size)}${x.pages ? ` · ${x.pages_read}/${x.pages} pages read` : ''}${x.assigned_by ? ' · ' + (HOW[x.assigned_by] || '') : ''}</div></td>
       <td>${edit && x.status !== 'blocked' ? `<select data-asub="${x.id}" aria-label="Subject">${subjOpts(x.subject || '', 'Not decided')}</select>` : esc(x.subject_label || '—')}</td>
       ${common ? '' : `<td>${edit && x.status !== 'blocked' ? `<select data-afac="${x.id}" aria-label="Teacher">${facOpts(x.faculty_id)}</select>` : esc(facName(x.faculty_id) || 'Every teacher of the subject')}</td>`}
-      <td>${lpill(x.status)}${x.safety_note ? `<div class="muted" style="font-size:12px">${esc(x.safety_note)}</div>` : ''}</td>
+      <td>${lpill(x.status)}${x.safety_note ? `<div class="muted" style="font-size:12px">${esc(x.safety_note)}</div>` : ''}${x.status === 'unclear' ? `<div class="muted" style="font-size:12px">${x.unclear_percent}% of letters broken · open Preview</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap"><button type="button" class="btn ghost" style="height:34px;padding:0 10px" data-prev="${x.id}">Preview</button>
         ${edit ? `${x.status === 'checking' ? `<button type="button" class="btn ghost" style="height:34px;padding:0 10px" data-rechk="${x.id}">Check again</button>` : ''}
         ${!common ? `<label class="btn ghost" style="height:34px;padding:0 10px">Replace<input type="file" data-repl="${x.id}" accept=".pdf,.docx,.txt,.md" hidden></label>` : ''}
@@ -569,7 +602,7 @@ async function loadLibrary(owner) {
       <label class="btn primary">${icon('plus', 18)}Upload files<input type="file" id="ufiles" multiple accept=".pdf,.docx,.txt,.md" hidden></label>
       <label class="btn ghost">Upload a folder<input type="file" id="udir" webkitdirectory multiple hidden></label>
       ${common ? '' : '<label class="check"><input type="checkbox" id="uallow">Allow in Dhurina Common Library</label>'}</div>` : ''}
-    <div class="presets">${tab('', 'All · ' + d.total)}${tab('pending', 'Pending check · ' + d.counts.pending)}${tab('live', 'Live · ' + d.counts.live)}${d.counts.blocked ? tab('blocked', 'Blocked · ' + d.counts.blocked) : ''}${d.counts.checking ? tab('checking', 'Safety check again · ' + d.counts.checking) : ''}</div>
+    <div class="presets">${tab('', 'All · ' + d.total)}${tab('pending', 'Pending check · ' + d.counts.pending)}${tab('live', 'Live · ' + d.counts.live)}${d.counts.unclear ? tab('unclear', 'Text unclear · ' + d.counts.unclear) : ''}${d.counts.blocked ? tab('blocked', 'Blocked · ' + d.counts.blocked) : ''}${d.counts.checking ? tab('checking', 'Safety check again · ' + d.counts.checking) : ''}</div>
     <div class="scroll">${d.items.length ? `<table><thead><tr><th>FILE</th><th>SUBJECT</th>${common ? '' : '<th>TEACHER</th>'}<th>STATUS</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<p class="muted">${d.total ? 'No files here.' : 'No files yet. Upload the first ones above.'}</p>`}</div>`;
   const re = () => loadLibrary(owner), refresh = () => { re(); if (!common) loadFaculty(owner); };
   el.querySelectorAll('[data-ls]').forEach((b) => b.onclick = () => { LIB.status = b.dataset.ls; re(); });
@@ -593,12 +626,27 @@ async function loadLibrary(owner) {
 
 async function previewFile(owner, id, edit, refresh) {
   let p; try { p = await api('GET', `${libBase(owner)}/${id}`); } catch (e) { toast(e.message); return; }
-  const canEdit = edit && owner !== 'common' && !p.more;
-  const m = await dialog(p.title, `<span class="muted">${esc(p.subject_label || 'Subject not decided')} · ${lpill(p.status)}</span>
-    <textarea id="ptext" style="height:46vh" ${canEdit ? '' : 'readonly'}>${esc(p.text)}</textarea>${p.more ? '<span class="muted">Showing the start of the file.</span>' : ''}`, canEdit ? 'Save changes' : '');
-  if (!m || !canEdit) return;
-  const text = m.querySelector('#ptext').value; if (text === p.text) return;
-  try { await api('PUT', `${libBase(owner)}/${id}/text`, { text }); toast('Saved'); refresh(); } catch (e) { toast(e.message); }
+  let text = p.text, next = p.next_offset;
+  const canEditAll = () => edit && next == null && p.total_chars <= 200000;
+  const info = `${esc(p.subject_label || 'Subject not decided')} · ${lpill(p.status)}${p.pages ? ` · ${p.pages_read} of ${p.pages} pages read` : ''} · ${p.total_chars.toLocaleString('en-IN')} letters`;
+  const unclear = p.status === 'unclear' ? `<div class="card" style="padding:12px;border-color:var(--warn);background:#FFFBEB;gap:6px"><b>Text unclear: ${p.unclear_percent}% of letters came out broken.</b><span class="muted">Teachers don’t use this file yet. Read it: if it is fine, press “Text is fine, use it”. If not, fix it here and save, or upload a cleaner copy (a PDF made from Word / Google Docs, or the Word file itself).</span>${edit ? '<button type="button" class="btn primary" id="pacc" style="align-self:flex-start">Text is fine, use it</button>' : ''}</div>` : '';
+  const pr = dialog(p.title, `<span class="muted">${info}</span>${unclear}
+    <textarea id="ptext" style="height:46vh" ${canEditAll() ? '' : 'readonly'}>${esc(text)}</textarea>
+    <div class="row"><span class="muted" id="pmore">${next != null ? `Showing ${text.length.toLocaleString('en-IN')} of ${p.total_chars.toLocaleString('en-IN')} letters` : 'Whole file shown'}</span>${next != null ? '<button type="button" class="btn ghost" id="pload" style="height:36px">Show more</button>' : ''}</div>`, edit ? 'Save changes' : '');
+  const box = [...document.querySelectorAll('.confirm')].pop();
+  const load = box && box.querySelector('#pload');
+  if (load) load.onclick = async () => {
+    load.disabled = true;
+    try { const m = await api('GET', `${libBase(owner)}/${id}?offset=${next}`); text += m.text; next = m.next_offset;
+      const ta = box.querySelector('#ptext'); ta.value = text; ta.readOnly = !canEditAll();
+      box.querySelector('#pmore').textContent = next != null ? `Showing ${text.length.toLocaleString('en-IN')} of ${p.total_chars.toLocaleString('en-IN')} letters` : 'Whole file shown';
+      if (next == null) load.remove(); else load.disabled = false; } catch (e) { toast(e.message); load.disabled = false; } };
+  const acc = box && box.querySelector('#pacc');
+  if (acc) acc.onclick = async () => { try { await api('POST', `${libBase(owner)}/${id}/accept`); box.remove(); toast('File is live now'); refresh(); } catch (e) { toast(e.message); } };
+  const m = await pr;
+  if (!m || !canEditAll()) return;
+  const val = m.querySelector('#ptext').value; if (val === text) return;
+  try { await api('PUT', `${libBase(owner)}/${id}/text`, { text: val }); toast('Saved'); refresh(); } catch (e) { toast(e.message); }
 }
 
 async function commonView() {

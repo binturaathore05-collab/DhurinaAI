@@ -25,7 +25,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install
-        run: pip install -r requirements.txt httpx
+        run: |
+          sudo apt-get install -y -q poppler-utils   # pdftotext: Hindi PDFs in the content library (as on the server)
+          pip install -r requirements.txt httpx
       - name: Backend tests
         run: python -m pytest -q
       - name: Safety tests — phrase rules (no AI)

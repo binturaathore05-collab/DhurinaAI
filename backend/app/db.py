@@ -436,7 +436,7 @@ CREATE TABLE IF NOT EXISTS content_links (
     subject TEXT,                            -- subject key or "general"; NULL = not decided yet
     faculty_id INTEGER,                      -- a fixed teacher (else every teacher of the subject)
     assigned_by TEXT,                        -- upload | name | ai | admin
-    status TEXT NOT NULL DEFAULT 'live',     -- live | pending (subject unsure) | blocked (safety) | checking
+    status TEXT NOT NULL DEFAULT 'live',     -- live | pending (subject unsure) | unclear (broken text) | blocked | checking
     allow_common INTEGER NOT NULL DEFAULT 0, -- uploader allows it in the Common Library
     uploaded_by TEXT,
     created_at REAL NOT NULL,
@@ -561,6 +561,8 @@ class Database:
         ("tests", "faculty_id", "INTEGER"), ("class_sessions", "faculty_id", "INTEGER"),
         ("kb_chunks", "faculty_id", "INTEGER"), ("verified_answers", "faculty_id", "INTEGER"),
         ("moderation_cache", "subject", "TEXT"), ("query_rewrites", "subject", "TEXT"),
+        ("content_files", "pages", "INTEGER"), ("content_files", "pages_read", "INTEGER"),
+        ("content_files", "unclear", "REAL"), ("content_links", "accepted", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     def _migrate(self) -> None:

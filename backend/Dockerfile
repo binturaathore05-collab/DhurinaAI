@@ -3,7 +3,8 @@ FROM python:3.12-slim
 WORKDIR /srv
 COPY requirements.txt .
 # libatomic1: the PDF engine's installer needs it before it can install anything else
-RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+# poppler-utils (pdftotext): reads Hindi PDFs in the content library correctly (matras, joined letters, spaces)
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 poppler-utils \
  && pip install --no-cache-dir -r requirements.txt \
  && playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
