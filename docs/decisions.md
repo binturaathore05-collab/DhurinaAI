@@ -163,8 +163,9 @@ content, and files identical across institutes are stored and processed only onc
 - **Safety check provider:** the free OpenAI moderation check for now; change later if needed. Built as the default
   (`MODERATION_PROVIDER=auto` → OpenAI when an OpenAI key is on the server: `OPENAI_MODERATION_KEY`, or the AI key when
   the AI is OpenAI; otherwise our own AI checker). To go back: `MODERATION_PROVIDER=llm`. The safety tests (A8) re-run
-  with it by themselves and still decide "Launch: ready / blocked". With OpenAI's check, the multi-teacher subject is
-  found by the free keyword match (OpenAI's check gives no subject).
+  with it by themselves and still decide "Launch: ready / blocked". With OpenAI's check (it gives no subject), the
+  multi-teacher subject comes from the free keyword match, and when that is unsure, from the search-keyword call the
+  teacher makes anyway (small model; owner, 17 Nov 2026) — no extra AI call.
 - **Flagged messages:** Dhurina's safety team **and** the student's own teacher can see them. The teacher sees only
   their own app's students, can't block or unblock, and every look is written to the audit log
   (`/teacher/safety`; the screen comes with the Institute panel).
