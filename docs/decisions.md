@@ -122,3 +122,8 @@ watermark on notes PDFs; PDFs keep only the small reference code (A5).
 Launch is blocked until the safety tests pass with the AI model and safety settings actually in use (admin → Safety
 tests shows "Launch: ready / blocked"). Pass rules: every harmful request stopped, every upset student cared for, at
 least 97% of study questions answered. The tests re-run by themselves on every model / settings / code change.
+
+## Who can use the app — B1 (owner, 17 Nov 2026)
+Class 6 and above (admin can change the lowest class). Students under 18 need a parent's OK: an OTP sent to the
+parent's phone, before Sir's AI works. 18+ students start straight away. The class is asked once at signup and Sir
+explains at that level.
