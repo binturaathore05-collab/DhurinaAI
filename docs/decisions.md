@@ -96,13 +96,13 @@ Built with Claude's defaults (owner can change them in admin Settings → "Stude
 counts; blocked topic = small problem, clearly harmful request = serious; 3 small in 7 days → warning, 6 → 24 h
 suspension; 1 serious → 24 h suspension, 2 serious in 30 days → stopped until an admin reviews. Notes and library
 stay open while suspended. Blocked-student message names "your parent or Dhurina support" (open question 7).
-Only Dhurina admins see flags and the student's words for now (open question 5: teacher access).
+Flags and the student's words: Dhurina admins **and** the student's own teacher (owner, 17 Nov 2026; see below).
 
 ## Safety check — A2 (17 Nov 2026)
 Built with Claude's choices: every student message and every AI text is checked before it is shown; if the check
 can't run, nothing goes out ("please try again"). Default checker = our own AI (small model) because it understands
-Hindi / Hinglish and study context; the free OpenAI moderation endpoint is ready as an option. **Owner to decide**
-the final provider after testing on the A8 Hindi / Hinglish set (open question 6).
+Hindi / Hinglish and study context; the free OpenAI moderation endpoint is ready as an option. **Owner decided
+(17 Nov 2026): use the free OpenAI check for now**, change later if needed (see below).
 
 ## Emergency switches — A4 (17 Nov 2026)
 Any admin can switch off AI chat (all / one teacher / one model) and voice / photo at once; turning back on needs a
@@ -154,3 +154,18 @@ One app can hold many AI teachers (an institute); Sir switches teacher by the qu
 library, classified by AI. Owner added: a Dhurina Common Library that Super Admin can attach to a teacher with little
 content, and files identical across institutes are stored and processed only once. Plan and open questions:
 `docs/multi-teacher-plan.md`.
+
+## Owner answers, 17 Nov 2026 (evening)
+- **One plan per institute:** one plan / payment covers all teachers of an institute.
+- **Money:** goes to the institute's Razorpay; Dhurina's share is split automatically as today.
+- **Content upload:** both the institute (Institute panel) and Dhurina admin can upload.
+- **Common Library:** only Dhurina's own content, and content whose uploader ticked "allow in Common Library".
+- **Safety check provider:** the free OpenAI moderation check for now; change later if needed. Built as the default
+  (`MODERATION_PROVIDER=auto` → OpenAI when an OpenAI key is on the server: `OPENAI_MODERATION_KEY`, or the AI key when
+  the AI is OpenAI; otherwise our own AI checker). To go back: `MODERATION_PROVIDER=llm`. The safety tests (A8) re-run
+  with it by themselves and still decide "Launch: ready / blocked". With OpenAI's check, the multi-teacher subject is
+  found by the free keyword match (OpenAI's check gives no subject).
+- **Flagged messages:** Dhurina's safety team **and** the student's own teacher can see them. The teacher sees only
+  their own app's students, can't block or unblock, and every look is written to the audit log
+  (`/teacher/safety`; the screen comes with the Institute panel).
+

@@ -24,10 +24,21 @@ class AI:
     backup: str
 
 
+OPENAI_URL = "https://api.openai.com/v1"
+
+
+def _openai_key(settings) -> str:
+    """The key for OpenAI's free moderation check: its own key, or the AI key when the AI itself is OpenAI."""
+    if getattr(settings, "openai_moderation_key", ""):
+        return settings.openai_moderation_key
+    return settings.llm_api_key if settings.llm_api_key and "api.openai.com" in (settings.llm_base_url or "") else ""
+
+
 def resolve_provider(settings, override: str | None = None) -> str:
+    """Owner (17 Nov 2026): use OpenAI's free moderation check for now; our own AI checker when there is no OpenAI key."""
     p = override or settings.moderation_provider
     if p == "auto":
-        p = "llm" if settings.llm_api_key else "rules"
+        p = "openai" if _openai_key(settings) else ("llm" if settings.llm_api_key else "rules")
     return p
 
 
@@ -52,7 +63,8 @@ def build(db: Database, settings, provider: str | None = None, switch_db: Databa
     moderator = moderation.Moderator(
         db, prov,
         switches.ModelRouter(sdb, [(small, client(small, 12)), (main, client(main, 12) or FakeLLM()), (backup, client(backup, 12))]),
-        settings.llm_base_url, settings.llm_api_key,
+        OPENAI_URL if prov == "openai" and getattr(settings, "openai_moderation_key", "") else settings.llm_base_url,
+        (_openai_key(settings) or settings.llm_api_key) if prov == "openai" else settings.llm_api_key,
         model_name="omni-moderation-latest" if prov == "openai" else (mod_model if prov == "llm" else "rules"))
     llm = moderation.ModeratedLLM(raw_llm, moderator)
     return AI(raw_llm, side_llm, moderator, llm, Tutor(db, KnowledgeBase(db), llm, side_llm), prov, main, small, backup)

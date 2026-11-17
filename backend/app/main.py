@@ -75,13 +75,14 @@ app = FastAPI(title="LiveTeach API", version="0.1.0")
 # ---------- A5: admin / teacher audit log ----------
 
 _WATCH_GET = re.compile(r"^/admin/api/(students/\d+|verify|incidents/\d+)$")
+_TEACHER_WATCH_GET = re.compile(r"^/teacher/safety/\d+$")   # a teacher looking at a student's flagged messages
 
 
 @app.middleware("http")
 async def _audit_middleware(request: Request, call_next):
     path, method = request.url.path, request.method
     watched = (path.startswith("/admin/api/") and (method != "GET" or _WATCH_GET.match(path))) or \
-              (path.startswith("/teacher/") and method != "GET")
+              (path.startswith("/teacher/") and (method != "GET" or _TEACHER_WATCH_GET.match(path)))
     if not watched:
         return await call_next(request)
     body = await request.body() if method != "GET" else b""
@@ -772,6 +773,26 @@ async def teacher_edit_verified(verified_id: int, request: Request, teacher_id: 
 async def teacher_review_bulk(request: Request, teacher_id: str = Depends(teacher_admin)):
     body = await request.json()
     return teacher_data.review_decide(db, teacher_id, body.get("decisions", []))
+
+
+@app.get("/teacher/safety")
+def teacher_safety(status: str = "", q: str = "", offset: int = 0, limit: int = 25,
+                   teacher_id: str = Depends(teacher_admin)):
+    """Owner (17 Nov 2026): the teacher also sees flagged students — only their own app's students; can't block."""
+    out = student_safety.list_students(db, status, q, teacher_id, offset, limit)
+    out.pop("counts", None)   # the platform-wide counts are Dhurina's
+    return out
+
+
+@app.get("/teacher/safety/{sid}")
+def teacher_safety_student(sid: int, teacher_id: str = Depends(teacher_admin)):
+    """A student's flagged messages (what they wrote) — own students only; every look is in the audit log."""
+    row = db.one("SELECT teacher_id FROM students WHERE id = ?", (sid,))
+    if row is None or row["teacher_id"] != teacher_id:
+        raise HTTPException(404, "Student not found")
+    d = student_safety.detail(db, sid)
+    return {k: d[k] for k in ("id", "name", "phone", "status", "status_until", "status_reason", "joined", "questions",
+                              "violations", "history", "class_level")}
 
 
 @app.get("/teacher/students")

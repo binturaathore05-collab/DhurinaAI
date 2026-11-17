@@ -44,8 +44,10 @@ class Settings:
     # read from X-Forwarded-For for the OTP-per-IP limit). Off by default, because the header can be faked.
     trust_proxy: bool = field(default_factory=lambda: _env("TRUST_PROXY", "0") == "1")
 
-    # A2 safety check: auto (= llm when an AI key is set, else rules only) | llm | openai | rules
+    # A2 safety check: auto (= openai when an OpenAI key is there, else llm with an AI key, else rules only) | llm | openai | rules
     moderation_provider: str = field(default_factory=lambda: _env("MODERATION_PROVIDER", "auto"))
+    # owner 17 Nov 2026: the free OpenAI moderation check for now. Its own key, so the AI teacher can use any provider.
+    openai_moderation_key: str = field(default_factory=lambda: _env("OPENAI_MODERATION_KEY"))
 
     # A5: seals answer records and the admin audit log. Set once, keep secret, never change (old seals would no
     # longer verify). Empty = derived from JWT_SECRET.
