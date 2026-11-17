@@ -114,7 +114,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | A2 | Input & output moderation with fail-safe (section 6, 16) — **built 17 Nov 2026** (see note below) | Core protection |
 | A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) — **built 17 Nov 2026** (see note below) | Stop misuse |
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) — **built 17 Nov 2026** (see note below) | Emergency control |
-| A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) | Prove what the AI really said if a recording goes viral |
+| A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) — **built 17 Nov 2026** (see note below) | Prove what the AI really said if a recording goes viral |
 | A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) — **built 17 Nov 2026** (see note below) | Abuse + cost |
 | A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
 | A8 | Safety test set (~150 cases in Hindi, Hinglish, English, Punjabi), run automatically on every code / prompt / model change; launch blocked if it fails (15) | Proof it works |
@@ -186,6 +186,20 @@ and blocked tries use no demo question. A switched-off model hands its work to t
 needs "what did you check" plus a tick that the problem is fixed. Every change is kept in the page's history (who,
 when, why). "AI image generation" in the brief does not apply: the app doesn't generate images. Not yet: only certain
 roles may use the switches (B5), alert to the team when something is switched off (B7).
+
+**A5 as built:** every answer a student gets (AI answers, refusals, care replies, stopped answers) is sealed when
+it is sent: class session, time, the AI model that actually wrote it (or "fixed reply, no AI"), and the safety-policy
+version (base policy + fingerprint of the admin's AI / safety / limit settings; every set of rules ever used is kept).
+The seal is an HMAC over the exact delivered text and links to the previous seal, so a later change in the database
+shows up. Each answer gets a reference code (LT-XXXX-XXXX) shown in small grey text under the answer in the app.
+**Admin → Audit → "Check a reported conversation":** paste the code from a screenshot / recording, or some words →
+the genuine record (teacher, masked student, session, model, rules) with "Genuine · unchanged" or "Changed after it
+was sent"; nothing found → the clip may be edited or fake. **Activity log:** every change in the admin panel and
+teacher dashboards (incl. failed tries), and every look at a student's flagged messages or a lookup — who, when,
+from which address, what (passwords, keys and codes are never stored); the log is chained and the page shows "Log
+intact" or where it was changed. `AUDIT_SECRET` (set once, never change). Limits: an admin with server access could
+still rebuild seals with the secret; for stronger proof the seals can later be published / time-stamped outside our
+server. Test answers and notes PDFs are not sealed yet (A7 adds the AI badge to PDFs).
 
 ### Phase B — also before launch
 | # | Item |
