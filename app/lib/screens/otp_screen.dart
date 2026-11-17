@@ -55,8 +55,15 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _resend() async {
-    await AppScope.of(context).api.sendOtp(widget.phone);
-    _startTimer();
+    setState(() => _error = null);
+    try {
+      await AppScope.of(context).api.sendOtp(widget.phone);
+      _startTimer();
+    } on ApiException catch (e) {
+      setState(() => _error = e.message); // e.g. "Too many code requests. Please try again in 10 minutes."
+    } catch (_) {
+      setState(() => _error = 'No internet connection. Please try again.');
+    }
   }
 
   Future<void> _verify() async {

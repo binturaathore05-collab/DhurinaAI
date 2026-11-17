@@ -84,3 +84,9 @@ Any new risky action must use the same `ask()` (web) / `confirmAction()` (app).
 **All safety work must be finished before launch** — Phase A *and* Phase B of `docs/safety-gap-analysis.md`,
 plus Phase C for any voice / photo / video feature that is in the launch version. The 12 acceptance criteria in
 section 24 of the owner's brief are the launch checklist. No real student uses the app until every item passes.
+
+## Rate limits — A6 (17 Nov 2026)
+Built with sensible defaults (Claude's choice, owner can change them any time in admin Settings → Limits):
+8 questions a minute and 250 a day per student, including paid students (cost guard; MCQ answers never count);
+OTP: 30 s gap, 3 per number per 10 min, 10 per number per day, 10 per device per day, 30 per internet address per
+hour; 10 wrong codes lock a number for the day. **Owner to confirm** the 250-a-day cap for paid students.

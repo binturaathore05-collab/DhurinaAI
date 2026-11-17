@@ -115,7 +115,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) | Stop misuse |
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) | Emergency control |
 | A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) | Prove what the AI really said if a recording goes viral |
-| A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) | Abuse + cost |
+| A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) — **built 17 Nov 2026** (see note below) | Abuse + cost |
 | A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
 | A8 | Safety test set (~150 cases in Hindi, Hinglish, English, Punjabi), run automatically on every code / prompt / model change; launch blocked if it fails (15) | Proof it works |
 
@@ -127,6 +127,19 @@ redirect is logged in `qa_history` (`origin = redirect`, `scope`, `blocked_topic
 and cannot be saved as notes. An unknown scope value counts as off-topic (fail closed). Neutral syllabus facts
 that only touch a blocked word (e.g. the Constitution under "politics") are allowed with facts only, no opinions —
 **owner to confirm**. Limit: this still relies on the AI's own judgement; A2 adds an independent check.
+
+**A6 as built:** all limits are checked on the server and can be changed by the admin in Settings → "Limits"
+(apply at once). Defaults: **8 questions a minute and 250 a day per student** — paid students too, so one
+account cannot run up AI cost. Counted: questions to Sir, class notes, new tests, written/oral test answers and
+"teach again"; MCQ answers are checked without AI and are never limited. A blocked question does not use up a demo
+or plan question and is not stored. **OTP:** 30 s between two codes for the same number, 3 per number in 10 min,
+10 per number per day, 10 per phone (device) per day, 30 per internet address per hour (generous, because many
+mobile users share one address); **10 wrong codes for a number in a day lock it** for the rest of that window (no
+new codes, even the right code is refused). The student gets a clear message with how long to wait (HTTP 429 +
+Retry-After). The app now sends a random per-install device id and shows the message when "Resend code" is refused.
+Limits: the device id and internet address can be changed by an attacker, so the per-number limits are the real
+guard on SMS cost; a cloud firewall / Play Integrity (S3) is still needed against large bot attacks. Set
+`TRUST_PROXY=1` only behind our own load balancer.
 
 ### Phase B — also before launch
 | # | Item |

@@ -5,6 +5,7 @@ import time
 
 from ..db import Database
 from ..secrets_box import mask, seal
+from .limits import DEFAULT_LIMITS
 
 CHECKLIST = [
     ("consent", "Teacher consent form signed"),
@@ -19,6 +20,7 @@ DEFAULT_SETTINGS = {
                 "linked_account": ""},
     "defaults": {"platform_percent": 20, "demo_questions": 3, "grace_days": 2, "grace_questions": 3,
                  "renew_reminder_days": 3},
+    "limits": dict(DEFAULT_LIMITS),   # A6 rate limits (see services/limits.py)
     "ai": {"trusted_sites": ["pib.gov.in", "india.gov.in", "ncert.nic.in"],
            "blocked_topics": ["politics", "adult content"]},
     "legal": {"privacy_url": "", "terms_url": ""},
@@ -50,6 +52,14 @@ def save_settings(db: Database, data: dict) -> dict:
     for section, values in data.items():
         if section in current and isinstance(values, dict):
             current[section].update({k: v for k, v in values.items() if k in current[section]})
+    for k, v in current["limits"].items():
+        try:
+            ok = int(v) >= 1 and float(v) == int(v)
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise AdminError("Every limit must be a whole number, 1 or more")
+        current["limits"][k] = int(v)
     p = current["defaults"]["platform_percent"]
     if not 0 <= float(p) <= 100:
         raise AdminError("Default split must be between 0 and 100")

@@ -291,11 +291,27 @@ class HttpApi implements Api {
     return _token;
   }
 
+  String? _deviceId;
+
+  /// A random id made once per install (no personal data). The server uses it to limit OTP requests per phone.
+  Future<String> _loadDeviceId() async {
+    if (_deviceId != null) return _deviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('device_id');
+    if (id == null) {
+      final r = Random.secure();
+      id = List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+      await prefs.setString('device_id', id);
+    }
+    return _deviceId = id;
+  }
+
   Future<dynamic> _call(String method, String path, [Map<String, dynamic>? body]) async {
     final token = await _loadToken();
     final headers = {
       'Content-Type': 'application/json',
       'X-Teacher-Id': teacherId,
+      'X-Device-Id': await _loadDeviceId(),
       if (token != null) 'Authorization': 'Bearer $token',
     };
     final uri = Uri.parse('$base$path');
