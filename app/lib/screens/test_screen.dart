@@ -4,6 +4,7 @@ import '../api.dart';
 import '../main.dart';
 import '../share.dart';
 import '../theme.dart';
+import '../voice.dart';
 
 /// Ask the student how they want Sir's test: MCQ, written or oral. Returns the mode, or null.
 Future<String?> chooseTestMode(BuildContext context, {String? intro}) => showModalBottomSheet<String>(
@@ -49,11 +50,47 @@ class _TestScreenState extends State<TestScreen> {
   AnswerCheck? _check; // feedback on the question just answered
   int? _picked;
   bool _busy = false;
+  bool _listening = false;
+  int _askedIndex = -1; // oral test: the question Sir has read out
 
   @override
   void dispose() {
+    Voice.instance.stopSpeaking();
+    Voice.instance.cancelListening();
     _input.dispose();
     super.dispose();
+  }
+
+  /// Oral (viva): Sir reads each question aloud once.
+  void _readQuestion(TestState t) {
+    if (t.mode != 'oral' || t.question == null || _askedIndex == t.index) return;
+    _askedIndex = t.index;
+    final lang = RegExp(r'[\u0900-\u097F]').hasMatch(t.question!.q) ? 'hi' : 'en';
+    WidgetsBinding.instance.addPostFrameCallback((_) => Voice.instance.speak([t.question!.q], language: lang));
+  }
+
+  /// Oral (viva): answer by speaking; the words go into the box (the student can still fix them) and are sent.
+  Future<void> _speakAnswer() async {
+    if (_listening) return Voice.instance.stopListening();
+    setState(() => _listening = true);
+    final ok = await Voice.instance.listen(
+      language: RegExp(r'[\u0900-\u097F]').hasMatch(_test.question?.q ?? '') ? 'hi' : 'en',
+      onWords: (w) {
+        if (mounted) setState(() => _input.text = w);
+      },
+      onDone: (w) {
+        if (!mounted) return;
+        setState(() => _listening = false);
+        if (w.trim().isNotEmpty) _submit(w.trim());
+      },
+      onError: (_) {
+        if (mounted) setState(() => _listening = false);
+      },
+    );
+    if (!ok && mounted) {
+      setState(() => _listening = false);
+      _toast('Please allow the microphone for this app, or type your answer.');
+    }
   }
 
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -137,6 +174,7 @@ class _TestScreenState extends State<TestScreen> {
 
   Widget _questionView(TestState t, Color accent) {
     final q = t.question!;
+    _readQuestion(t);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (t.mode == 'oral')
         const Text('SIR IS ASKING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
@@ -176,12 +214,23 @@ class _TestScreenState extends State<TestScreen> {
           decoration: InputDecoration(
               hintText: t.mode == 'oral' ? 'Answer Sir in a line or two…' : 'Write your answer…'),
         ),
-        if (t.mode == 'oral')
+        if (t.mode == 'oral') ...[
+          const SizedBox(height: 12),
+          Center(
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _speakAnswer,
+              style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: LT.onAccent,
+                  minimumSize: const Size(220, 56), shape: const StadiumBorder()),
+              icon: Icon(_listening ? Icons.stop_rounded : Icons.mic_rounded),
+              label: Text(_listening ? 'Listening… tap to send' : 'Speak your answer',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            ),
+          ),
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: Text('Speaking your answer comes with the voice update — type it for now.',
-                style: TextStyle(color: LT.muted, fontSize: 12)),
+            child: Center(child: Text('Or type it in the box above.', style: TextStyle(color: LT.muted, fontSize: 12))),
           ),
+        ],
         const SizedBox(height: 14),
         Row(children: [
           TextButton(onPressed: _busy ? null : () => _submit(''), child: const Text('Skip')),

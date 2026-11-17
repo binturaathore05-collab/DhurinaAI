@@ -78,6 +78,20 @@ jobs:
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q "android.permission.INTERNET" "$MANIFEST" || \
             sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$MANIFEST"
+          # audio mode: microphone, and (Android 11+) permission to find the phone's speech recognition and voices
+          python3 - <<'PY'
+          path = 'android/app/src/main/AndroidManifest.xml'
+          m = open(path).read()
+          if 'RECORD_AUDIO' not in m:
+              m = m.replace('<application', '<uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application', 1)
+          if 'android.speech.RecognitionService' not in m:
+              q = ('<queries>\n        <intent><action android:name="android.speech.RecognitionService"/></intent>\n'
+                   '        <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>\n    </queries>\n')
+              m = m.replace('</manifest>', '    ' + q + '</manifest>', 1) if '<queries>' not in m else \
+                  m.replace('<queries>', q.rstrip('\n').replace('</queries>', ''), 1)
+          open(path, 'w').write(m)
+          PY
+          grep -n "RECORD_AUDIO\|RecognitionService\|TTS_SERVICE" "$MANIFEST"
 
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings

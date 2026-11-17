@@ -5,6 +5,7 @@ import 'package:liveteach/config.dart';
 import 'package:liveteach/main.dart';
 import 'package:liveteach/screens/live_screen.dart';
 import 'package:liveteach/theme.dart';
+import 'package:liveteach/voice.dart';
 
 void main() {
   const cfg = TeacherConfig(
@@ -153,5 +154,15 @@ void main() {
     final api = HttpApi('https://x.test', 'demo');
     expect(api.mediaUrl('/faculty/3/avatar'), 'https://x.test/faculty/3/avatar');
     expect(api.mediaUrl(null), isNull);
+  });
+
+  test('audio mode: Sir speaks sentence by sentence, in the right phone language', () {
+    expect(Voice.sentences('हल्दीघाटी का युद्ध 1576 में हुआ। अकबर की सेना थी! क्या समझे?'),
+        ['हल्दीघाटी का युद्ध 1576 में हुआ।', 'अकबर की सेना थी!', 'क्या समझे?']);
+    expect(Voice.sentences('Pi is 3.14 roughly. Next point.'), ['Pi is 3.14 roughly.', 'Next point.']);
+    expect(Voice.ttsLanguage('hi'), 'hi-IN');
+    expect(Voice.ttsLanguage('hi-Latn'), 'en-IN');
+    expect(Voice.ttsLanguage('en'), 'en-IN');
+    expect(Voice.ttsLanguage('pa'), 'pa-IN');
   });
 }
