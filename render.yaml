@@ -1,0 +1,26 @@
+# One-click demo server on Render (render.com → New → Blueprint → this repository).
+# Free plan: sleeps when unused (first visit takes ~1 minute) and demo data is wiped on restart.
+services:
+  - type: web
+    name: liveteach-demo
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /admin
+    autoDeploy: true
+    envVars:
+      - key: ADMIN_EMAIL          # your admin login
+        sync: false
+      - key: ADMIN_PASSWORD       # at least 8 characters, letters and numbers
+        sync: false
+      - key: TEACHER_KEY_SUBHASH  # password for the demo teacher panel (teacher id: subhash)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SECRETS_KEY
+        generateValue: true
+      - key: AUDIT_SECRET
+        generateValue: true
+      - key: TRUST_PROXY
+        value: "1"
