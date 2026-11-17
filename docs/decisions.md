@@ -141,3 +141,6 @@ Safety Admins see student conversations or block students. New members get a one
 Owner didn't pick a period; Claude used its suggestion: conversations 12 months, safety records 36 months, then
 deleted by themselves (admin Settings → Data keeping). Students can delete their account and data themselves (app or
 by telling Sir). Database and backups encrypted.
+
+## Alerts — B7 (owner, 17 Nov 2026)
+Alerts in the admin panel and by email now. **WhatsApp alerts: at the very end** (needs a WhatsApp Business provider).
