@@ -30,20 +30,15 @@ def build_note_html(teacher_name: str, question: str, answer: str, sources: list
   h1 {{ font-size: 20pt; margin: 6px 0 14px; line-height: 1.3; }}
   .label {{ font-size: 10pt; color: #4B5563; text-transform: uppercase; letter-spacing: .06em; }}
   .src {{ margin-top: 18px; font-size: 10.5pt; color: #0F766E; }}
-  .ai {{ display: inline-block; background: #0F766E; color: #fff; border-radius: 999px; padding: 1px 9px; font-size: 9.5pt; font-weight: 700; margin-inline-end: 6px; }}
-  .ainote {{ border: 1px solid #99F6E4; background: #F0FDFA; color: #134E4A; border-radius: 6px; padding: 5px 10px; font-size: 9.5pt; margin: 6px 0 12px; }}
-  .wm {{ position: fixed; top: 45%; left: 0; right: 0; text-align: center; transform: rotate(-30deg); font-size: 64pt; font-weight: 800; color: rgba(15,118,110,.06); z-index: -1; pointer-events: none; }}
   footer {{ margin-top: 28px; border-top: 1px solid #E5E7EB; padding-top: 8px; font-size: 9.5pt; color: #6B7280; }}
 </style></head>
 <body>
-  <div class="wm">{esc(t('notes_ai_badge', lang.code))}</div>
-  <div class="brand"><span class="ai">{esc(t('notes_ai_badge', lang.code))}</span>{esc(teacher_name)} · {esc(t('notes_title', lang.code))}</div>
-  <div class="ainote">{esc(t('notes_ai_note', lang.code, teacher=teacher_name))}</div>
+  <div class="brand">{esc(teacher_name)} · {esc(t('notes_title', lang.code))}</div>
   <div class="label">{esc(t('notes_question', lang.code))}</div>
   <h1>{esc(question)}</h1>
   {paras}
   <div class="src">{esc(t('notes_source', lang.code))}: {src}</div>
-  <footer>{esc(t('notes_ai_badge', lang.code))} · {esc(t('notes_footer', lang.code, teacher=teacher_name))} · {esc(date_text)}{(' · Ref ' + esc(ref)) if ref else ''}</footer>
+  <footer>{esc(t('notes_footer', lang.code, teacher=teacher_name))} · {esc(date_text)}{(' · Ref ' + esc(ref)) if ref else ''}</footer>
 </body></html>"""
 
 
@@ -71,19 +66,14 @@ def build_class_notes_html(teacher_name: str, title: str, sections: list[dict], 
   ul {{ margin: 0 0 6px; padding-inline-start: 22px; }}
   li {{ margin: 3px 0; }}
   .sum {{ background: #F0FDFA; border-radius: 6px; padding: 6px 10px; font-size: 12pt; }}
-  .ai {{ display: inline-block; background: #0F766E; color: #fff; border-radius: 999px; padding: 1px 9px; font-size: 9.5pt; font-weight: 700; margin-inline-end: 6px; }}
-  .ainote {{ border: 1px solid #99F6E4; background: #F0FDFA; color: #134E4A; border-radius: 6px; padding: 5px 10px; font-size: 9.5pt; margin: 6px 0 12px; }}
-  .wm {{ position: fixed; top: 45%; left: 0; right: 0; text-align: center; transform: rotate(-30deg); font-size: 64pt; font-weight: 800; color: rgba(15,118,110,.06); z-index: -1; pointer-events: none; }}
   footer {{ margin-top: 28px; border-top: 1px solid #E5E7EB; padding-top: 8px; font-size: 9.5pt; color: #6B7280; }}
 </style></head>
 <body>
-  <div class="wm">{esc(t('notes_ai_badge', lang.code))}</div>
-  <div class="brand"><span class="ai">{esc(t('notes_ai_badge', lang.code))}</span>{esc(teacher_name)} · {esc(t('notes_title', lang.code))}</div>
-  <div class="ainote">{esc(t('notes_ai_note', lang.code, teacher=teacher_name))}</div>
+  <div class="brand">{esc(teacher_name)} · {esc(t('notes_title', lang.code))}</div>
   <h1>{esc(title)}</h1>
   <div class="date">{esc(date_text)}</div>
   {''.join(body)}
-  <footer>{esc(t('notes_ai_badge', lang.code))} · {esc(t('notes_footer', lang.code, teacher=teacher_name))} · {esc(date_text)}{(' · Ref ' + esc(ref)) if ref else ''}</footer>
+  <footer>{esc(t('notes_footer', lang.code, teacher=teacher_name))} · {esc(date_text)}{(' · Ref ' + esc(ref)) if ref else ''}</footer>
 </body></html>"""
 
 
