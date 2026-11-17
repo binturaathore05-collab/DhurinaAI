@@ -5,6 +5,7 @@ Cases open by themselves (escalation) for:
   student_review  a student was stopped until an admin reviews (A3 ladder) → HIGH
   serious_request a clearly harmful request (A2 / A3) → MEDIUM
   ai_stopped      the AI wrote something unsafe and the safety check stopped it → LOW (quality review)
+  filter_review   a small problem caught by a content filter with "human review" on (B9) → LOW
 and by hand: an admin flags a conversation (e.g. after a parent's complaint, found by its LT- code in Audit).
 
 Repeats are folded: while a case of the same kind for the same student is still open, a new event is added to its
@@ -22,6 +23,7 @@ KINDS = {
     "student_review": ("high", "Student stopped until an admin reviews"),
     "serious_request": ("medium", "Harmful request by a student"),
     "ai_stopped": ("low", "AI tried to give an unsafe answer (stopped)"),
+    "filter_review": ("low", "Caught by a content filter (human review on)"),
     "report": ("high", "Reported conversation"),
 }
 STATUSES = ("open", "in_review", "escalated", "resolved")
@@ -73,6 +75,10 @@ def open_auto(db: Database, kind: str, student_id: int | None, teacher_id: str |
                            "A student seemed upset or talked about hurting themselves. Sir gave the helpline. "
                            "Please look at the case now.", f"#/case/{cur.lastrowid}", f"care:{cur.lastrowid}",
                            student_id, teacher_id, now)
+        if student_id:   # B9: only when the admin chose "automatic" (default: a person decides in the case)
+            from . import parent_notify
+            if parent_notify.notify(db, student_id, "care", now=now).get("status") == "sent":
+                _note(db, cur.lastrowid, "system", "inform parent: SMS sent to the parent (automatic)", "", now)
     return cur.lastrowid
 
 

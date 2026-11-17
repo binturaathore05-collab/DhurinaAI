@@ -32,7 +32,7 @@ PERMS = {
     "data_admin": {"owner"},                                  # B6: backups, clean-up, data-keeping
     "delete_data": {"owner", "support"},                      # B6: delete a student's data on request
 }
-SAFETY_SECTIONS = {"ai", "safety", "limits", "age_groups", "students", "alerts"}
+SAFETY_SECTIONS = {"ai", "safety", "limits", "age_groups", "students", "alerts", "filters", "messages", "parents"}
 
 
 def has(role: str, cap: str) -> bool:

@@ -35,6 +35,8 @@ from .services import incidents
 from .services import roles
 from .services import data_protection
 from .services import alerts
+from .services import age_policy, content_filters, parent_notify
+from . import i18n
 from .services import policy
 from .services.tutor import is_delete_command
 import threading
@@ -63,6 +65,8 @@ if _provider == "rules":
 elif os.environ.get("SAFETY_LAB_AUTORUN", "1") == "1":
     safety_lab.start_background(settings, db, "startup")   # A8: new model / instructions on the server → test them
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
+parent_notify.sender["sms"] = sms_console   # B9: parent SMS goes through the same SMS service as login codes
+i18n.overrides["get"] = lambda: admin.get_settings(db).get("messages")   # B9: messages changed by the admin
 AUDIT_SECRET = settings.audit_secret or hashlib.sha256(f"audit|{settings.jwt_secret}".encode()).hexdigest()
 
 app = FastAPI(title="LiveTeach API", version="0.1.0")
@@ -910,7 +914,7 @@ def admin_policy_rollback(vid: int, body: Rollback, user=Depends(need("settings_
     if policy.fingerprint(policy.snapshot(current)) == old["fingerprint"]:
         raise HTTPException(400, "These rules are already in use")
     try:
-        saved = admin.save_settings(db, old["rules"])
+        saved = admin.save_settings(db, policy.rules_to_restore(old["rules"]))
     except admin.AdminError as exc:
         raise HTTPException(400, str(exc))
     why = (body.note or "").strip()
@@ -942,6 +946,7 @@ def admin_data():
     return {"encrypted": db.encrypted, "backup_dir": settings.backup_dir,
             "backups": data_protection.list_backups(settings.backup_dir),
             "last_backup": data_protection.last_job(db, "backup"), "last_cleanup": data_protection.last_job(db, "retention"),
+            "last_restore_test": data_protection.last_job(db, "restore_test"),
             "settings": data_protection.data_settings(admin.get_settings(db)),
             "requests": data_protection.requests_log(db)}
 
@@ -950,6 +955,21 @@ def admin_data():
 def admin_data_backup():
     data_protection.backup_now(db, settings.backup_dir, data_protection.data_settings(admin.get_settings(db))["backup_keep"])
     return admin_data()
+
+
+class RestoreTest(BaseModel):
+    file: str = ""
+
+
+@app.post("/admin/api/data/restore-test", dependencies=[Depends(need("data_admin"))])
+def admin_data_restore_test(body: RestoreTest):
+    """B9: open a copy of a backup the way a restore would and check it (nothing live is changed)."""
+    try:
+        result = data_protection.restore_test(db, settings.backup_dir, settings.db_encryption_key or None,
+                                              AUDIT_SECRET, body.file)
+    except data_protection.DataError as exc:
+        raise HTTPException(400, str(exc))
+    return {**admin_data(), "result": result}
 
 
 @app.post("/admin/api/data/cleanup", dependencies=[Depends(need("data_admin"))])
@@ -963,7 +983,8 @@ def _data_jobs_loop():
     while True:
         time.sleep(60)
         try:
-            data_protection.daily(db, lambda: admin.get_settings(db), settings.backup_dir)
+            data_protection.daily(db, lambda: admin.get_settings(db), settings.backup_dir,
+                                  key=settings.db_encryption_key or None, audit_secret=AUDIT_SECRET)
         except Exception as exc:   # never take the server down; say so in the logs
             print(f"[data] daily job failed: {exc}")
         time.sleep(3600 - 60)
@@ -1328,7 +1349,7 @@ def admin_audit_log(q: str = "", offset: int = 0, limit: int = 50):
 # ---------- B4: Human Review Center ----------
 
 class IncidentAction(BaseModel):
-    action: str                 # escalate | note | resolve | reopen | stop_class | pause_teacher
+    action: str                 # escalate | note | resolve | reopen | stop_class | pause_teacher | notify_parent
     note: str = ""
     resolution: str = ""
 
@@ -1366,7 +1387,7 @@ def admin_incident_flag(body: IncidentFlag, user=Depends(require_safety)):
 @app.post("/admin/api/incidents/{iid}/act")
 def admin_incident_act(iid: int, body: IncidentAction, user=Depends(require_safety)):
     who = user["email"]
-    row = db.one("SELECT student_id, teacher_id FROM incidents WHERE id = ?", (iid,))
+    row = db.one("SELECT student_id, teacher_id, kind FROM incidents WHERE id = ?", (iid,))
     if row is None:
         raise HTTPException(404, "Case not found")
     try:
@@ -1384,11 +1405,68 @@ def admin_incident_act(iid: int, body: IncidentAction, user=Depends(require_safe
             except ValueError as exc:
                 raise incidents.IncidentError(str(exc))
             incidents.record(db, iid, who, "paused this teacher's AI (turn back on in Emergency)", reason)
+        elif body.action == "notify_parent":   # B9: a person decided the parent should know (care cases)
+            if not row["student_id"]:
+                raise incidents.IncidentError("This case has no student")
+            kind = row["kind"] if row["kind"] == "care" else "block"
+            res = parent_notify.notify(db, row["student_id"], "care" if kind == "care" else "block", who, force=True)
+            msg = {"sent": "SMS sent to the parent", "adult": "not sent — the student is 18 or older",
+                   "no_phone": "not sent — no parent number (no parent consent)",
+                   "repeat": "not sent — the parent already got this SMS today",
+                   "failed": "SMS could not be sent (SMS service)"}.get(res["status"], res["status"])
+            incidents.record(db, iid, who, "inform parent: " + msg, body.note)
         else:
             incidents.act(db, iid, who, body.action, body.note, body.resolution)
     except incidents.IncidentError as exc:
         raise HTTPException(400, str(exc))
     return incidents.detail(db, iid)
+
+
+# ---------- B9: AI Teacher Safety Center (one place for the 12 safety modules of the brief) ----------
+
+@app.get("/admin/api/safety-center", dependencies=[Depends(need("dashboard"))])
+def admin_safety_center():
+    """A short live status of every safety module (no personal data), with where to open it."""
+    s = admin.get_settings(db)
+    f = content_filters.settings_of(s)
+    off = switches.off_keys(db)
+    since = time.time() - 86400
+    lab = safety_lab.launch_status(settings, db)
+    last_run = db.one("SELECT at, passed, total, failed FROM safety_test_runs ORDER BY at DESC LIMIT 1")
+    ss = student_safety.safety_settings(s)
+    p = parent_notify.parent_settings(s)
+    restore = data_protection.last_job(db, "restore_test")
+    return {
+        "filters": {"on": sum(1 for v in f.values() if v["on"]), "total": len(f), "locked": len(content_filters.LOCKED),
+                    "custom_messages": sum(1 for v in (s.get("messages") or {}).values() if any(v.values()))},
+        "age_groups": {g: v["strictness"] for g, v in age_policy.settings_of(s).items()},
+        "education_only": {"blocked_topics": len(s["ai"]["blocked_topics"])},
+        "moderation": {"provider": moderator.provider,
+                       "stopped_24h": db.one("SELECT COUNT(*) AS n FROM safety_events WHERE at > ? AND action != 'retry'", (since,))["n"],
+                       "failed_24h": db.one("SELECT COUNT(*) AS n FROM safety_events WHERE at > ? AND action = 'retry'", (since,))["n"]},
+        "students": {"auto_block": ss["auto_block"], **{st: db.one("SELECT COUNT(*) AS n FROM students WHERE status = ?", (st,))["n"]
+                                                        for st in ("warning", "suspended", "review")}},
+        "review": {"open": db.one("SELECT COUNT(*) AS n FROM incidents WHERE status != 'resolved'")["n"],
+                   "high": db.one("SELECT COUNT(*) AS n FROM incidents WHERE status != 'resolved' AND severity = 'high'")["n"]},
+        "identity": {"sealed_answers": db.one("SELECT COUNT(*) AS n FROM qa_history WHERE record_hash IS NOT NULL")["n"]},
+        "privacy": {"encrypted": db.encrypted, "parent_block_sms": p["notify_block"], "parent_care_sms": p["notify_care"],
+                    "consents": db.one("SELECT COUNT(*) AS n FROM parent_consents WHERE revoked_at IS NULL")["n"],
+                    "restore_test": restore},
+        "tests": {"state": lab["state"], "why": lab["why"], "last": dict(last_run) if last_run else None},
+        "emergency": {"off": [{"key": k, "reason": v.get("reason")} for k, v in off.items()]},
+        "alerts_open": db.one("SELECT COUNT(*) AS n FROM alerts WHERE ack_at IS NULL")["n"],
+    }
+
+
+@app.get("/admin/api/filters", dependencies=[Depends(need("settings_view"))])
+def admin_filters():
+    """B9: the Content filters page — filters, the messages students see (built-in text for blank fields), parent SMS."""
+    s = admin.get_settings(db)
+    return {"catalog": content_filters.catalog(), "filters": content_filters.settings_of(s),
+            "messages": {k: {"name": policy.MESSAGE_NAMES[k], "must": list(i18n.EDITABLE[k]),
+                             "default": {lang: i18n.MESSAGES[k].get(lang, "") for lang in i18n.EDIT_LANGS},
+                             "custom": (s.get("messages") or {}).get(k) or {}} for k in i18n.EDITABLE},
+            "parents": parent_notify.parent_settings(s), "sms_ready": settings.sms_provider != "console"}
 
 
 @app.get("/admin/api/safety-dashboard", dependencies=[Depends(need("dashboard"))])
@@ -1415,6 +1493,7 @@ def admin_safety_student(sid: int, user=Depends(need("students"))):
             v["question"] = "(hidden — safety team only)"
     d["can"] = {"block": roles.has(user["role"], "block"), "consent": roles.has(user["role"], "consent"),
                 "evidence": roles.has(user["role"], "evidence"), "delete": roles.has(user["role"], "delete_data")}
+    d["parent_notices"] = parent_notify.history(db, sid)   # B9: SMS sent to the parent (or why not)
     return d
 
 

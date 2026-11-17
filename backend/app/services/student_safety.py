@@ -89,6 +89,9 @@ def _set(db: Database, student_id: int, new: str, by: str, reason: str, remarks:
     db.execute("UPDATE students SET status = ?, status_until = ?, status_reason = ? WHERE id = ?",
                (new, until, reason[:200], student_id))
     _log(db, student_id, old, new, by, reason, remarks, until, now)
+    if new in ("suspended", "review", "disabled") and old != new and reason != "Data deleted on request":
+        from . import parent_notify   # B9: tell the parent (if on; never the child's words)
+        parent_notify.notify(db, student_id, "block", "system" if by == "auto" else by, now)
     if by == "auto" and new in ("suspended", "review"):   # B7
         from . import alerts
         alerts.raise_alert(db, "auto_block", "high",
@@ -154,6 +157,10 @@ def record_violation(db: Database, student_id: int, teacher_id: str, severity: s
     if severity == "serious":   # B4: a person should look at every clearly harmful request
         from . import incidents
         incidents.open_auto(db, "serious_request", student_id, teacher_id, f"{category}: {question[:300]}", qa_id, now)
+    elif severity == "minor":   # B9: the admin asked for a person to look at this filter's hits
+        from . import admin as admin_mod, content_filters, incidents
+        if content_filters.needs_review(category, admin_mod.get_settings(db)):
+            incidents.open_auto(db, "filter_review", student_id, teacher_id, f"{category}: {question[:300]}", qa_id, now)
     st = status(db, student_id, now)
     if not settings["auto_block"] or st in ("review", "disabled"):
         return st

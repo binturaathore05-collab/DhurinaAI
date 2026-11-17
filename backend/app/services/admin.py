@@ -10,6 +10,9 @@ from . import student_safety
 from . import age_policy
 from . import data_protection
 from . import alerts
+from . import content_filters
+from . import parent_notify
+from .. import i18n
 import copy
 
 CHECKLIST = [
@@ -29,6 +32,9 @@ DEFAULT_SETTINGS = {
     "age_groups": copy.deepcopy(age_policy.DEFAULT_AGE_GROUPS),   # B2: rules per age group
     "data": dict(data_protection.DEFAULT_DATA),   # B6: how long data is kept, backups kept
     "alerts": dict(alerts.DEFAULT_ALERTS),        # B7: who gets emails, thresholds
+    "filters": copy.deepcopy(content_filters.DEFAULT_FILTERS),   # B9: content filters (Safety Center)
+    "messages": {k: {} for k in i18n.EDITABLE},   # B9: student messages changed by the admin (blank = default)
+    "parents": dict(parent_notify.DEFAULT_PARENTS),   # B9: SMS to parents on block / care
     "limits": dict(DEFAULT_LIMITS),
     "safety": dict(student_safety.DEFAULT_SAFETY),   # A3 warnings ladder (see services/student_safety.py)   # A6 rate limits (see services/limits.py)
     "ai": {"trusted_sites": ["pib.gov.in", "india.gov.in", "ncert.nic.in"],
@@ -73,6 +79,12 @@ def save_settings(db: Database, data: dict) -> dict:
     try:
         current["data"].update(data_protection.validate(current["data"]))
     except data_protection.DataError as exc:
+        raise AdminError(str(exc))
+    try:
+        current["filters"] = {**current["filters"], **content_filters.validate(current["filters"])}
+        current["messages"] = {**current["messages"], **i18n.validate_messages(current["messages"])}
+        current["parents"].update(parent_notify.validate(current["parents"]))
+    except ValueError as exc:
         raise AdminError(str(exc))
     try:
         current["age_groups"] = age_policy.validate(current["age_groups"])

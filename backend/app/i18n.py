@@ -112,6 +112,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{code} is the code to allow your child to study with {teacher} on LiveTeach (AI teacher app). Give it to your child only if you agree. Valid 5 minutes.",
         "hi": "{code} आपके बच्चे को LiveTeach (AI टीचर ऐप) पर {teacher} से पढ़ने की अनुमति देने का कोड है। सहमत हों तभी बच्चे को दें। 5 मिनट तक मान्य।",
     },
+    "parent_block": {   # B9: never the child's words
+        "en": "LiveTeach: {name}'s classes with {teacher} have been paused for a while because the class safety rules were not followed. Please talk to your child. Notes stay open. Help: Dhurina support.",
+        "hi": "LiveTeach: सुरक्षा नियम न मानने के कारण {name} की {teacher} वाली क्लास कुछ समय के लिए रोकी गई है। कृपया बच्चे से बात करें। नोट्स खुले हैं। मदद: Dhurina support.",
+    },
+    "parent_care": {
+        "en": "LiveTeach: During class today {name} seemed upset or low. Please talk to your child gently and be with them. If needed, call Tele-MANAS 14416 (free, 24x7).",
+        "hi": "LiveTeach: आज पढ़ाई के दौरान हमें लगा कि {name} का मन थोड़ा परेशान या उदास है। कृपया प्यार से बात करें और साथ रहें। ज़रूरत हो तो Tele-MANAS 14416 पर फ़ोन करें (मुफ़्त, 24 घंटे)।",
+    },
     "profile_needed": {
         "en": "Please tell us your class first.",
         "hi": "पहले अपनी क्लास बताइए।",
@@ -167,9 +175,58 @@ MESSAGES: dict[str, dict[str, str]] = {
 }
 
 
+# B9: messages the admin can change in the Safety Center (blank = the text above). Placeholders that must stay.
+EDITABLE = {
+    "safety_refusal": (), "redirect_study": (), "safety_replaced": (), "safety_warning": (),
+    "safety_suspended": ("{wait}",), "safety_review": (), "safety_disabled": (), "care_message": ("14416",),
+}
+EDIT_LANGS = ("en", "hi", "hi-Latn", "pa")
+overrides = {"get": None}   # set by the API: () -> {key: {lang: text}}
+
+
+def _custom(key: str) -> dict:
+    if key not in EDITABLE or not overrides["get"]:
+        return {}
+    try:
+        return {k: v for k, v in ((overrides["get"]() or {}).get(key) or {}).items() if isinstance(v, str) and v.strip()}
+    except Exception:   # never break a reply because of a settings problem
+        return {}
+
+
+def validate_messages(values: dict) -> dict:
+    out = {}
+    for key, langs in (values or {}).items():
+        if key not in EDITABLE:
+            raise ValueError(f"This message can't be changed: {key}")
+        if not isinstance(langs, dict):
+            raise ValueError("Each message needs a text per language")
+        clean = {}
+        for lang, text in langs.items():
+            if lang not in EDIT_LANGS:
+                raise ValueError(f"Unknown language: {lang}")
+            text = str(text or "").strip()
+            if not text:
+                continue
+            if len(text) > 600:
+                raise ValueError("A message can be at most 600 letters")
+            for must in EDITABLE[key]:
+                if must not in text:
+                    raise ValueError(f"This message must keep {must}" + (" (the helpline number)" if must == "14416" else
+                                                                         " (where the waiting time is filled in)"))
+            rest = text.replace("{wait}", "") if "{wait}" in EDITABLE[key] else text
+            if "{" in rest or "}" in rest:
+                raise ValueError("Please don't use { or } in messages")
+            clean[lang] = text
+        out[key] = clean
+    return out
+
+
 def t(key: str, lang: str | None, **kwargs) -> str:
     """Translate a message key into the student's language, falling back to English."""
     entry = MESSAGES[key]
+    custom = _custom(key)
+    if custom:
+        entry = {**entry, **custom}
     code = get_language(lang).code
     text = entry.get(code) or entry.get(code.split("-")[0]) or entry["en"]
     return text.format(**kwargs)
