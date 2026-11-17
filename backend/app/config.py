@@ -38,7 +38,7 @@ class Settings:
     sms_provider: str = field(default_factory=lambda: _env("SMS_PROVIDER", "console"))
 
     # Public address used in share links: <PUBLIC_BASE_URL>/t/<teacher id> (e.g. https://liveteach.in)
-    public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL"))
+    public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL") or _env("RENDER_EXTERNAL_URL"))
 
     # Set TRUST_PROXY=1 only when the API runs behind our own proxy / load balancer (then the student's IP is
     # read from X-Forwarded-For for the OTP-per-IP limit). Off by default, because the header can be faked.
