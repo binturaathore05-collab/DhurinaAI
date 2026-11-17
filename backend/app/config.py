@@ -56,6 +56,13 @@ class Settings:
     db_encryption_key: str = field(default_factory=lambda: _env("DB_ENCRYPTION_KEY"))
     backup_dir: str = field(default_factory=lambda: _env("BACKUP_DIR", "backups"))
 
+    # B7: email for alerts (any SMTP: Gmail app password, Zoho, Amazon SES …). Empty host = alerts only in the panel.
+    smtp_host: str = field(default_factory=lambda: _env("SMTP_HOST"))
+    smtp_port: int = field(default_factory=lambda: int(_env("SMTP_PORT", "587")))
+    smtp_user: str = field(default_factory=lambda: _env("SMTP_USER"))
+    smtp_password: str = field(default_factory=lambda: _env("SMTP_PASSWORD"))
+    smtp_from: str = field(default_factory=lambda: _env("SMTP_FROM"))
+
     notes_dir: str = field(default_factory=lambda: _env("NOTES_DIR", "notes_pdfs"))
 
 

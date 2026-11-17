@@ -142,6 +142,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   data: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
   review: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/>',
   dash: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
@@ -159,7 +160,8 @@ const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Sci
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
 let KEY = (() => { try { return sessionStorage.getItem('adminToken') || ''; } catch { return ''; } })();
-let ME = null;   // B5: who is logged in and what their role may do (the server checks it again on every request)
+let ME = null;
+let ALERTS = { open: 0, critical: 0 };   // B7: the bell count, refreshed every minute   // B5: who is logged in and what their role may do (the server checks it again on every request)
 const can = (cap) => !!(ME && ME.caps.includes(cap));
 // ---------- Date field with our own calendar popup ----------
 // dateField('id', '2026-04-01') → a button; read it with dateVal('id'); it fires 'change' when a day is picked.
@@ -244,6 +246,7 @@ function shell(active, inner) {
   const item = (href, ic, label, cap) => (!cap || can(cap)) ? `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>` : '';
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
+    ${can('dashboard') ? `<a class="item ${active === 'Alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${ALERTS.open ? ` <span class="pill" style="margin-left:auto;color:${ALERTS.critical ? 'var(--bad)' : 'var(--warn)'}">${ALERTS.open}</span>` : ''}</a>` : ''}
     ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
@@ -543,6 +546,11 @@ async function settingsView() {
       ${f('limits', 'otp_per_phone_day', 'Codes per number per day', s.limits.otp_per_phone_day, 'number')}${f('limits', 'otp_per_device_day', 'Codes per phone (device) per day', s.limits.otp_per_device_day, 'number')}
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
       ${f('limits', 'otp_wrong_per_phone_day', 'Wrong codes before a number is locked for the day', s.limits.otp_wrong_per_phone_day, 'number')}</div>`)}
+    ${card('Alerts', 'Who gets an email when something serious happens. The email never contains what a child wrote.', `<div class="grid2">
+      <label class="f">Send alert emails to<textarea data-sec="alerts" name="email_to" rows="3">${esc((s.alerts.email_to || []).join('\n'))}</textarea><span class="h">One email per line. Needs SMTP on the server.</span></label>
+      <label class="f">Which alerts by email<select data-sec="alerts" name="email_level">${[['critical', 'Only critical (upset student, AI failure, shutdown)'], ['high', 'Critical and high (recommended)'], ['all', 'All']].map(([v, l]) => `<option value="${v}" ${s.alerts.email_level === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      ${f('alerts', 'pending_hours', 'Alert when a high-priority case waits (hours)', s.alerts.pending_hours, 'number')}${f('alerts', 'spike_min', 'Spike: at least this many in an hour', s.alerts.spike_min, 'number', 'and 3× the usual hour')}
+      ${f('alerts', 'check_down_min', 'Safety check failed this many times in 10 min', s.alerts.check_down_min, 'number')}</div>`)}
     ${card('Data keeping', 'Old data is deleted by itself every day. Parent consents, payments and the audit log are kept (legal duties).', `<div class="grid2">${f('data', 'conversation_months', 'Keep conversations (months)', s.data.conversation_months, 'number', 'Questions, answers, tests. Answers a safety case or a saved note points to are kept.')}
       ${f('data', 'safety_months', 'Keep safety records (months)', s.data.safety_months, 'number', 'Flagged messages, safety events, closed cases')}${f('data', 'backup_keep', 'Daily backups to keep', s.data.backup_keep, 'number')}</div>`)}
     ${card('Students', 'Who can sign up', `<div class="grid2">${f('students', 'min_class', 'Lowest class allowed', s.students.min_class, 'number', 'Owner’s choice: class 6. Students under 18 always need a parent’s OK by OTP.')}</div>`)}
@@ -1080,6 +1088,34 @@ function bindData() {
     try { await api('POST', '/data/cleanup'); toast('Clean-up done'); again(); } catch (e) { toast(e.message); } };
 }
 
+// ---------- Alerts (B7) ----------
+const ALV = { all: false };
+const LV = { critical: ['Critical', 'var(--bad)'], high: ['High', 'var(--warn)'], medium: ['Info', 'var(--muted)'] };
+async function alertsView() {
+  const d = await api('GET', '/alerts' + (ALV.all ? '?all=true' : ''));
+  ALERTS = { open: d.open, critical: d.critical };
+  const rows = d.items.map((a) => `<tr><td>${pillOf(LV, a.level)}</td><td><b>${esc(a.title)}</b><div class="muted" style="font-size:12px;max-width:520px">${esc(a.body || '')}</div></td>
+    <td>${when(a.at)}</td><td class="muted" style="font-size:12px">${a.emailed === 1 ? 'emailed' : a.emailed === -1 ? '<span style="color:var(--bad)">email failed</span>' : '—'}</td>
+    <td style="text-align:right;white-space:nowrap">${a.link ? `<a class="btn ghost" href="${esc(a.link)}">Open</a>` : ''} ${a.ack_at ? `<span class="muted" style="font-size:12px">seen by ${esc(a.ack_by)}</span>` : `<button type="button" class="btn ghost" data-ack="${a.id}">Mark as seen</button>`}</td></tr>`).join('');
+  return shell('Alerts', `<div class="row"><div><h1>Alerts</h1><span class="sub">Serious things the team should know at once. Most urgent first.</span></div>
+      ${d.open ? '<button type="button" class="btn ghost" id="ackall">Mark all as seen</button>' : ''}</div>
+    ${d.email_ready ? (d.settings.email_to.length ? `<span class="muted" style="font-size:13px">Emails go to ${esc(d.settings.email_to.join(', '))} (${esc(d.settings.email_level)}).</span>` : '<span class="muted" style="font-size:13px">No one gets emails yet — add addresses in Settings → Alerts.</span>')
+      : '<section class="card" style="border-color:var(--warn);background:#FFFBEB"><span>Email is not set up on the server (SMTP), so alerts show only here. WhatsApp alerts need a WhatsApp Business provider.</span></section>'}
+    <section class="card" style="gap:12px"><div class="presets"><button type="button" data-al="0" class="${ALV.all ? '' : 'on'}">New · ${d.open}</button><button type="button" data-al="1" class="${ALV.all ? 'on' : ''}">All</button></div>
+      <div class="scroll">${rows ? `<table><thead><tr><th>LEVEL</th><th>WHAT</th><th>WHEN</th><th>EMAIL</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Nothing new. All quiet.</p>'}</div></section>`);
+}
+function bindAlerts() {
+  const again = async () => { $('#app').innerHTML = await alertsView(); bindAlerts(); };
+  document.querySelectorAll('[data-al]').forEach((b) => b.onclick = () => { ALV.all = b.dataset.al === '1'; again(); });
+  document.querySelectorAll('[data-ack]').forEach((b) => b.onclick = async () => { try { await api('POST', '/alerts/ack', { id: Number(b.dataset.ack) }); again(); } catch (e) { toast(e.message); } });
+  if ($('#ackall')) $('#ackall').onclick = async () => { if (!(await ask({ title: 'Mark all alerts as seen?', text: 'Do this only after someone has looked at each one.', ok: 'Mark all' }))) return;
+    try { await api('POST', '/alerts/ack', { id: null }); again(); } catch (e) { toast(e.message); } };
+}
+setInterval(async () => {   // keep the bell count fresh without reloading the page
+  if (!KEY || !ME || !can('dashboard') || document.hidden) return;
+  try { const a = await api('GET', '/alerts'); if (a.open !== ALERTS.open) { ALERTS = { open: a.open, critical: a.critical }; const b = $('#bell'); if (b) b.outerHTML = `<a class="item ${location.hash === '#/alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${a.open ? ` <span class="pill" style="margin-left:auto;color:${a.critical ? 'var(--bad)' : 'var(--warn)'}">${a.open}</span>` : ''}</a>`; } } catch {}
+}, 60000);
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -1104,7 +1140,9 @@ async function render() {
     if (ME.must_change) { app.innerHTML = firstPasswordView(); bindFirstPassword(); return; }
     if (h === '#/' && !can('teachers_view')) { location.hash = can('evidence') ? '#/review' : can('students') ? '#/safety' : '#/safety-dash'; return; }
     GUARD = null; HERE = h;
+    if (can('dashboard')) { try { const a = await api('GET', '/alerts'); ALERTS = { open: a.open, critical: a.critical }; } catch {} }
     if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
+    else if (h === '#/alerts') { app.innerHTML = await alertsView(); bindAlerts(); }
     else if (h === '#/data') { app.innerHTML = await dataView(); bindData(); }
     else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }

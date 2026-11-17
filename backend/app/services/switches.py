@@ -46,6 +46,11 @@ def set_switch(db: Database, key: str, off: bool, reason: str, by: str, now: flo
                "at = excluded.at", (key, int(off), reason[:500], by, now))
     db.execute("INSERT INTO kill_switch_log (key, off, reason, by_who, at) VALUES (?, ?, ?, ?, ?)",
                (key, int(off), reason[:500], by, now))
+    from . import alerts   # B7: everyone should know the AI (or part of it) is off / back
+    what = FEATURES.get(key) or (f"AI of teacher {key[8:]}" if key.startswith("teacher:") else f"AI model {key[6:]}")
+    alerts.raise_alert(db, "shutdown", "critical" if off else "medium",
+                       f"Emergency: {what} turned {'OFF' if off else 'back on'} by {by}", f"Why: {reason}",
+                       "#/emergency", f"shutdown:{key}:{int(off)}:{int(now)}", now=now)
 
 
 def ai_paused_for(db: Database, teacher_id: str | None) -> bool:

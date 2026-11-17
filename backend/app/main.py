@@ -34,6 +34,7 @@ from .services import safety_dashboard
 from .services import incidents
 from .services import roles
 from .services import data_protection
+from .services import alerts
 from .services.tutor import is_delete_command
 import threading
 import hashlib
@@ -930,6 +931,48 @@ def _data_jobs_loop():
 
 if os.environ.get("DATA_JOBS", "1") == "1":
     threading.Thread(target=_data_jobs_loop, daemon=True, name="data-jobs").start()
+
+
+# ---------- B7: alerts ----------
+
+alerts.mailer["base_url"] = settings.public_base_url
+if settings.smtp_host:
+    alerts.mailer["send"] = alerts.smtp_sender(settings.smtp_host, settings.smtp_port, settings.smtp_user,
+                                               settings.smtp_password, settings.smtp_from or settings.smtp_user)
+
+
+def _alerts_loop():
+    """Every 5 minutes: cases waiting too long, unusual spikes, the safety check failing again and again."""
+    while True:
+        time.sleep(300)
+        try:
+            alerts.periodic(db, admin.get_settings(db))
+        except Exception as exc:
+            print(f"[alerts] check failed: {exc}")
+
+
+if os.environ.get("DATA_JOBS", "1") == "1":
+    threading.Thread(target=_alerts_loop, daemon=True, name="alerts").start()
+
+
+class AlertAck(BaseModel):
+    id: int | None = None      # None = all open alerts
+    note: str = ""
+
+
+@app.get("/admin/api/alerts", dependencies=[Depends(need("dashboard"))])
+def admin_alerts(all: bool = False):
+    return {**alerts.listing(db, not all), "email_ready": bool(alerts.mailer["send"]),
+            "settings": alerts.alert_settings(admin.get_settings(db))}
+
+
+@app.post("/admin/api/alerts/ack")
+def admin_alerts_ack(body: AlertAck, user=Depends(need("dashboard"))):
+    try:
+        alerts.acknowledge(db, body.id, user["email"], body.note)
+    except KeyError:
+        raise HTTPException(404, "Alert not found")
+    return admin_alerts()
 if not db.encrypted:
     print("[data] WARNING: the database is NOT encrypted. Set DB_ENCRYPTION_KEY before launch.")
 

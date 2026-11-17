@@ -173,6 +173,7 @@ def describe(method: str, path: str) -> str:
         (r"^POST /admin/api/students/(\d+)/status$", "Changed status of student {0}"),
         (r"^GET /admin/api/students/(\d+)$", "Viewed flagged messages of student {0}"),
         (r"^GET /admin/api/verify$", "Looked up a reported conversation"),
+        (r"^POST /admin/api/alerts/ack$", "Marked alerts as seen"),
         (r"^POST /admin/api/team$", "Added a team member"), (r"^PUT /admin/api/team/(\d+)$", "Changed team member {0}"),
         (r"^POST /admin/api/team/(\d+)/reset$", "Reset the password of team member {0}"),
         (r"^GET /admin/api/incidents/(\d+)$", "Opened review case {0}"),

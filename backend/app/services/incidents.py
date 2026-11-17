@@ -55,12 +55,24 @@ def open_auto(db: Database, kind: str, student_id: int | None, teacher_id: str |
         db.execute("UPDATE incidents SET events = events + 1, last_at = ?, qa_id = COALESCE(?, qa_id) WHERE id = ?",
                    (now, qa_id, existing["id"]))
         _note(db, existing["id"], "system", "happened again", summary, now)
+        n = db.one("SELECT events FROM incidents WHERE id = ?", (existing["id"],))["events"]
+        if kind == "serious_request" and n >= 3:   # B7: the same student keeps trying
+            from . import alerts
+            alerts.raise_alert(db, "repeated", "high", f"Student made {n} harmful requests (case #{existing['id']})",
+                               "The same student keeps asking for harmful things.", f"#/case/{existing['id']}",
+                               f"repeated:{existing['id']}", student_id, teacher_id, now)
         return existing["id"]
     cur = db.execute(
         "INSERT INTO incidents (created_at, last_at, source, kind, severity, status, student_id, teacher_id, qa_id, "
         "title, summary, events) VALUES (?, ?, 'auto', ?, ?, 'open', ?, ?, ?, ?, ?, 1)",
         (now, now, kind, severity, student_id, teacher_id, qa_id, title, (summary or "")[:1000]))
     _note(db, cur.lastrowid, "system", "opened", summary, now)
+    if kind == "care":   # B7: a person should look now
+        from . import alerts
+        alerts.raise_alert(db, "care", "critical", f"A student may need help (case #{cur.lastrowid})",
+                           "A student seemed upset or talked about hurting themselves. Sir gave the helpline. "
+                           "Please look at the case now.", f"#/case/{cur.lastrowid}", f"care:{cur.lastrowid}",
+                           student_id, teacher_id, now)
     return cur.lastrowid
 
 
@@ -185,6 +197,11 @@ def act(db: Database, incident_id: int, by: str, action: str, note: str = "", re
                    "resolved_at = ?, ai_failure = ? WHERE id = ?",
                    (resolution, note[:2000], by, now, int(resolution == "ai_failure"), incident_id))
         _note(db, incident_id, by, "resolved: " + RESOLUTIONS[resolution], note, now)
+        if resolution == "ai_failure":   # B7: something unsafe reached a student
+            from . import alerts
+            alerts.raise_alert(db, "ai_failure", "critical", f"AI failure confirmed in case #{incident_id}",
+                               f"{by} found that something unsafe reached a student. Consider Emergency and the safety "
+                               f"tests.", f"#/case/{incident_id}", f"ai_failure:{incident_id}", now=now)
     elif action == "reopen":
         if r["status"] != "resolved":
             raise IncidentError("This case is not closed")
