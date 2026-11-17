@@ -169,3 +169,9 @@ content, and files identical across institutes are stored and processed only onc
   their own app's students, can't block or unblock, and every look is written to the audit log
   (`/teacher/safety`; the screen comes with the Institute panel).
 
+
+## Testing phase: lowest AI bill (owner, 17 Nov 2026)
+While we are testing, keep the OpenAI bill as low as possible: $5 prepaid, auto-reload off (spending stops at $0).
+Demo server: `LLM_MODEL=gpt-4o-mini` for everything (no separate small model), free OpenAI safety check,
+`SAFETY_LAB_AUTORUN=0` (the 160-case safety test runs only when someone presses it in admin, not on every restart of
+the free server). Any test Claude runs with the real AI uses the fewest calls needed; bigger models only after testing.
