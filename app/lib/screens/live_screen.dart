@@ -9,6 +9,7 @@ import '../share.dart';
 import '../theme.dart';
 import 'library_screen.dart';
 import 'pay_screen.dart';
+import 'setup_screen.dart';
 import 'test_screen.dart';
 
 /// "Sir, save this" in any language saves the notes of the whole class so far as one PDF.
@@ -100,7 +101,9 @@ class _LiveScreenState extends State<LiveScreen> {
   Future<void> _refreshAccess() async {
     try {
       final a = await AppScope.of(context).api.access();
-      if (mounted) setState(() => _access = a);
+      if (!mounted) return;
+      if (a.setupNeeded) return goTo(context, a); // B1: class / parent's OK still missing
+      setState(() => _access = a);
     } catch (_) {}
   }
 
@@ -193,7 +196,7 @@ class _LiveScreenState extends State<LiveScreen> {
         _openPlans();
       } else {
         _toast(e.message);
-        if (e.status == 403 || e.status == 503) _refreshAccess(); // AI paused: show the notice on the call screen
+        if (e.status == 403 || e.status == 503 || e.status == 428) _refreshAccess(); // paused / setup missing
       }
     } catch (_) {
       _toast('No internet connection. Please try again.');

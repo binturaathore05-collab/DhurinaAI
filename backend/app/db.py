@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS students (
     status TEXT NOT NULL DEFAULT 'active',      -- A3: active | warning | suspended | review | disabled
     status_until REAL,
     status_reason TEXT,
+    class_level TEXT,                           -- B1: "6".."12" or "college"
+    is_adult INTEGER,                           -- B1: 1 = said they are 18 or older
+    consent_status TEXT,                        -- B1: given | withdrawn | NULL
+    parent_phone TEXT,
+    consent_at REAL,
     UNIQUE (teacher_id, phone)
 );
 CREATE TABLE IF NOT EXISTS otp_codes (
@@ -271,6 +276,19 @@ CREATE TABLE IF NOT EXISTS safety_test_runs (  -- A8: every run of the safety te
     seconds REAL
 );
 
+CREATE TABLE IF NOT EXISTS parent_consents (  -- B1: proof of every parent's OK (DPDP Act), never deleted
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    teacher_id TEXT,
+    parent_phone TEXT NOT NULL,
+    given_at REAL NOT NULL,
+    ip TEXT,
+    notice_version TEXT,
+    revoked_at REAL,
+    revoked_by TEXT,
+    revoke_reason TEXT
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
@@ -306,6 +324,8 @@ class Database:
         ("saved_notes", "qa_upto", "INTEGER"),
         ("students", "status", "TEXT NOT NULL DEFAULT 'active'"), ("students", "status_until", "REAL"),
         ("students", "status_reason", "TEXT"),
+        ("students", "class_level", "TEXT"), ("students", "is_adult", "INTEGER"),
+        ("students", "consent_status", "TEXT"), ("students", "parent_phone", "TEXT"), ("students", "consent_at", "REAL"),
         ("qa_history", "model", "TEXT"), ("qa_history", "policy_version", "TEXT"), ("qa_history", "prev_hash", "TEXT"),
         ("qa_history", "record_hash", "TEXT"), ("qa_history", "verify_code", "TEXT"), ("qa_history", "sealed_at", "REAL"),
         ("verified_answers", "active", "INTEGER NOT NULL DEFAULT 1"), ("verified_answers", "updated_at", "TEXT"),

@@ -21,6 +21,7 @@ DEFAULT_SETTINGS = {
                 "linked_account": ""},
     "defaults": {"platform_percent": 20, "demo_questions": 3, "grace_days": 2, "grace_questions": 3,
                  "renew_reminder_days": 3},
+    "students": {"min_class": 6},    # B1: lowest class allowed at signup
     "limits": dict(DEFAULT_LIMITS),
     "safety": dict(student_safety.DEFAULT_SAFETY),   # A3 warnings ladder (see services/student_safety.py)   # A6 rate limits (see services/limits.py)
     "ai": {"trusted_sites": ["pib.gov.in", "india.gov.in", "ncert.nic.in"],
@@ -58,6 +59,14 @@ def save_settings(db: Database, data: dict) -> dict:
         current["safety"].update(student_safety.validate_settings(current["safety"]))
     except student_safety.SafetyError as exc:
         raise AdminError(str(exc))
+    try:
+        mc = int(current["students"]["min_class"])
+        ok = 1 <= mc <= 12 and float(current["students"]["min_class"]) == mc
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        raise AdminError("Lowest class must be a whole number from 1 to 12")
+    current["students"]["min_class"] = mc
     for k, v in current["limits"].items():
         try:
             ok = int(v) >= 1 and float(v) == int(v)

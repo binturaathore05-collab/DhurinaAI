@@ -256,4 +256,8 @@ def detail(db: Database, student_id: int) -> dict:
         "SELECT old_status, new_status, by_who, reason, remarks, until, at FROM student_status_log "
         "WHERE student_id = ? ORDER BY at DESC, id DESC LIMIT 100", (student_id,))]
     out["reasons"] = REASONS
+    from . import consent   # B1
+    out["class_level"], out["is_adult"] = r["class_level"], r["is_adult"]
+    out["consent_status"] = "not needed (18+)" if r["is_adult"] else (r["consent_status"] or "not given yet")
+    out["consents"] = consent.history(db, student_id)
     return out

@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../api.dart';
 import '../main.dart';
 import '../theme.dart';
-import 'live_screen.dart';
+import 'setup_screen.dart';
 
 /// Screen 2 · OTP verification: six boxes (one hidden field), resend timer, "Verify & join class".
 class OtpScreen extends StatefulWidget {
@@ -73,9 +73,9 @@ class _OtpScreenState extends State<OtpScreen> {
       _error = null;
     });
     try {
-      await AppScope.of(context).api.verifyOtp(widget.phone, _code.text);
+      final a = await AppScope.of(context).api.verifyOtp(widget.phone, _code.text);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LiveScreen()), (_) => false);
+      goTo(context, a); // B1: class / parent's OK first if still needed, else straight to the class
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {

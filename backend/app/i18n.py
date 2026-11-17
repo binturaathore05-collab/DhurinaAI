@@ -108,6 +108,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "सर थोड़ी देर के ब्रेक पर हैं। कुछ देर बाद फिर आइए — आपके नोट्स और लाइब्रेरी खुले हैं।",
         "pa": "ਸਰ ਥੋੜ੍ਹੀ ਦੇਰ ਦੀ ਬ੍ਰੇਕ 'ਤੇ ਹਨ। ਕੁਝ ਦੇਰ ਬਾਅਦ ਫਿਰ ਆਓ — ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ।",
     },
+    "parent_sms": {
+        "en": "{code} is the code to allow your child to study with {teacher} on LiveTeach (AI teacher app). Give it to your child only if you agree. Valid 5 minutes.",
+        "hi": "{code} आपके बच्चे को LiveTeach (AI टीचर ऐप) पर {teacher} से पढ़ने की अनुमति देने का कोड है। सहमत हों तभी बच्चे को दें। 5 मिनट तक मान्य।",
+    },
+    "profile_needed": {
+        "en": "Please tell us your class first.",
+        "hi": "पहले अपनी क्लास बताइए।",
+    },
+    "consent_needed": {
+        "en": "A parent needs to allow LiveTeach first. Enter your mother's or father's phone number to send them a code.",
+        "hi": "पहले माता-पिता की अनुमति चाहिए। माँ या पापा का फ़ोन नंबर डालिए, उन्हें एक कोड भेजा जाएगा।",
+    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},
