@@ -97,6 +97,38 @@ def active_subscription(db: Database, student_id: int, now: float | None = None)
                   "ORDER BY ends_at DESC LIMIT 1", (student_id, now, now))
 
 
+FREE_PLAN = "free"   # a plan given by Dhurina without payment (testers, scholarships); never counted as money
+
+
+def grant_free_plan(db: Database, student_id: int, days: int, now: float | None = None) -> float:
+    """Super Admin: a plan without payment, from now (or from the end of a plan the student already has)."""
+    if not 1 <= int(days) <= 366:
+        raise ValueError("Give 1 to 366 days")
+    now = now or time.time()
+    start = max(now, _latest_end(db, student_id) or 0)
+    end = start + int(days) * 86400
+    db.execute("INSERT INTO subscriptions (student_id, plan_id, starts_at, ends_at) VALUES (?, ?, ?, ?)",
+               (student_id, FREE_PLAN, start, end))
+    return end
+
+
+def end_free_plan(db: Database, student_id: int, now: float | None = None) -> None:
+    """Stops free plans at once (paid plans are never touched)."""
+    now = now or time.time()
+    db.execute("UPDATE subscriptions SET ends_at = ? WHERE student_id = ? AND plan_id = ? AND ends_at > ?",
+               (now, student_id, FREE_PLAN, now))
+    db.execute("DELETE FROM subscriptions WHERE student_id = ? AND plan_id = ? AND starts_at >= ends_at",
+               (student_id, FREE_PLAN))
+
+
+def plan_summary(db: Database, student_id: int, now: float | None = None) -> dict:
+    now = now or time.time()
+    cur = active_subscription(db, student_id, now)
+    free = db.one("SELECT MAX(ends_at) AS e FROM subscriptions WHERE student_id = ? AND plan_id = ? AND ends_at > ?",
+                  (student_id, FREE_PLAN, now))["e"]
+    return {"active": bool(cur), "ends_at": _latest_end(db, student_id) if cur else None, "free_until": free}
+
+
 def _latest_end(db: Database, student_id: int) -> float | None:
     """When the student's paid time runs out (including plans bought in advance)."""
     row = db.one("SELECT MAX(ends_at) AS e FROM subscriptions WHERE student_id = ?", (student_id,))

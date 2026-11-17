@@ -181,3 +181,9 @@ No video / AI avatar for now. The app is built and tested end to end in **audio*
 answers in voice (and text). Questions, answers, notes and tests all work in audio mode first; video mode comes
 later, after a small cost trial of avatar providers (per-minute billing). While testing, voice uses the phone's own
 free speech-to-text and text-to-speech; the teacher's own cloned voice is a later step.
+
+## Free plan without payment, for testers (owner, 18 Nov 2026)
+Payments are not set up yet, so testers would stop after the 3 demo questions. Super Admin can now give any student a
+plan without payment (admin → Student safety → the student → Plan → "Give free plan", days + why) and end it again.
+It never counts as money or as a paying plan in reports; every change is in the audit log. Also usable later for
+scholarships. On the free demo server it is lost when the server restarts.
