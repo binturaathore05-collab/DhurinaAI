@@ -9,5 +9,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
  && rm -rf /var/lib/apt/lists/*
 COPY . .
 # demo hosting keeps data in /tmp (wiped on restart); a real server sets DATABASE_PATH etc. to a lasting disk
-ENV DATABASE_PATH=/tmp/liveteach.db NOTES_DIR=/tmp/notes AVATAR_DIR=/tmp/avatars PYTHONUNBUFFERED=1
+ENV DATABASE_PATH=/tmp/liveteach.db NOTES_DIR=/tmp/notes AVATAR_DIR=/tmp/avatars BACKUP_DIR=/tmp/backups PYTHONUNBUFFERED=1
 CMD python seed.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'

@@ -136,3 +136,8 @@ Class 9–10 medium (no dating advice), Class 11–12 medium, 18+ relaxed. Sylla
 Five admin roles (Super Admin, Safety Admin, Support, Technical, Auditor), Claude's split of permissions — see
 `backend/app/services/roles.py` and admin → Team. Only Super Admins manage the team and money settings; only Super /
 Safety Admins see student conversations or block students. New members get a one-time password.
+
+## Data keeping — B6 (17 Nov 2026)
+Owner didn't pick a period; Claude used its suggestion: conversations 12 months, safety records 36 months, then
+deleted by themselves (admin Settings → Data keeping). Students can delete their account and data themselves (app or
+by telling Sir). Database and backups encrypted.

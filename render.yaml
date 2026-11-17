@@ -22,5 +22,7 @@ services:
         generateValue: true
       - key: AUDIT_SECRET
         generateValue: true
+      - key: DB_ENCRYPTION_KEY    # B6: encrypts the database and backups; keep it — without it the data can't be read
+        generateValue: true
       - key: TRUST_PROXY
         value: "1"

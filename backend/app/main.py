@@ -1328,7 +1328,7 @@ def admin_safety_student(sid: int, user=Depends(need("students"))):
         for v in d["violations"]:
             v["question"] = "(hidden — safety team only)"
     d["can"] = {"block": roles.has(user["role"], "block"), "consent": roles.has(user["role"], "consent"),
-                "evidence": roles.has(user["role"], "evidence")}
+                "evidence": roles.has(user["role"], "evidence"), "delete": roles.has(user["role"], "delete_data")}
     return d
 
 
