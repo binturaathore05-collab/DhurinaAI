@@ -134,6 +134,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  lab: '<path d="M9 3h6M10 3v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
   audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
@@ -230,7 +231,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -766,6 +767,39 @@ function bindAudit() {
   document.querySelectorAll('[data-ap]').forEach((b) => b.onclick = () => { AU.offset = Number(b.dataset.ap) * 50; again(); });
 }
 
+// ---------- Safety tests (A8) ----------
+async function testsView() {
+  const d = await api('GET', '/safety-tests');
+  const L = d.launch, last = d.runs.find((r) => r.mode === 'live');
+  const color = { ready: 'var(--ok)', running: 'var(--warn)', blocked: 'var(--bad)' }[L.state];
+  const bg = { ready: '#F0FDF4', running: '#FFFBEB', blocked: '#FEF2F2' }[L.state];
+  const title = { ready: 'Launch: ready', running: 'Safety tests are running…', blocked: 'Launch: blocked' }[L.state];
+  const groups = last ? Object.values(last.groups).map((g) => `<tr><td>${esc(g.label)}</td><td><b>${g.passed}/${g.total}</b> <span class="muted">(${Math.round(g.share * 100)}%)</span></td>
+    <td class="muted">${Math.round(g.needed * 100)}%</td><td><span class="pill" style="color:${g.ok ? 'var(--ok)' : 'var(--bad)'}">${g.ok ? 'Pass' : 'Fail'}</span></td></tr>`).join('') : '';
+  const fails = last ? last.failures.map((f) => `<tr><td class="muted" style="font-size:12px">${esc(f.id)}</td><td>${esc(f.lang)}</td><td style="max-width:360px">${esc(f.text)}</td>
+    <td>${esc(f.want)}</td><td style="max-width:260px;color:var(--bad)">${esc(String(f.got).slice(0, 160))}</td></tr>`).join('') : '';
+  const trig = { startup: 'Server started with a new model', settings: 'Safety settings changed', emergency: 'Model switched', admin: 'Run by admin' };
+  const hist = d.runs.map((r) => `<tr><td>${when(r.at)}</td><td>${esc(trig[r.trigger] || r.trigger || '')}</td><td>${esc(r.provider || '')} · ${esc(r.model || '')}</td>
+    <td>${r.total - r.failed}/${r.total}</td><td><span class="pill" style="color:${r.passed ? 'var(--ok)' : 'var(--bad)'}">${r.passed ? 'Passed' : 'Failed'}</span></td><td class="muted">${r.seconds}s</td></tr>`).join('');
+  return shell('Safety tests', `<div class="row"><div><h1>Safety tests</h1><span class="sub">${d.cases} test messages in ${d.languages.length} languages (Hindi, Hinglish, English, Punjabi). They run by themselves whenever the AI model, the safety settings or the instructions change.</span></div>
+      <button class="btn primary" id="runlab" ${L.state === 'running' ? 'disabled' : ''}>Run tests now</button></div>
+    <section class="card" style="border-color:${color};background:${bg}"><b style="color:${color};font-size:18px">${title}</b><span class="muted">${esc(L.why)}</span>
+      <span class="muted" style="font-size:12px">Checker: ${esc(L.provider)} · model ${esc(L.model)}</span></section>
+    ${last ? `<section class="card"><div class="row"><h2>Latest result</h2><span class="muted">${when(last.at)} · ${last.total - last.failed}/${last.total} checks passed</span></div>
+      <div class="scroll"><table><thead><tr><th>CHECK</th><th>PASSED</th><th>NEEDED</th><th></th></tr></thead><tbody>${groups}</tbody></table></div></section>
+      <section class="card"><h2>What failed</h2><div class="scroll">${fails ? `<table><thead><tr><th>CASE</th><th>LANG</th><th>MESSAGE</th><th>SHOULD BE</th><th>WAS</th></tr></thead><tbody>${fails}</tbody></table>` : '<p class="muted">Nothing — every check passed.</p>'}</div></section>` : ''}
+    <section class="card"><h2>All runs</h2><div class="scroll">${hist ? `<table><thead><tr><th>WHEN</th><th>WHY</th><th>CHECKER · MODEL</th><th>PASSED</th><th>RESULT</th><th>TIME</th></tr></thead><tbody>${hist}</tbody></table>` : '<p class="muted">No runs yet.</p>'}</div></section>`);
+}
+let labTimer = null;
+function bindTests() {
+  clearTimeout(labTimer);
+  if ($('#runlab').disabled) labTimer = setTimeout(async () => { if (location.hash === '#/tests') { $('#app').innerHTML = await testsView(); bindTests(); } }, 5000);
+  $('#runlab').onclick = async () => {
+    try { await api('POST', '/safety-tests/run'); toast('Safety tests started'); $('#app').innerHTML = await testsView(); bindTests(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -792,6 +826,7 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/tests') { $('#app').innerHTML = await testsView(); bindTests(); }
     else if (h === '#/audit') { $('#app').innerHTML = await auditView(); bindAudit(); }
     else if (h === '#/emergency') { $('#app').innerHTML = await emergencyView(); bindEmergency(); }
     else if (h === '#/safety') { app.innerHTML = await safetyView(); bindSafety(); }

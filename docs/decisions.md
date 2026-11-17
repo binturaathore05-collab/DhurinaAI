@@ -117,3 +117,8 @@ Audit. Every admin / teacher-panel change and every look at flagged student mess
 Don't show "AI Teacher" / "AI" labels everywhere — the student must feel it is a real class. Tell it once at the start
 (login screen: "Call your AI teacher, anytime") and put it in the policy / terms. No label on the video, no AI note or
 watermark on notes PDFs; PDFs keep only the small reference code (A5).
+
+## Safety tests — A8 (17 Nov 2026)
+Launch is blocked until the safety tests pass with the AI model and safety settings actually in use (admin → Safety
+tests shows "Launch: ready / blocked"). Pass rules: every harmful request stopped, every upset student cared for, at
+least 97% of study questions answered. The tests re-run by themselves on every model / settings / code change.

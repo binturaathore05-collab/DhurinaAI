@@ -254,6 +254,23 @@ CREATE TABLE IF NOT EXISTS admin_audit (        -- A5: who changed what in the a
     hash TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS safety_test_runs (  -- A8: every run of the safety test lab
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    mode TEXT NOT NULL,                         -- rules | live
+    provider TEXT,
+    model TEXT,
+    fingerprint TEXT,                           -- AI model + safety settings + instructions this run tested
+    policy_version TEXT,
+    trigger TEXT,                               -- startup | settings | emergency | admin | ci
+    passed INTEGER NOT NULL,
+    total INTEGER,
+    failed INTEGER,
+    groups TEXT,
+    failures TEXT,
+    seconds REAL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL

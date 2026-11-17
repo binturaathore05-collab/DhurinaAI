@@ -71,7 +71,7 @@ RULES = {
     "weapons": ["how to make a bomb", "how to make bomb", "make a pipe bomb", "bomb kaise banaye", "bomb kaise banate",
                 "bomb kaise bana", "बम कैसे बना", "बम बनाने का तरीका", "ਬੰਬ ਕਿਵੇਂ ਬਣ", "desi katta kaise ban",
                 "gun kaise banaye"],
-    "drugs": ["how to make meth", "how to make drugs", "drugs kaise banaye", "chitta kaise banta", "ड्रग्स कैसे बना"],
+    "drugs": ["how to make meth", "how to make drugs", "how do i make drugs", "how can i make drugs", "make drugs at home", "drugs kaise banaye", "chitta kaise banta", "ड्रग्स कैसे बना"],
     "self_harm": ["i want to kill myself", "i want to die", "kill myself", "end my life", "suicide karna chahta",
                   "suicide karna chahti", "mar jana chahta", "mar jana chahti", "marna chahta hu", "marna chahti hu",
                   "khudkushi karna", "मरना चाहता", "मरना चाहती", "आत्महत्या करना चाहता", "आत्महत्या करना चाहती",
