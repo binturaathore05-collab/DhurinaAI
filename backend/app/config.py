@@ -42,6 +42,9 @@ class Settings:
     # read from X-Forwarded-For for the OTP-per-IP limit). Off by default, because the header can be faked.
     trust_proxy: bool = field(default_factory=lambda: _env("TRUST_PROXY", "0") == "1")
 
+    # A2 safety check: auto (= llm when an AI key is set, else rules only) | llm | openai | rules
+    moderation_provider: str = field(default_factory=lambda: _env("MODERATION_PROVIDER", "auto"))
+
     notes_dir: str = field(default_factory=lambda: _env("NOTES_DIR", "notes_pdfs"))
 
 

@@ -97,3 +97,9 @@ counts; blocked topic = small problem, clearly harmful request = serious; 3 smal
 suspension; 1 serious → 24 h suspension, 2 serious in 30 days → stopped until an admin reviews. Notes and library
 stay open while suspended. Blocked-student message names "your parent or Dhurina support" (open question 7).
 Only Dhurina admins see flags and the student's words for now (open question 5: teacher access).
+
+## Safety check — A2 (17 Nov 2026)
+Built with Claude's choices: every student message and every AI text is checked before it is shown; if the check
+can't run, nothing goes out ("please try again"). Default checker = our own AI (small model) because it understands
+Hindi / Hinglish and study context; the free OpenAI moderation endpoint is ready as an option. **Owner to decide**
+the final provider after testing on the A8 Hindi / Hinglish set (open question 6).

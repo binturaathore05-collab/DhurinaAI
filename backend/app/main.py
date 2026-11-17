@@ -24,6 +24,8 @@ from .services import classroom, quiz, share
 from .services import admin_reports
 from .services import limits
 from .services import student_safety
+from .services import moderation
+from .languages import detect_language
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
@@ -36,15 +38,36 @@ def sms_console(phone: str, message: str) -> None:
 
 db = Database(settings.database_path)
 kb = KnowledgeBase(db)
-llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_model)
-       if settings.llm_api_key else FakeLLM())
-# optional cheaper model for small helper jobs (search keywords); answers, notes and tests use the main model
+raw_llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_model)
+           if settings.llm_api_key else FakeLLM())
+# optional cheaper model for small helper jobs (search keywords, safety check); answers, notes and tests use the
+# main model. Search keywords are never shown to the student, so they skip the output check.
 side_llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_small_model)
-            if settings.llm_api_key and settings.llm_small_model else llm)
+            if settings.llm_api_key and settings.llm_small_model else raw_llm)
+
+# A2: independent safety check on every student message and every AI text before a student sees it
+_provider = settings.moderation_provider
+if _provider == "auto":
+    _provider = "llm" if settings.llm_api_key else "rules"
+if _provider == "rules":
+    print("[safety] WARNING: safety model is OFF (rules only). Set LLM_API_KEY or MODERATION_PROVIDER before launch.")
+_mod_model = settings.llm_small_model or settings.llm_model
+moderator = moderation.Moderator(
+    db, _provider,
+    OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, _mod_model, timeout=12) if settings.llm_api_key else FakeLLM(),
+    settings.llm_base_url, settings.llm_api_key,
+    model_name="omni-moderation-latest" if _provider == "openai" else (_mod_model if _provider == "llm" else "rules"))
+llm = moderation.ModeratedLLM(raw_llm, moderator)
 tutor = Tutor(db, kb, llm, side_llm)
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
 
 app = FastAPI(title="LiveTeach API", version="0.1.0")
+
+
+@app.exception_handler(moderation.Unavailable)
+def _moderation_down(request: Request, exc: moderation.Unavailable):
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": t("safety_retry", "en")}, status_code=503)
 
 
 # ---------- dependencies ----------
@@ -109,6 +132,8 @@ def _too_many(exc: limits.Limited) -> HTTPException:
 def _gate(student_id: int) -> None:
     """A3: a suspended / under-review / disabled student can't use Sir's AI (checked on the server every time,
     so logging out, reinstalling or a new class doesn't help). Notes, library and payments keep working."""
+    row = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))
+    moderation.request_ctx.set({"student_id": student_id, "teacher_id": row["teacher_id"] if row else None})
     blocked = student_safety.can_use_ai(db, student_id)
     if blocked:
         raise HTTPException(403, blocked["account_message"])
@@ -211,6 +236,10 @@ class StudentName(BaseModel):
 def set_my_name(body: StudentName, student=Depends(current_student)):
     """'What should Sir call you?' — the AI teacher uses it now and then."""
     name = body.name.strip()[:40]
+    if name:   # the name goes into Sir's instructions, so it is checked like a message
+        moderation.request_ctx.set({"student_id": student["id"], "teacher_id": student["teacher_id"]})
+        if not _check_input(name).safe:
+            raise HTTPException(400, "Please choose a different name.")
     db.execute("UPDATE students SET name = ? WHERE id = ?", (name or None, student["id"]))
     return {"name": name}
 
@@ -241,6 +270,54 @@ def _class_notes(student_id: int, teacher: TeacherProfile, session_id: int | Non
         raise HTTPException(400, str(exc))
 
 
+def _retry() -> HTTPException:
+    return HTTPException(503, t("safety_retry", "en"))
+
+
+def _check_input(text: str) -> moderation.Verdict:
+    """A2 stage 1. If the check can't run, the student is asked to try again (nothing unchecked goes through)."""
+    try:
+        return moderator.check_input(text)
+    except moderation.Unavailable:
+        raise _retry()
+
+
+def _safe_reply(student_id: int, teacher: TeacherProfile, question: str, v: moderation.Verdict, session_id):
+    """A message the input check stopped: no AI call. Care for a student in distress; a kind refusal for a harmful
+    request (serious, counts in A3); a study redirect for a small problem (minor, counts in A3)."""
+    lang = detect_language(question)
+    level = style_mod.get_level(db, student_id)
+    if v.severity == "care":
+        result = tutor._redirect(student_id, question, lang, "care", None, level, session_id, "care_message")
+    elif v.severity == "serious":
+        result = tutor._redirect(student_id, question, lang, "unsafe", v.category, level, session_id, "safety_refusal")
+    else:
+        result = tutor._redirect(student_id, question, lang, "blocked", v.category, level, session_id)
+    _after_answer(student_id, teacher.id, question, result)
+    return result
+
+
+def _refund(student_id: int) -> None:
+    """The safety check failed after a demo question was counted: give it back."""
+    if _access(student_id)["state"] == "demo":
+        db.execute("UPDATE students SET demo_questions_used = MAX(demo_questions_used - 1, 0) WHERE id = ?", (student_id,))
+
+
+def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, session_id):
+    """A2 stage 2 happens inside the model wrapper: an unsafe AI answer is never stored or shown."""
+    try:
+        result = tutor.answer(student_id, teacher, question, session_id)
+    except moderation.UnsafeOutput:
+        lang = detect_language(question)
+        return tutor._redirect(student_id, question, lang, "stopped", None, style_mod.get_level(db, student_id),
+                               session_id, "safety_replaced")
+    except moderation.Unavailable:
+        _refund(student_id)
+        raise _retry()
+    _after_answer(student_id, teacher.id, question, result)
+    return result
+
+
 @app.post("/class/ask")
 def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
     _limit_questions(student["id"])
@@ -250,9 +327,12 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     if quiz.is_test_command(body.question):   # "Sir, test lo" → the app asks MCQ / written / oral
         return {"type": "test_offer", "mode": quiz.mode_in(body.question), **classroom.class_summary(
             db, student["id"], classroom.latest_session_with_content(db, student["id"], session_id))}
+    verdict = _check_input(body.question)
+    if not verdict.safe:
+        result = _safe_reply(student["id"], teacher, body.question, verdict, session_id)
+        return {"type": "answer", **result.__dict__, **_access(student["id"])}
     _consume(student["id"], teacher)
-    result = tutor.answer(student["id"], teacher, body.question, session_id)
-    _after_answer(student["id"], teacher.id, body.question, result)
+    result = _answer_safely(student["id"], teacher, body.question, session_id)
     return {"type": "answer", **result.__dict__, **_access(student["id"])}
 
 
@@ -336,6 +416,13 @@ def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student)
     row = db.one("SELECT mode FROM tests WHERE id = ? AND student_id = ?", (test_id, student["id"]))
     if row is not None and row["mode"] != "mcq":   # MCQ is checked without AI, so it is not limited
         _limit_questions(student["id"])
+        if isinstance(body.answer, str):
+            v = _check_input(body.answer)
+            if not v.safe:
+                if v.severity in ("serious", "minor"):
+                    student_safety.record_violation(db, student["id"], teacher.id, v.severity, v.category, body.answer,
+                                                    None, student_safety.safety_settings(admin.get_settings(db)))
+                raise HTTPException(400, t("care_message" if v.severity == "care" else "safety_refusal", "en"))
     try:
         return quiz.answer_question(db, llm, student["id"], test_id, body.answer, teacher.name)
     except KeyError:
@@ -360,8 +447,7 @@ def test_reteach(test_id: int, body: Reteach, student=Depends(current_student),
         return {"type": "none"}
     _consume(student["id"], teacher)
     session_id = classroom.current_session(db, student["id"], teacher.id)
-    result = tutor.answer(student["id"], teacher, request_text, session_id)
-    _after_answer(student["id"], teacher.id, request_text, result)
+    result = _answer_safely(student["id"], teacher, request_text, session_id)
     return {"type": "answer", "question": request_text, **result.__dict__, **_access(student["id"])}
 
 
@@ -782,6 +868,13 @@ class StudentAction(BaseModel):
 @app.get("/admin/api/students", dependencies=[Depends(require_admin)])
 def admin_safety_students(status: str = "", q: str = "", teacher: str = "", offset: int = 0, limit: int = 25):
     return student_safety.list_students(db, status, q, teacher, offset, limit)
+
+
+@app.get("/admin/api/safety-events", dependencies=[Depends(require_admin)])
+def admin_safety_events(limit: int = 30):
+    """A2: what the safety check stopped (student messages and AI answers) and when it could not run."""
+    return {**moderation.recent_events(db, max(1, min(limit, 100))), "provider": moderator.provider,
+            "policy_version": moderation.POLICY_VERSION}
 
 
 @app.get("/admin/api/students/{sid}", dependencies=[Depends(require_admin)])

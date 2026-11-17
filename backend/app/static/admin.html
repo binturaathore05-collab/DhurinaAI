@@ -579,6 +579,7 @@ const SF = { status: '', q: '', offset: 0 };
 async function safetyView() {
   const p = new URLSearchParams({ status: SF.status, q: SF.q, offset: SF.offset, limit: 25 });
   const d = await api('GET', '/students?' + p);
+  const ev = await api('GET', '/safety-events');
   const tab = (st, label) => `<button type="button" data-st="${st}" class="${SF.status === st ? 'on' : ''}">${label}${st && st !== 'all' ? ' · ' + d.counts[st] : ''}</button>`;
   const rows = d.items.map((x) => `<tr><td><a class="who" href="#/s/${x.id}"><span style="display:flex;flex-direction:column"><b>${esc(x.name || 'No name')}</b><span class="muted" style="font-size:12px">${esc(x.phone)} · ID ${x.id}</span></span></a></td>
     <td>${esc(x.teacher_name)}</td><td>${spill(x.status)}${x.status === 'suspended' ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(x.status_until)}</div>` : ''}</td>
@@ -589,7 +590,8 @@ async function safetyView() {
       <input type="search" id="sq" placeholder="Search by name, phone or student ID" value="${esc(SF.q)}" aria-label="Search students"></section>
     <section class="card"><div class="scroll">${d.items.length ? `<table><thead><tr><th>STUDENT</th><th>TEACHER</th><th>STATUS</th><th>REASON</th><th>PROBLEMS</th><th>LAST PROBLEM</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
       : `<p class="muted">${SF.q ? 'No student matches this search.' : 'No students here. Everyone is learning normally.'}</p>`}</div>
-      ${pages > 1 ? `<div class="pager"><button type="button" data-pg="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>‹</button><span class="muted">Page ${cur + 1} of ${pages}</span><button type="button" data-pg="${cur + 1}" ${cur + 1 >= pages ? 'disabled' : ''}>›</button></div>` : ''}</section>`);
+      ${pages > 1 ? `<div class="pager"><button type="button" data-pg="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>‹</button><span class="muted">Page ${cur + 1} of ${pages}</span><button type="button" data-pg="${cur + 1}" ${cur + 1 >= pages ? 'disabled' : ''}>›</button></div>` : ''}</section>
+    ${eventsCard(ev)}`);
 }
 function bindSafety() {
   document.querySelectorAll('[data-st]').forEach((b) => b.onclick = async () => { SF.status = b.dataset.st; SF.offset = 0; $('#app').innerHTML = await safetyView(); bindSafety(); });
@@ -597,6 +599,21 @@ function bindSafety() {
   let timer; const q = $('#sq');
   q.oninput = () => { clearTimeout(timer); timer = setTimeout(async () => { SF.q = q.value.trim(); SF.offset = 0; $('#app').innerHTML = await safetyView(); bindSafety();
     const n = $('#sq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 400); };
+}
+
+const EACT = { refused: ['Message refused', 'var(--bad)'], redirected: ['Sent back to studies', 'var(--warn)'],
+  care_reply: ['Care reply · helpline', 'var(--acc)'], replaced: ['AI answer stopped', 'var(--bad)'], retry: ['Check could not run', 'var(--muted)'] };
+function eventsCard(ev) {
+  const n = (k) => ev.last_24h[k] || 0;
+  const rows = ev.items.map((e) => { const [t, c] = EACT[e.action] || [e.action, 'var(--muted)'];
+    return `<tr><td>${when(e.at)}</td><td>${e.stage === 'output' ? 'AI answer' : 'Student message'}</td><td><span class="pill" style="color:${c}">${esc(t)}</span></td>
+      <td>${esc(e.category === 'check_failed' ? '—' : (e.category || '').replace('_', ' '))}</td>
+      <td>${e.student_id ? `<a href="#/s/${e.student_id}">${esc(e.student_name || e.student_phone || 'ID ' + e.student_id)}</a>` : '—'}</td>
+      <td style="max-width:360px">${esc((e.excerpt || '').slice(0, 160))}</td></tr>`; }).join('');
+  return `<section class="card"><div class="row"><div><h2>Safety check</h2><span class="sub">Every student message and every AI answer is checked before the student sees it · checker: ${esc(ev.provider)} · policy ${esc(ev.policy_version)}</span></div></div>
+    ${ev.provider === 'rules' ? '<p class="err">The safety model is off (phrase rules only). Set the AI key before launch.</p>' : ''}
+    <div class="stats">${stat('Messages refused', n('refused'), 'last 24 hours')}${stat('AI answers stopped', n('replaced'), 'never shown to the student')}${stat('Care replies', n('care_reply'), 'student seemed upset · helpline given')}${stat('Check could not run', n('retry'), 'student asked to try again')}</div>
+    <div class="scroll">${rows ? `<table><thead><tr><th>WHEN</th><th>WHAT</th><th>RESULT</th><th>ABOUT</th><th>STUDENT</th><th>TEXT</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Nothing stopped yet.</p>'}</div></section>`;
 }
 
 const SACT = {
