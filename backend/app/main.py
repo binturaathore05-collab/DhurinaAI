@@ -166,6 +166,8 @@ def teacher_info(request: Request, teacher: TeacherProfile = Depends(teacher_fro
     return {"id": row["id"], "name": row["name"], "subject": row["subject"], "avatar_url": row["avatar_url"],
             "brand_color": row["brand_color"], "plans": plans, "demo_questions": _limits(teacher.id)["demo"],
             "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url)),
+            # A7: the first thing the student sees on the call, said plainly: this is an AI, not the real teacher
+            "ai_disclosure": t("ai_disclosure", "en", teacher=row["name"]),
             "features": {"ai_chat": not switches.ai_paused_for(db, teacher.id), "voice": not switches.is_off(db, "voice"),
                          "photo": not switches.is_off(db, "photo")}}
 
