@@ -45,3 +45,19 @@ jobs:
       - name: Add the reports to the run summary
         if: always()
         run: cat rules-report.md live-report.md 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+
+  server-image:
+    # the same image Render builds and runs: must build, start, and answer on /admin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the server image
+        run: docker build -t liveteach-demo backend
+      - name: Start it like Render does and open the pages
+        run: |
+          docker run -d --name srv -p 8000:10000 -e PORT=10000 -e ADMIN_EMAIL=owner@example.in -e ADMIN_PASSWORD=Check2026x \
+            -e TEACHER_KEY_SUBHASH=k -e JWT_SECRET=ci-secret-ci-secret-ci-secret-123 liveteach-demo
+          for i in $(seq 1 30); do curl -fs localhost:8000/admin >/dev/null && break; sleep 2; done
+          docker logs srv
+          curl -fsS -o /dev/null -w "admin %{http_code}\n" localhost:8000/admin
+          curl -fsS -o /dev/null -w "teacher panel %{http_code}\n" localhost:8000/teacher-panel
