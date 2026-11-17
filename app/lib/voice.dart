@@ -53,11 +53,16 @@ class Voice {
     _onStatus = (s) {
       if (s == 'done' || s == 'notListening') finish();
     };
+    final locale = await _sttLocale(language);
     await _stt.listen(
-      localeId: await _sttLocale(language),
-      listenFor: const Duration(seconds: 60),
-      pauseFor: const Duration(milliseconds: 2500),
-      listenOptions: SpeechListenOptions(partialResults: true, listenMode: ListenMode.dictation, cancelOnError: true),
+      listenOptions: SpeechListenOptions(
+        localeId: locale,
+        listenFor: const Duration(seconds: 60),
+        pauseFor: const Duration(milliseconds: 2500),
+        partialResults: true,
+        listenMode: ListenMode.dictation,
+        cancelOnError: true,
+      ),
       onResult: (SpeechRecognitionResult r) {
         last = r.recognizedWords;
         onWords(last);

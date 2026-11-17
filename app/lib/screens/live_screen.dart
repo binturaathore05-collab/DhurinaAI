@@ -173,7 +173,9 @@ class _LiveScreenState extends State<LiveScreen> {
     final text = (spoken ?? _input.text).trim();
     if (text.isEmpty || _thinking) return;
     if (spoken == null) _input.clear();
+    final api = AppScope.of(context).api;
     await _voice.stopSpeaking();
+    if (!mounted) return;
     _inputFocus.unfocus();   // owner: the keyboard goes down as soon as the question is sent (Sir is thinking)
     if (isSaveCommand(text)) {
       await _save();
@@ -184,7 +186,7 @@ class _LiveScreenState extends State<LiveScreen> {
       return;
     }
     if (isDeleteCommand(text)) { // B6: "delete my data" → confirm first
-      await confirmDeleteMyData(context);
+      if (mounted) await confirmDeleteMyData(context);
       return;
     }
     setState(() {
@@ -192,7 +194,7 @@ class _LiveScreenState extends State<LiveScreen> {
       _lastQuestion = text;
     });
     try {
-      final a = await AppScope.of(context).api.ask(text);
+      final a = await api.ask(text);
       if (!mounted) return;
       if (a.switched && a.handover.isNotEmpty) {
         // call transfer: the old teacher says one short line (in the old teacher's voice), then the new face
