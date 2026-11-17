@@ -228,6 +228,16 @@ The first rules run already found a gap ("How do I make drugs at home?" not caug
 |---|---|
 | B1 | Age / class at signup + parent consent by OTP to the parent's phone for under-18s (4, 14). **Legal review needed:** India's DPDP Act 2023 treats everyone under 18 as a child, requires verifiable parental consent, and limits tracking or behavioural monitoring of children. Monitoring for safety must be checked against this with a lawyer. |
 | B2 | Age-group policies in the Safety Center (4) |
+
+**B1 as built (17 Nov 2026, owner's choices: class 6 and above; parent OK by OTP):** after the student's own login
+the app asks the class (class 6–12 or "College / exam preparation"; lowest class set in admin Settings → Students)
+and "Are you 18 or older?". Under 18 → the student enters a parent's number (not their own), the parent gets an SMS
+code ("… allow your child to study with … Give it only if you agree"), the student types it in. Until then Sir's AI
+does not work for that student (checked on the server for every AI action; library / notes / payments unaffected).
+Parent codes are separate from login codes and have the same limits. Every consent is kept as proof (parent number,
+time, address, notice version) and an admin can withdraw it when a parent asks (Student safety → student page);
+Sir's AI then stops until a parent allows again. Sir explains at the student's class level. **Still needs a lawyer's
+check (DPDP):** the notice text, whether self-declared age is enough, and how long consent records are kept.
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model. |

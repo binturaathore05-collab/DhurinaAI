@@ -530,6 +530,7 @@ async function settingsView() {
       ${f('limits', 'otp_per_phone_day', 'Codes per number per day', s.limits.otp_per_phone_day, 'number')}${f('limits', 'otp_per_device_day', 'Codes per phone (device) per day', s.limits.otp_per_device_day, 'number')}
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
       ${f('limits', 'otp_wrong_per_phone_day', 'Wrong codes before a number is locked for the day', s.limits.otp_wrong_per_phone_day, 'number')}</div>`)}
+    ${card('Students', 'Who can sign up', `<div class="grid2">${f('students', 'min_class', 'Lowest class allowed', s.students.min_class, 'number', 'Owner’s choice: class 6. Students under 18 always need a parent’s OK by OTP.')}</div>`)}
     ${card('Student safety (warnings &amp; auto-block)', 'Off-topic chat never counts. A blocked topic is a small problem; a clearly harmful request (sexual, weapons, crime, breaking the rules, threats) is serious.', `<div class="grid2">
       <label class="f">Auto-block<select data-sec="safety" name="auto_block"><option value="true" ${s.safety.auto_block ? 'selected' : ''}>On (recommended)</option><option value="false" ${s.safety.auto_block ? '' : 'selected'}>Off — only record problems</option></select><span class="h">On: the system warns and suspends by itself. Off: admins decide.</span></label>
       ${f('safety', 'suspend_hours', 'Suspension length (hours)', s.safety.suspend_hours, 'number', 'Notes and library stay open while suspended')}
@@ -662,11 +663,22 @@ async function studentView(id) {
     <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
       ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
       ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
+    <section class="card"><div class="row"><h2>Class &amp; parent consent</h2>${x.consent_status === 'given' ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        ${kv('Class', x.class_level ? (x.class_level === 'college' ? 'College / exam preparation' : 'Class ' + esc(x.class_level)) : 'Not given yet')}${kv('18 or older', x.is_adult == null ? '—' : (x.is_adult ? 'Yes' : 'No'))}
+        ${kv('Parent consent', esc(x.consent_status))}</div>
+      ${x.consents.length ? `<div class="scroll"><table><thead><tr><th>PARENT NUMBER</th><th>GIVEN</th><th>FROM</th><th>WITHDRAWN</th></tr></thead><tbody>${x.consents.map((c) => `<tr><td>${esc(c.parent_phone)}</td><td>${when(c.given_at)}</td><td class="muted">${esc(c.ip || '')}</td>
+        <td>${c.revoked_at ? when(c.revoked_at) + ' · ' + esc(c.revoked_by) + '<div class="muted" style="font-size:12px">' + esc(c.revoke_reason || '') + '</div>' : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>
     <section class="card"><div class="row"><h2>Problems found</h2><span class="muted" style="font-size:12px">What the student wrote · admins only</span></div><div class="scroll">${viol ? `<table><thead><tr><th>WHEN</th><th>TYPE</th><th>ABOUT</th><th>STUDENT WROTE</th></tr></thead><tbody>${viol}</tbody></table>` : '<p class="muted">No problems recorded.</p>'}</div></section>
     <section class="card"><h2>Block / unblock history</h2><div class="scroll">${hist ? `<table><thead><tr><th>WHEN</th><th>CHANGE</th><th>BY</th><th>REASON · REMARKS</th></tr></thead><tbody>${hist}</tbody></table>` : '<p class="muted">No changes yet.</p>'}</div></section>`);
 }
 async function bindStudent(id) {
   const x = await api('GET', '/students/' + encodeURIComponent(id));
+  if ($('#revoke')) $('#revoke').onclick = async () => {
+    const reason = await switchDialog('parent consent for ' + (x.name || x.phone), true); if (!reason) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/consent/revoke`, { reason }); toast('Parent consent withdrawn — Sir’s AI is paused for this student');
+      $('#app').innerHTML = await studentView(id); bindStudent(id); } catch (e) { toast(e.message); }
+  };
   document.querySelectorAll('[data-act]').forEach((b) => b.onclick = async () => {
     const body = await actionDialog(b.dataset.act, x.reasons, x.name || x.phone); if (!body) return;
     try { await api('POST', `/students/${encodeURIComponent(id)}/status`, body); toast('Saved: ' + SACT[body.action].label); $('#app').innerHTML = await studentView(id); bindStudent(id); }

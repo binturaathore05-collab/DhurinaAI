@@ -29,6 +29,7 @@ from .services import switches
 from .services import audit
 from . import ai_setup
 from . import safety_lab
+from .services import consent
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -180,6 +181,10 @@ def _gate(student_id: int) -> None:
     blocked = student_safety.can_use_ai(db, student_id)
     if blocked:
         raise HTTPException(403, blocked["account_message"])
+    # B1: class first; under 18 → a parent's OK first (428 = the app opens the right screen)
+    wait = consent.gate_message(consent.state(db, student_id, consent.min_class(admin.get_settings(db))))
+    if wait:
+        raise HTTPException(428, wait)
 
 
 def _limit_questions(student_id: int) -> None:
@@ -259,6 +264,7 @@ def _access(student_id: int) -> dict:
     lim = _limits(tid)
     return {**accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"]),
             **student_safety.account(db, student_id),
+            **consent.state(db, student_id, consent.min_class(admin.get_settings(db))),
             "service_message": t("ai_paused", "en") if switches.ai_paused_for(db, tid) or not raw_llm.available() else None}
 
 
@@ -270,6 +276,79 @@ def _after_answer(student_id: int, teacher_id: str, question: str, result) -> No
     sev = "minor" if result.scope == "blocked" else "serious"
     student_safety.record_violation(db, student_id, teacher_id, sev, (row["blocked_topic"] if row else "") or result.scope,
                                     question, result.qa_id, student_safety.safety_settings(admin.get_settings(db)))
+
+
+# ---------- B1: class + parent consent ----------
+
+class Profile(BaseModel):
+    class_level: str
+    is_adult: bool
+
+
+class ParentPhone(BaseModel):
+    phone: str
+
+
+class ParentCode(BaseModel):
+    phone: str
+    code: str
+
+
+@app.put("/me/profile")
+def set_profile(body: Profile, student=Depends(current_student)):
+    try:
+        consent.set_profile(db, student["id"], body.class_level, body.is_adult, consent.min_class(admin.get_settings(db)))
+    except consent.ConsentError as exc:
+        raise HTTPException(400, str(exc))
+    return _access(student["id"])
+
+
+def _needs_parent(student_id: int) -> None:
+    if not consent.state(db, student_id)["consent_needed"]:
+        raise HTTPException(400, "No parent permission is needed for this account.")
+
+
+@app.post("/me/parent/otp")
+def parent_otp(body: ParentPhone, request: Request, student=Depends(current_student),
+               teacher: TeacherProfile = Depends(teacher_from_header), x_device_id: str = Header("")):
+    """Send the parent a code by SMS (same limits as login codes)."""
+    _needs_parent(student["id"])
+    ns = consent.namespace(student["id"])
+    try:
+        phone = accounts.normalize_phone(body.phone)
+        consent.check_parent_phone(db, student["id"], phone)
+        lim = _limit_settings()
+        limits.check_and_record(db, [limits.wrong_code_rule(ns, phone, lim)], record=False)
+        limits.check_and_record(db, limits.otp_send_rules(ns, phone, x_device_id.strip(), _client_ip(request), lim))
+        otp.send(ns, teacher.name, phone, "parent_sms")
+    except (ValueError, consent.ConsentError) as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    return {"sent": True}
+
+
+@app.post("/me/parent/verify")
+def parent_verify(body: ParentCode, request: Request, student=Depends(current_student)):
+    _needs_parent(student["id"])
+    ns = consent.namespace(student["id"])
+    try:
+        phone = accounts.normalize_phone(body.phone)
+        wrong = limits.wrong_code_rule(ns, phone, _limit_settings())
+        limits.check_and_record(db, [wrong], record=False)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    try:
+        phone = otp.verify(ns, phone, body.code)
+    except accounts.WrongCode as exc:
+        limits.record(db, wrong.key)
+        raise HTTPException(400, str(exc))
+    except (accounts.AuthError, ValueError) as exc:
+        raise HTTPException(400, str(exc))
+    consent.record(db, student["id"], student["teacher_id"], phone, _client_ip(request))
+    return _access(student["id"])
 
 
 class StudentName(BaseModel):
@@ -1012,6 +1091,22 @@ def admin_safety_student(sid: int):
         return student_safety.detail(db, sid)
     except KeyError:
         raise HTTPException(404, "Student not found")
+
+
+class ConsentRevoke(BaseModel):
+    reason: str
+
+
+@app.post("/admin/api/students/{sid}/consent/revoke")
+def admin_consent_revoke(sid: int, body: ConsentRevoke, user=Depends(require_admin)):
+    """B1: a parent withdraws consent (e.g. by calling support) → Sir's AI stops until a parent allows again."""
+    try:
+        consent.revoke(db, sid, user["email"], body.reason)
+    except KeyError:
+        raise HTTPException(404, "Student not found")
+    except consent.ConsentError as exc:
+        raise HTTPException(400, str(exc))
+    return student_safety.detail(db, sid)
 
 
 @app.post("/admin/api/students/{sid}/status")

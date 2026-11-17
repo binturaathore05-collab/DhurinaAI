@@ -46,9 +46,22 @@ class Access {
   final String? accountMessage;
   /// Set when the AI is switched off in admin → Emergency (for everyone or this teacher).
   final String? serviceMessage;
+  /// B1: the class isn't known yet / a parent's OK is still needed (under 18).
+  final bool profileNeeded;
+  final bool consentNeeded;
+  final List<ClassOption> classOptions;
   Access(this.state, this.demoLeft,
       {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0,
-      this.accountStatus = 'active', this.accountMessage, this.serviceMessage});
+      this.accountStatus = 'active', this.accountMessage, this.serviceMessage,
+      this.profileNeeded = false, this.consentNeeded = false, this.classOptions = const []});
+
+  /// Still something to do before the class can start.
+  bool get setupNeeded => profileNeeded || consentNeeded;
+
+  Access withSetup({required bool profileNeeded, required bool consentNeeded}) => Access(state, demoLeft,
+      daysLeft: daysLeft, renewSoon: renewSoon, planEndedAt: planEndedAt, graceLeft: graceLeft,
+      accountStatus: accountStatus, accountMessage: accountMessage, serviceMessage: serviceMessage,
+      profileNeeded: profileNeeded, consentNeeded: consentNeeded, classOptions: ClassOption.defaults);
 
   /// What the call screen shows above Sir (account first, then a platform pause).
   String? get notice => accountMessage ?? serviceMessage;
@@ -71,8 +84,25 @@ class Access {
       accountStatus: j['account_status'] as String? ?? 'active',
       accountMessage: j['account_message'] as String?,
       serviceMessage: j['service_message'] as String?,
+      profileNeeded: j['profile_needed'] == true,
+      consentNeeded: j['consent_needed'] == true,
+      classOptions: ((j['class_options'] as List?) ?? [])
+          .map((o) => ClassOption((o as Map)['value'].toString(), o['label'].toString()))
+          .toList(),
     );
   }
+}
+
+/// One choice on the "Which class are you in?" screen.
+class ClassOption {
+  final String value; // "6".."12" or "college"
+  final String label;
+  const ClassOption(this.value, this.label);
+  static const defaults = [
+    ClassOption('6', 'Class 6'), ClassOption('7', 'Class 7'), ClassOption('8', 'Class 8'), ClassOption('9', 'Class 9'),
+    ClassOption('10', 'Class 10'), ClassOption('11', 'Class 11'), ClassOption('12', 'Class 12'),
+    ClassOption('college', 'College / exam preparation'),
+  ];
 }
 
 class Answer {
@@ -275,6 +305,10 @@ abstract class Api {
   Future<Access> verifyOtp(String phone, String code);
   Future<bool> hasSession();
   Future<Access> access();
+  /// B1: class + "18 or older?"; then, for under-18s, the parent's code.
+  Future<Access> setProfile(String classLevel, bool isAdult);
+  Future<void> sendParentOtp(String phone);
+  Future<Access> verifyParentOtp(String phone, String code);
   Future<Answer> ask(String question);
   Future<SavedNote> saveNote(int qaId); // older single-answer notes (kept for compatibility)
   /// Notes of the whole class so far, one PDF per class. [topics] null = all topics of the class.
@@ -337,7 +371,9 @@ class HttpApi implements Api {
     final uri = Uri.parse('$base$path');
     final res = method == 'GET'
         ? await http.get(uri, headers: headers)
-        : await http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
+        : method == 'PUT'
+            ? await http.put(uri, headers: headers, body: jsonEncode(body ?? {}))
+            : await http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
     final data = res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
     if (res.statusCode >= 400) {
       final detail = data is Map && data['detail'] is String ? data['detail'] as String : 'Something went wrong';
@@ -370,6 +406,19 @@ class HttpApi implements Api {
 
   @override
   Future<Access> access() async => Access.fromJson(await _call('GET', '/me/access') as Map<String, dynamic>);
+
+  @override
+  Future<Access> setProfile(String classLevel, bool isAdult) async => Access.fromJson(
+      await _call('PUT', '/me/profile', {'class_level': classLevel, 'is_adult': isAdult}) as Map<String, dynamic>);
+
+  @override
+  Future<void> sendParentOtp(String phone) async {
+    await _call('POST', '/me/parent/otp', {'phone': phone});
+  }
+
+  @override
+  Future<Access> verifyParentOtp(String phone, String code) async => Access.fromJson(
+      await _call('POST', '/me/parent/verify', {'phone': phone, 'code': code}) as Map<String, dynamic>);
 
   @override
   Future<Answer> ask(String question) async {
@@ -521,18 +570,42 @@ class DemoApi implements Api {
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
+  // B1 in demo mode: the class and parent steps are shown, any code works
+  String? _classLevel;
+  bool _adult = false;
+  bool _parentOk = false;
+  Access get _now => _access.withSetup(
+      profileNeeded: _classLevel == null, consentNeeded: _classLevel != null && !_adult && !_parentOk);
+
   @override
   Future<Access> verifyOtp(String phone, String code) async {
     await Future.delayed(const Duration(milliseconds: 500));
     _loggedIn = true;
-    return _access;
+    return _now;
+  }
+
+  @override
+  Future<Access> setProfile(String classLevel, bool isAdult) async {
+    _classLevel = classLevel;
+    _adult = isAdult;
+    return _now;
+  }
+
+  @override
+  Future<void> sendParentOtp(String phone) async => Future.delayed(const Duration(milliseconds: 400));
+
+  @override
+  Future<Access> verifyParentOtp(String phone, String code) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    _parentOk = true;
+    return _now;
   }
 
   @override
   Future<bool> hasSession() async => _loggedIn;
 
   @override
-  Future<Access> access() async => _access;
+  Future<Access> access() async => _now;
 
   @override
   Future<Answer> ask(String question) async {

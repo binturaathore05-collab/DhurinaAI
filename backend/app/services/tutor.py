@@ -186,6 +186,10 @@ class Tutor:
         st = self.db.one("SELECT name FROM students WHERE id = ?", (student_id,))
         level = style_mod.get_level(self.db, student_id)
         rules = style_mod.style_rules(style_mod.get_style(self.db, teacher.id), st["name"] if st else None, level)
+        cls = self.db.one("SELECT class_level FROM students WHERE id = ?", (student_id,))
+        from .consent import class_for_prompt   # B1: explain at the student's class level
+        if cls and cls["class_level"]:
+            rules += "\n" + class_for_prompt(cls["class_level"])
         system = _system_prompt(teacher, lang.english_name, rules, _scope_rules(teacher, self.blocked_topics()))
         recent = list(reversed(self.db.all("SELECT question, answer, follow_up FROM qa_history WHERE student_id = ? "
                                            "ORDER BY id DESC LIMIT 3", (student_id,))))
