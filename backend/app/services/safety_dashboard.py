@@ -59,7 +59,9 @@ def build(db: Database, days: int = 30, teacher_id: str = "", now: float | None 
                            (since, *targs))
     ai_tried = ev("AND e.stage = 'output' AND e.action = 'replaced'")
     check_failed = ev("AND e.action = 'retry'")
-    reported = 0   # filled by the review center (B4): unsafe answers someone reported after they reached a student
+    from . import incidents   # B4: cases a reviewer closed as "AI failure — something unsafe reached the student"
+    inc = incidents.counts(db, since, teacher_id)
+    reported = inc["ai_failures"]
 
     # ---- students: flags, blocks, unblocks ----
     flagged = one(f"SELECT COUNT(*) AS n FROM student_violations v JOIN students s ON s.id = v.student_id "
@@ -128,6 +130,7 @@ def build(db: Database, days: int = 30, teacher_id: str = "", now: float | None 
                           "off_topic": off_topic},
         "ai": {"tried": ai_tried + reported, "stopped": ai_tried, "reported_failures": reported,
                "check_failed": check_failed},
+        "review": inc,
         "students": {"flagged": flagged, "warnings": warnings, "auto_blocks": auto_blocks, "admin_blocks": admin_blocks,
                      "unblocks": unblocks, "review_pending": review_pending},
         "categories": categories, "models": model_rows,
