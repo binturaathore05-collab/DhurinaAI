@@ -27,6 +27,8 @@ from .services import student_safety
 from .services import moderation
 from .services import switches
 from .services import audit
+from . import ai_setup
+from . import safety_lab
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -43,34 +45,14 @@ db = Database(settings.database_path)
 kb = KnowledgeBase(db)
 
 
-def _client(model: str, timeout: float = 60):
-    if not settings.llm_api_key:
-        return None
-    return OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, model, timeout) if model else None
-
-
-_fake = None if settings.llm_api_key else FakeLLM()   # local development / tests without an AI key
-_main, _small, _backup = settings.llm_model, settings.llm_small_model, settings.llm_backup_model
-# A4: every job goes to the first model in line that is not switched off in admin → Emergency
-raw_llm = switches.ModelRouter(db, [(_main, _client(_main) or _fake), (_backup, _client(_backup))], track=True)
-# optional cheaper model for small helper jobs (search keywords, safety check); answers, notes and tests use the
-# main model. Search keywords are never shown to the student, so they skip the output check.
-side_llm = switches.ModelRouter(db, [(_small, _client(_small)), (_main, _client(_main) or _fake), (_backup, _client(_backup))])
-
-# A2: independent safety check on every student message and every AI text before a student sees it
-_provider = settings.moderation_provider
-if _provider == "auto":
-    _provider = "llm" if settings.llm_api_key else "rules"
+# the AI side (model router A4, safety check A2, AI teacher) — the safety test lab (A8) builds the very same pipeline
+_ai = ai_setup.build(db, settings)
+raw_llm, side_llm, moderator, llm, tutor = _ai.raw_llm, _ai.side_llm, _ai.moderator, _ai.llm, _ai.tutor
+_main, _small, _backup, _provider = _ai.main, _ai.small, _ai.backup, _ai.provider
 if _provider == "rules":
     print("[safety] WARNING: safety model is OFF (rules only). Set LLM_API_KEY or MODERATION_PROVIDER before launch.")
-_mod_model = settings.llm_small_model or settings.llm_model
-moderator = moderation.Moderator(
-    db, _provider,
-    switches.ModelRouter(db, [(_small, _client(_small, 12)), (_main, _client(_main, 12) or FakeLLM()), (_backup, _client(_backup, 12))]),
-    settings.llm_base_url, settings.llm_api_key,
-    model_name="omni-moderation-latest" if _provider == "openai" else (_mod_model if _provider == "llm" else "rules"))
-llm = moderation.ModeratedLLM(raw_llm, moderator)
-tutor = Tutor(db, kb, llm, side_llm)
+elif os.environ.get("SAFETY_LAB_AUTORUN", "1") == "1":
+    safety_lab.start_background(settings, db, "startup")   # A8: new model / instructions on the server → test them
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
 AUDIT_SECRET = settings.audit_secret or hashlib.sha256(f"audit|{settings.jwt_secret}".encode()).hexdigest()
 
@@ -925,9 +907,11 @@ def admin_get_settings():
 @app.put("/admin/api/settings", dependencies=[Depends(require_admin)])
 async def admin_put_settings(request: Request):
     try:
-        return admin.save_settings(db, await request.json())
+        saved = admin.save_settings(db, await request.json())
     except admin.AdminError as exc:
         raise HTTPException(400, str(exc))
+    safety_lab.start_background(settings, db, "settings")   # A8: safety rules changed → run the safety tests again
+    return saved
 
 
 # ---------- A3: student safety (block / unblock) ----------
@@ -974,7 +958,27 @@ def admin_emergency_set(body: SwitchChange, user=Depends(require_admin)):
         switches.set_switch(db, body.key, body.off, body.reason, user["email"])
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    if body.key.startswith("model:"):
+        safety_lab.start_background(settings, db, "emergency")   # A8: another model now answers → test it
     return admin_emergency()
+
+
+# ---------- A8: safety test lab ----------
+
+@app.get("/admin/api/safety-tests", dependencies=[Depends(require_admin)])
+def admin_safety_tests():
+    cases = safety_lab.load_cases()["cases"]
+    return {"launch": safety_lab.launch_status(settings, db), "runs": safety_lab.runs(db),
+            "cases": len(cases), "languages": sorted({c["lang"] for c in cases})}
+
+
+@app.post("/admin/api/safety-tests/run", dependencies=[Depends(require_admin)])
+def admin_safety_tests_run():
+    if _provider == "rules":
+        raise HTTPException(400, "The server has no AI key yet, so the real safety check can't be tested.")
+    if not safety_lab.start_background(settings, db, "admin", force=True):
+        raise HTTPException(409, "Safety tests are already running.")
+    return admin_safety_tests()
 
 
 @app.get("/admin/api/verify", dependencies=[Depends(require_admin)])

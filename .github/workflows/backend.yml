@@ -1,0 +1,47 @@
+name: Backend tests + safety tests
+
+# A8: runs on every change to the backend (code, AI instructions, safety rules, test cases).
+# - always: all backend tests + the safety phrase rules (no AI key needed)
+# - when the repository has an LLM_API_KEY secret: the full safety test lab against the real AI model
+#   (Settings → Secrets and variables → Actions: LLM_API_KEY, and variables LLM_MODEL / LLM_SMALL_MODEL / LLM_BASE_URL)
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt httpx
+      - name: Backend tests
+        run: python -m pytest -q
+      - name: Safety tests — phrase rules (no AI)
+        run: python -m app.safety_lab --mode rules --gate --report rules-report.md
+      - name: Safety tests — real AI model
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_SMALL_MODEL: ${{ vars.LLM_SMALL_MODEL }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "::warning::No LLM_API_KEY secret: the real safety check was not tested. Launch stays blocked until it is."
+            exit 0
+          fi
+          python -m app.safety_lab --mode live --gate --report live-report.md
+      - name: Add the reports to the run summary
+        if: always()
+        run: cat rules-report.md live-report.md 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
