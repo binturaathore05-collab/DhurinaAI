@@ -11,7 +11,7 @@ Repeats are folded: while a case of the same kind for the same student is still 
 timeline instead of opening another case. Every step (seen, escalated, class stopped, teacher AI paused, resolved)
 is written to the case timeline with who and when; the audit log (A5) records every look.
 
-Only the safety team may see cases (roles: owner, safety; more roles come with B5).
+Only roles with the "evidence" permission may see cases (services/roles.py: Super Admin, Safety Admin).
 """
 import time
 
@@ -33,7 +33,6 @@ RESOLUTIONS = {
     "referred": "Referred to parents / authorities",
 }
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-REVIEW_ROLES = ("owner", "safety")
 
 
 class IncidentError(Exception):

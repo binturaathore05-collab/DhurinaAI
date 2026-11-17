@@ -32,6 +32,7 @@ from . import safety_lab
 from .services import consent
 from .services import safety_dashboard
 from .services import incidents
+from .services import roles
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -801,18 +802,29 @@ AVATAR_DIR = os.environ.get("AVATAR_DIR", "avatars")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
-def require_admin(authorization: str = Header("")):
+_FIRST_LOGIN_OK = {"/admin/api/me", "/admin/api/password"}
+
+
+def require_admin(request: Request, authorization: str = Header("")):
     try:
-        return admin_auth.read_session(db, authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+        user = admin_auth.read_session(db, authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
     except admin_auth.LoginError as exc:
         raise HTTPException(401, str(exc))
-
-
-def require_safety(user=Depends(require_admin)):
-    """B4: flagged conversations and student messages only for the safety team (owner / safety roles)."""
-    if user["role"] not in incidents.REVIEW_ROLES:
-        raise HTTPException(403, "Only the safety team can see student conversations.")
+    if user["must_change"] and request.url.path not in _FIRST_LOGIN_OK:   # B5: one-time password → own password first
+        raise HTTPException(403, "Please set your own password first.")
     return user
+
+
+def need(cap: str):
+    """B5: this request needs a permission (see services/roles.py). Checked on the server, every time."""
+    def dep(user=Depends(require_admin)):
+        if not roles.has(user["role"], cap):
+            raise HTTPException(403, f"Your role ({roles.label(user['role'])}) can't do this.")
+        return user
+    return dep
+
+
+require_safety = need("evidence")   # B4: conversations and flagged messages only for the safety team
 
 
 class AdminLogin(BaseModel):
@@ -838,7 +850,58 @@ def admin_login(body: AdminLogin, request: Request):
 def admin_me(user=Depends(require_admin)):
     logins = [dict(r) for r in db.all("SELECT at, ip, success FROM admin_logins WHERE email = ? ORDER BY id DESC LIMIT 5",
                                       (user["email"],))]
-    return {"email": user["email"], "name": user["name"], "role": user["role"], "recent_logins": logins}
+    return {"email": user["email"], "name": user["name"], "role": user["role"], "role_label": roles.label(user["role"]),
+            "caps": roles.caps(user["role"]), "must_change": bool(user["must_change"]), "recent_logins": logins}
+
+
+# ---------- B5: team ----------
+
+class TeamAdd(BaseModel):
+    email: str
+    name: str = ""
+    role: str
+
+
+class TeamUpdate(BaseModel):
+    role: str | None = None
+    active: bool | None = None
+    name: str | None = None
+
+
+@app.get("/admin/api/team", dependencies=[Depends(need("team"))])
+def admin_team():
+    return {"members": admin_auth.team(db), "roles": roles.catalog()}
+
+
+@app.post("/admin/api/team")
+def admin_team_add(body: TeamAdd, user=Depends(need("team"))):
+    try:
+        uid, pw = admin_auth.add_member(db, body.email, body.name, body.role, user["email"], roles.ROLES)
+    except admin_auth.LoginError as exc:
+        raise HTTPException(400, str(exc))
+    return {"id": uid, "temp_password": pw, **admin_team()}   # shown once; never stored in plain text
+
+
+@app.put("/admin/api/team/{uid}")
+def admin_team_update(uid: int, body: TeamUpdate, user=Depends(need("team"))):
+    try:
+        admin_auth.update_member(db, uid, user["id"], roles.ROLES, body.role, body.active, body.name)
+    except KeyError:
+        raise HTTPException(404, "Team member not found")
+    except admin_auth.LoginError as exc:
+        raise HTTPException(400, str(exc))
+    return admin_team()
+
+
+@app.post("/admin/api/team/{uid}/reset")
+def admin_team_reset(uid: int, user=Depends(need("team"))):
+    if uid == user["id"]:
+        raise HTTPException(400, "Change your own password in Settings")
+    try:
+        pw = admin_auth.reset_password(db, uid)
+    except KeyError:
+        raise HTTPException(404, "Team member not found")
+    return {"temp_password": pw, **admin_team()}
 
 
 @app.post("/admin/api/password")
@@ -867,12 +930,12 @@ def admin_page():
         return f.read()
 
 
-@app.get("/admin/api/overview", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/overview", dependencies=[Depends(need("teachers_view"))])
 def admin_overview():
     return {"overview": admin.overview(db, _default_pct()), "teachers": admin.list_teachers(db, _default_pct())}
 
 
-@app.get("/admin/api/teachers/{tid}", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/teachers/{tid}", dependencies=[Depends(need("teachers_view"))])
 def admin_teacher(tid: str):
     try:
         return admin.teacher_detail(db, tid, _default_pct())
@@ -880,12 +943,12 @@ def admin_teacher(tid: str):
         raise HTTPException(404, "Teacher not found")
 
 
-@app.post("/admin/api/teachers", dependencies=[Depends(require_admin)])
+@app.post("/admin/api/teachers", dependencies=[Depends(need("teachers_edit"))])
 async def admin_create_teacher(request: Request):
     return _save_teacher(await request.json(), creating=True)
 
 
-@app.put("/admin/api/teachers/{tid}", dependencies=[Depends(require_admin)])
+@app.put("/admin/api/teachers/{tid}", dependencies=[Depends(need("teachers_edit"))])
 async def admin_update_teacher(tid: str, request: Request):
     data = await request.json()
     data["id"] = tid
@@ -912,7 +975,7 @@ def _save_teacher(data: dict, creating: bool):
     return out
 
 
-@app.post("/admin/api/teachers/{tid}/checklist", dependencies=[Depends(require_admin)])
+@app.post("/admin/api/teachers/{tid}/checklist", dependencies=[Depends(need("teachers_edit"))])
 async def admin_checklist(tid: str, request: Request):
     body = await request.json()
     try:
@@ -921,7 +984,7 @@ async def admin_checklist(tid: str, request: Request):
         raise HTTPException(400, str(exc))
 
 
-@app.post("/admin/api/teachers/{tid}/build", dependencies=[Depends(require_admin)])
+@app.post("/admin/api/teachers/{tid}/build", dependencies=[Depends(need("teachers_edit"))])
 def admin_build(tid: str, request: Request):
     t = db.one("SELECT * FROM teachers WHERE id = ?", (tid,))
     if t is None:
@@ -937,7 +1000,7 @@ def admin_build(tid: str, request: Request):
     return {"started": True}
 
 
-@app.get("/admin/api/teachers/{tid}/builds", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/teachers/{tid}/builds", dependencies=[Depends(need("teachers_view"))])
 def admin_builds(tid: str):
     try:
         return builds.list_builds(tid)
@@ -945,7 +1008,7 @@ def admin_builds(tid: str):
         return {"error": str(exc), "builds": []}
 
 
-@app.get("/admin/api/teachers/{tid}/report", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/teachers/{tid}/report", dependencies=[Depends(need("money"))])
 def admin_teacher_report(tid: str, month: str = "", format: str = "json", view: str = "admin", date_from: str = "", date_to: str = ""):
     """view=teacher gives exactly what the teacher sees (to send it to them)."""
     return _report_response(tid, month, format, "teacher" if view == "teacher" else "admin", date_from, date_to)
@@ -960,12 +1023,12 @@ def _rep_err(fn):
         raise HTTPException(400, str(exc))
 
 
-@app.get("/admin/api/reports", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/reports", dependencies=[Depends(need("money"))])
 def admin_reports_view(date_from: str, date_to: str, teacher: str = "", sort: str = "sales"):
     return _rep_err(lambda: admin_reports.full_report(db, date_from, date_to, _default_pct(), teacher or None, sort))
 
 
-@app.get("/admin/api/reports/payments", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/reports/payments", dependencies=[Depends(need("money"))])
 def admin_reports_payments(date_from: str, date_to: str, teacher: str = "", q: str = "", offset: int = 0, limit: int = 50):
     def run():
         start, end, _, _ = admin_reports.parse_period(date_from, date_to)
@@ -973,7 +1036,7 @@ def admin_reports_payments(date_from: str, date_to: str, teacher: str = "", q: s
     return _rep_err(run)
 
 
-@app.get("/admin/api/reports/export", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/reports/export", dependencies=[Depends(need("money"))])
 def admin_reports_export(date_from: str, date_to: str, format: str = "xlsx", teacher: str = ""):
     rep = _rep_err(lambda: admin_reports.full_report(db, date_from, date_to, _default_pct(), teacher or None))
     name = f"liveteach-sales-{date_from}-to-{date_to}" + (f"-{teacher}" if teacher else "")
@@ -989,20 +1052,29 @@ def admin_reports_export(date_from: str, date_to: str, format: str = "xlsx", tea
                     headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})
 
 
-@app.get("/admin/api/teachers/{tid}/students", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/teachers/{tid}/students", dependencies=[Depends(need("teachers_view"))])
 def admin_teacher_students(tid: str, offset: int = 0, limit: int = 25, q: str = "", status: str = ""):
     return teacher_data.students_page(db, tid, offset, limit, q, status)
 
 
-@app.get("/admin/api/settings", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/settings", dependencies=[Depends(need("settings_view"))])
 def admin_get_settings():
     return admin.get_settings(db)
 
 
-@app.put("/admin/api/settings", dependencies=[Depends(require_admin)])
-async def admin_put_settings(request: Request):
+@app.put("/admin/api/settings")
+async def admin_put_settings(request: Request, user=Depends(need("settings_view"))):
+    data = await request.json()
+    # B5: only sections whose values really change are checked (the page sends the whole form)
+    current = admin.get_settings(db)
+    changed = [sec for sec, vals in (data or {}).items() if isinstance(vals, dict) and sec in current
+               and any(current[sec].get(k) != v for k, v in vals.items() if k in current[sec])]
+    for sec in changed:
+        cap = "settings_safety" if sec in roles.SAFETY_SECTIONS else "settings_all"
+        if not roles.has(user["role"], cap):
+            raise HTTPException(403, f"Your role ({roles.label(user['role'])}) can't change these settings.")
     try:
-        saved = admin.save_settings(db, await request.json())
+        saved = admin.save_settings(db, data)
     except admin.AdminError as exc:
         raise HTTPException(400, str(exc))
     safety_lab.start_background(settings, db, "settings")   # A8: safety rules changed → run the safety tests again
@@ -1018,7 +1090,7 @@ class StudentAction(BaseModel):
     hours: int | None = None    # for suspend
 
 
-@app.get("/admin/api/students", dependencies=[Depends(require_safety)])
+@app.get("/admin/api/students", dependencies=[Depends(need("students"))])
 def admin_safety_students(status: str = "", q: str = "", teacher: str = "", offset: int = 0, limit: int = 25):
     return student_safety.list_students(db, status, q, teacher, offset, limit)
 
@@ -1042,13 +1114,13 @@ class SwitchChange(BaseModel):
     reason: str
 
 
-@app.get("/admin/api/emergency", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/emergency", dependencies=[Depends(need("emergency_view"))])
 def admin_emergency():
     return {**switches.overview(db, _models_in_use()), "ai_available": raw_llm.available()}
 
 
 @app.post("/admin/api/emergency")
-def admin_emergency_set(body: SwitchChange, user=Depends(require_admin)):
+def admin_emergency_set(body: SwitchChange, user=Depends(need("emergency"))):
     try:
         switches.set_switch(db, body.key, body.off, body.reason, user["email"])
     except ValueError as exc:
@@ -1060,14 +1132,14 @@ def admin_emergency_set(body: SwitchChange, user=Depends(require_admin)):
 
 # ---------- A8: safety test lab ----------
 
-@app.get("/admin/api/safety-tests", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/safety-tests", dependencies=[Depends(need("tests_view"))])
 def admin_safety_tests():
     cases = safety_lab.load_cases()["cases"]
     return {"launch": safety_lab.launch_status(settings, db), "runs": safety_lab.runs(db),
             "cases": len(cases), "languages": sorted({c["lang"] for c in cases})}
 
 
-@app.post("/admin/api/safety-tests/run", dependencies=[Depends(require_admin)])
+@app.post("/admin/api/safety-tests/run", dependencies=[Depends(need("tests_run"))])
 def admin_safety_tests_run():
     if _provider == "rules":
         raise HTTPException(400, "The server has no AI key yet, so the real safety check can't be tested.")
@@ -1082,7 +1154,7 @@ def admin_verify(q: str = ""):
     return audit.find(db, AUDIT_SECRET, q)
 
 
-@app.get("/admin/api/audit", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/audit", dependencies=[Depends(need("audit"))])
 def admin_audit_log(q: str = "", offset: int = 0, limit: int = 50):
     return {**audit.audit_log(db, AUDIT_SECRET, q, offset, limit), "chain": audit.check_audit_chain(db, AUDIT_SECRET)}
 
@@ -1153,7 +1225,7 @@ def admin_incident_act(iid: int, body: IncidentAction, user=Depends(require_safe
     return incidents.detail(db, iid)
 
 
-@app.get("/admin/api/safety-dashboard", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/safety-dashboard", dependencies=[Depends(need("dashboard"))])
 def admin_safety_dashboard(days: int = 30, teacher: str = ""):
     """B3: safety numbers for a date range (and optionally one teacher)."""
     return safety_dashboard.build(db, days, teacher)
@@ -1166,12 +1238,18 @@ def admin_safety_events(limit: int = 30):
             "policy_version": moderation.POLICY_VERSION}
 
 
-@app.get("/admin/api/students/{sid}", dependencies=[Depends(require_safety)])
-def admin_safety_student(sid: int):
+@app.get("/admin/api/students/{sid}")
+def admin_safety_student(sid: int, user=Depends(need("students"))):
     try:
-        return student_safety.detail(db, sid)
+        d = student_safety.detail(db, sid)
     except KeyError:
         raise HTTPException(404, "Student not found")
+    if not roles.has(user["role"], "evidence"):   # B5: support sees the account, not what the student wrote
+        for v in d["violations"]:
+            v["question"] = "(hidden — safety team only)"
+    d["can"] = {"block": roles.has(user["role"], "block"), "consent": roles.has(user["role"], "consent"),
+                "evidence": roles.has(user["role"], "evidence")}
+    return d
 
 
 class ConsentRevoke(BaseModel):
@@ -1179,7 +1257,7 @@ class ConsentRevoke(BaseModel):
 
 
 @app.post("/admin/api/students/{sid}/consent/revoke")
-def admin_consent_revoke(sid: int, body: ConsentRevoke, user=Depends(require_admin)):
+def admin_consent_revoke(sid: int, body: ConsentRevoke, user=Depends(need("consent"))):
     """B1: a parent withdraws consent (e.g. by calling support) → Sir's AI stops until a parent allows again."""
     try:
         consent.revoke(db, sid, user["email"], body.reason)
@@ -1191,7 +1269,7 @@ def admin_consent_revoke(sid: int, body: ConsentRevoke, user=Depends(require_adm
 
 
 @app.post("/admin/api/students/{sid}/status")
-def admin_safety_action(sid: int, body: StudentAction, user=Depends(require_admin)):
+def admin_safety_action(sid: int, body: StudentAction, user=Depends(need("block"))):
     try:
         return student_safety.admin_action(db, sid, body.action, body.reason, body.remarks, user["email"], body.hours)
     except KeyError:

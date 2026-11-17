@@ -158,6 +158,8 @@ const SUBJECTS = ['Rajasthan GK','History','Geography','Polity','Economics','Sci
 const STATUS = { live: ['Live', 'var(--ok)'], building: ['Building app', 'var(--warn)'], draft: ['Draft', 'var(--muted)'] };
 
 let KEY = (() => { try { return sessionStorage.getItem('adminToken') || ''; } catch { return ''; } })();
+let ME = null;   // B5: who is logged in and what their role may do (the server checks it again on every request)
+const can = (cap) => !!(ME && ME.caps.includes(cap));
 // ---------- Date field with our own calendar popup ----------
 // dateField('id', '2026-04-01') → a button; read it with dateVal('id'); it fires 'change' when a day is picked.
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -232,16 +234,16 @@ function toast(msg) { const t = document.createElement('div'); t.className = 'to
 async function api(method, path, body) {
   const res = await fetch('/admin/api' + path, { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && path !== '/login' && path !== '/password') { KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} render(); throw new Error(data.detail || 'Please log in again'); }
+  if (res.status === 401 && path !== '/login' && path !== '/password') { KEY = ''; ME = null; try { sessionStorage.removeItem('adminToken'); } catch {} render(); throw new Error(data.detail || 'Please log in again'); }
   if (!res.ok) throw new Error(data.detail || 'Something went wrong');
   return data;
 }
 
 function shell(active, inner) {
-  const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
+  const item = (href, ic, label, cap) => (!cap || can(cap)) ? `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>` : '';
   return `<div class="shell"><nav aria-label="Admin">
-    <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety-dash', 'dash', 'Safety dashboard')}${item('#/review', 'review', 'Review center')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
+    <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
+    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -600,7 +602,7 @@ const SF = { status: '', q: '', offset: 0 };
 async function safetyView() {
   const p = new URLSearchParams({ status: SF.status, q: SF.q, offset: SF.offset, limit: 25 });
   const d = await api('GET', '/students?' + p);
-  const ev = await api('GET', '/safety-events');
+  const ev = can('evidence') ? await api('GET', '/safety-events') : null;
   const tab = (st, label) => `<button type="button" data-st="${st}" class="${SF.status === st ? 'on' : ''}">${label}${st && st !== 'all' ? ' · ' + d.counts[st] : ''}</button>`;
   const rows = d.items.map((x) => `<tr><td><a class="who" href="#/s/${x.id}"><span style="display:flex;flex-direction:column"><b>${esc(x.name || 'No name')}</b><span class="muted" style="font-size:12px">${esc(x.phone)} · ID ${x.id}</span></span></a></td>
     <td>${esc(x.teacher_name)}</td><td>${spill(x.status)}${x.status === 'suspended' ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(x.status_until)}</div>` : ''}</td>
@@ -612,7 +614,7 @@ async function safetyView() {
     <section class="card"><div class="scroll">${d.items.length ? `<table><thead><tr><th>STUDENT</th><th>TEACHER</th><th>STATUS</th><th>REASON</th><th>PROBLEMS</th><th>LAST PROBLEM</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
       : `<p class="muted">${SF.q ? 'No student matches this search.' : 'No students here. Everyone is learning normally.'}</p>`}</div>
       ${pages > 1 ? `<div class="pager"><button type="button" data-pg="${cur - 1}" ${cur === 0 ? 'disabled' : ''}>‹</button><span class="muted">Page ${cur + 1} of ${pages}</span><button type="button" data-pg="${cur + 1}" ${cur + 1 >= pages ? 'disabled' : ''}>›</button></div>` : ''}</section>
-    ${eventsCard(ev)}`);
+    ${ev ? eventsCard(ev) : ''}`);
 }
 function bindSafety() {
   document.querySelectorAll('[data-st]').forEach((b) => b.onclick = async () => { SF.status = b.dataset.st; SF.offset = 0; $('#app').innerHTML = await safetyView(); bindSafety(); });
@@ -670,7 +672,8 @@ async function studentView(id) {
   const st = x.status;
   const acts = (st === 'active' ? ['warn', 'suspend', 'review', 'disable'] : st === 'warning' ? ['unblock', 'suspend', 'review', 'disable']
     : st === 'disabled' ? ['unblock'] : ['unblock', 'disable']);
-  const btns = acts.map((a, i) => `<button type="button" class="btn ${i === 0 && a === 'unblock' ? 'primary' : 'ghost'}" data-act="${a}" ${a === 'disable' ? 'style="color:var(--bad)"' : ''}>${SACT[a].label}</button>`).join('');
+  const allowed = x.can ? acts.filter((a) => x.can.block) : acts;
+  const btns = allowed.map((a, i) => `<button type="button" class="btn ${i === 0 && a === 'unblock' ? 'primary' : 'ghost'}" data-act="${a}" ${a === 'disable' ? 'style="color:var(--bad)"' : ''}>${SACT[a].label}</button>`).join('');
   const viol = x.violations.map((v) => `<tr><td>${when(v.at)}</td><td><span class="pill" style="color:${v.severity === 'serious' ? 'var(--bad)' : 'var(--warn)'}">${v.severity === 'serious' ? 'Serious' : 'Blocked topic'}</span></td>
     <td>${esc(v.category || '—')}</td><td style="max-width:420px">${esc(v.question || '')}</td></tr>`).join('');
   const hist = x.history.map((h) => `<tr><td>${when(h.at)}</td><td>${spill(h.old_status)} → ${spill(h.new_status)}${h.until ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(h.until)}</div>` : ''}</td>
@@ -680,7 +683,7 @@ async function studentView(id) {
     <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
       ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
       ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
-    <section class="card"><div class="row"><h2>Class &amp; parent consent</h2>${x.consent_status === 'given' ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}</div>
+    <section class="card"><div class="row"><h2>Class &amp; parent consent</h2>${x.consent_status === 'given' && (!x.can || x.can.consent) ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}</div>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
         ${kv('Class', x.class_level ? (x.class_level === 'college' ? 'College / exam preparation' : 'Class ' + esc(x.class_level)) : 'Not given yet')}${kv('18 or older', x.is_adult == null ? '—' : (x.is_adult ? 'Yes' : 'No'))}
         ${kv('Parent consent', esc(x.consent_status))}</div>
@@ -981,6 +984,67 @@ function bindCase(id) {
   });
 }
 
+// ---------- B5: first login + Team ----------
+function firstPasswordView() {
+  return `<form class="login card" id="fp" style="gap:16px"><h1 style="font-size:22px">Set your own password</h1>
+    <span class="sub">Welcome ${esc(ME.name)} (${esc(ME.role_label)}). You logged in with a one-time password — choose your own to continue.</span>
+    <label class="f">One-time password<input id="fp0" type="password" autocomplete="current-password" required></label>
+    <label class="f">New password<input id="fp1" type="password" autocomplete="new-password" required><span class="h">At least 8 characters, letters and numbers</span></label>
+    <label class="f">New password again<input id="fp2" type="password" autocomplete="new-password" required></label>
+    <button class="btn primary" type="submit">Save and log in again</button><span id="fperr" class="err" role="alert"></span></form>`;
+}
+function bindFirstPassword() {
+  $('#fp').onsubmit = async (e) => { e.preventDefault();
+    if ($('#fp1').value !== $('#fp2').value) { $('#fperr').textContent = 'The two new passwords are not the same'; return; }
+    try { await api('POST', '/password', { current_password: $('#fp0').value, new_password: $('#fp1').value });
+      toast('Password saved — log in with your new password'); KEY = ''; ME = null; try { sessionStorage.removeItem('adminToken'); } catch {} setTimeout(render, 600);
+    } catch (err) { $('#fperr').textContent = err.message; } };
+  $('#fp0').focus();
+}
+function showTempPassword(email, pw) {
+  const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+  m.innerHTML = `<div class="box"><h3>One-time password for ${esc(email)}</h3><p>Give it to them privately (call or in person). It is shown only now. They must choose their own password when they first log in.</p>
+    <div style="font:700 22px/1.4 ui-monospace,monospace;letter-spacing:2px;background:var(--surf);border-radius:10px;padding:12px;text-align:center" id="tp">${esc(pw)}</div>
+    <div class="acts"><button type="button" class="btn ghost" id="cp">Copy</button><button type="button" class="btn primary" id="ok">Done</button></div></div>`;
+  document.body.append(m);
+  m.querySelector('#cp').onclick = async () => { try { await navigator.clipboard.writeText(pw); toast('Copied'); } catch { toast('Select and copy it by hand'); } };
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+async function teamView() {
+  const d = await api('GET', '/team');
+  const opt = (sel) => d.roles.map((r) => `<option value="${r.key}" ${sel === r.key ? 'selected' : ''}>${esc(r.label)}</option>`).join('');
+  const rows = d.members.map((m) => `<tr style="${m.active ? '' : 'opacity:.55'}"><td><b>${esc(m.name || '')}</b><div class="muted" style="font-size:12px">${esc(m.email)}</div></td>
+    <td><select data-role="${m.id}" aria-label="Role of ${esc(m.email)}" ${m.email === ME.email ? 'disabled' : ''}>${opt(m.role)}</select></td>
+    <td>${m.active ? (m.must_change ? '<span class="pill" style="color:var(--warn)">Hasn’t set own password</span>' : '<span class="pill" style="color:var(--ok)">Active</span>') : '<span class="pill">Switched off</span>'}</td>
+    <td class="muted" style="font-size:12px">${esc(m.last_login || 'never')}</td>
+    <td style="text-align:right;white-space:nowrap">${m.email === ME.email ? '<span class="muted">you</span>' : `<button type="button" class="btn ghost" data-reset="${m.id}" data-email="${esc(m.email)}">Reset password</button>
+      <button type="button" class="btn ghost" data-active="${m.id}" data-on="${m.active ? 0 : 1}" style="${m.active ? 'color:var(--bad)' : ''}">${m.active ? 'Switch off' : 'Switch on'}</button>`}</td></tr>`).join('');
+  return shell('Team', `<div class="row"><div><h1>Team</h1><span class="sub">Who can use this admin panel, and what each role may do. Checked on the server for every request.</span></div></div>
+    <section class="card"><h2>Add someone</h2><form id="tadd" class="grid2" style="align-items:end">
+      <label class="f">Email<input id="te" type="email" required placeholder="name@dhurina.in"></label><label class="f">Name<input id="tn" type="text" placeholder="Their name"></label>
+      <label class="f">Role<select id="tr">${opt('support')}</select></label><button class="btn primary" type="submit">Add and get one-time password</button></form><span class="err" id="terr"></span></section>
+    <section class="card"><h2>Members</h2><div class="scroll"><table><thead><tr><th>PERSON</th><th>ROLE</th><th>STATUS</th><th>LAST LOGIN</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>
+    <section class="card"><h2>What each role can do</h2><div class="scroll"><table><tbody>${d.roles.map((r) => `<tr><td style="width:180px"><b>${esc(r.label)}</b></td><td>${esc(r.text)}</td></tr>`).join('')}</tbody></table></div>
+      <span class="muted" style="font-size:12px">“School Admin” from the safety brief is the Teacher: each teacher sees only their own students in the teacher dashboard.</span></section>`);
+}
+function bindTeam() {
+  const again = async () => { $('#app').innerHTML = await teamView(); bindTeam(); };
+  $('#tadd').onsubmit = async (e) => { e.preventDefault();
+    try { const r = await api('POST', '/team', { email: $('#te').value, name: $('#tn').value, role: $('#tr').value }); await again(); showTempPassword(r.members.find((m) => m.id === r.id).email, r.temp_password); }
+    catch (err) { $('#terr').textContent = err.message; } };
+  document.querySelectorAll('[data-role]').forEach((sel) => sel.onchange = async () => {
+    const label = sel.options[sel.selectedIndex].text;
+    if (!(await ask({ title: 'Change role?', text: `They will be able to do what a ${label} can do, from their next click.`, ok: 'Change role' }))) return again();
+    try { await api('PUT', '/team/' + sel.dataset.role, { role: sel.value }); toast('Role changed'); } catch (err) { toast(err.message); } again(); });
+  document.querySelectorAll('[data-active]').forEach((b) => b.onclick = async () => {
+    const on = b.dataset.on === '1';
+    if (!(await ask({ title: on ? 'Switch this person on?' : 'Switch this person off?', text: on ? 'They can log in again with their password.' : 'They are logged out at once and can’t log in. Their history stays in the audit log.', ok: on ? 'Switch on' : 'Switch off', danger: !on }))) return;
+    try { await api('PUT', '/team/' + b.dataset.active, { active: on }); toast(on ? 'Switched on' : 'Switched off'); again(); } catch (err) { toast(err.message); } });
+  document.querySelectorAll('[data-reset]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'Reset password?', text: 'Their current password and open sessions stop working. You get a new one-time password to give them.', ok: 'Reset' }))) return;
+    try { const r = await api('POST', `/team/${b.dataset.reset}/reset`); await again(); showTempPassword(b.dataset.email, r.temp_password); } catch (err) { toast(err.message); } });
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -1000,9 +1064,13 @@ async function render() {
   try {
     if (h === '#/logout') {
       if (!(await ask({ title: 'Log out?', text: 'You will need your email and password to log in again.', ok: 'Log out' }))) { history.replaceState(null, '', HERE || '#/'); return; }
-      KEY = ''; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
+      KEY = ''; ME = null; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
+    if (!ME) ME = await api('GET', '/me');
+    if (ME.must_change) { app.innerHTML = firstPasswordView(); bindFirstPassword(); return; }
+    if (h === '#/' && !can('teachers_view')) { location.hash = can('evidence') ? '#/review' : can('students') ? '#/safety' : '#/safety-dash'; return; }
     GUARD = null; HERE = h;
-    if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
+    if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
+    else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }

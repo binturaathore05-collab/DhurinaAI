@@ -272,9 +272,20 @@ remarks, reopen; printable incident report. "AI failure" cases fill the dashboar
 **Privacy:** cases, student pages, flagged messages, conversation lookup and safety events are open only to the
 safety team (roles owner / safety; other roles get "Only the safety team…"); every look is in the audit log. Roles
 are managed in B5.
+
+**B5 as built (17 Nov 2026):** admin → **Team** (Super Admin only): add a person with a role → a one-time password is
+shown once (never stored in plain text, never in the audit log); at first login they must set their own. Change role,
+switch someone off (logged out at once, can't log in, history kept), reset a password (old password and sessions
+stop). There is always at least one active Super Admin and nobody can change their own role. Roles: **Super Admin**
+everything · **Safety Admin** conversations, review cases, blocking, safety settings, Emergency, tests, audit ·
+**Support** student accounts, class and parent consent (withdraw), no conversations, no blocking · **Technical**
+teachers, app builds, Emergency, safety tests, no student data · **Auditor** read-only dashboards, audit log,
+reports, settings. Every admin request is checked on the server (`services/roles.py`); the menu shows only allowed
+pages; Settings saves are checked per section (safety sections for Safety Admin, company / money / legal for Super
+Admin only). "School Admin" = Teacher (own students only, teacher dashboard).
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) — **built 17 Nov 2026** (see note below) |
-| B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model. |
+| B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model.  — **built 17 Nov 2026** (see note below) |
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21) |
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) |
 | B8 | Safety policy versions with compare and rollback (18) |

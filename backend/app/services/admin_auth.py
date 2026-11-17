@@ -59,6 +59,9 @@ def login(db: Database, email: str, password: str, secret: str, ip: str = "") ->
     email = (email or "").strip().lower()
     user = db.one("SELECT * FROM admin_users WHERE email = ?", (email,))
     now = time.time()
+    if user and not user["active"]:
+        db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 0)", (email, ip))
+        raise LoginError("This account has been switched off. Ask the Super Admin.")
     if user and user["locked_until"] and user["locked_until"] > now:
         mins = int((user["locked_until"] - now) // 60) + 1
         raise LoginError(f"Too many wrong passwords. Try again in {mins} minutes.")
@@ -76,7 +79,8 @@ def login(db: Database, email: str, password: str, secret: str, ip: str = "") ->
     token = jwt.encode({"sub": str(user["id"]), "aud": "admin", "iat": int(now),
                         "exp": int(now + SESSION_HOURS * 3600), "pv": user["password_hash"][-8:]},
                        secret, algorithm="HS256")
-    return {"token": token, "name": user["name"], "email": user["email"], "role": user["role"]}
+    return {"token": token, "name": user["name"], "email": user["email"], "role": user["role"],
+            "must_change": bool(user["must_change"])}
 
 
 def read_session(db: Database, token: str, secret: str):
@@ -85,8 +89,8 @@ def read_session(db: Database, token: str, secret: str):
     except jwt.PyJWTError:
         raise LoginError("Please log in again")
     user = db.one("SELECT * FROM admin_users WHERE id = ?", (int(data["sub"]),))
-    if user is None or user["password_hash"][-8:] != data.get("pv"):  # password changed → old sessions end
-        raise LoginError("Please log in again")
+    if user is None or user["password_hash"][-8:] != data.get("pv") or not user["active"]:
+        raise LoginError("Please log in again")   # password changed or account switched off → old sessions end
     return user
 
 
@@ -95,4 +99,63 @@ def change_password(db: Database, user_id: int, current: str, new: str) -> None:
     if not check_password(current, user["password_hash"]):
         raise LoginError("Current password is wrong")
     validate_password(new)
-    db.execute("UPDATE admin_users SET password_hash = ? WHERE id = ?", (hash_password(new), user_id))
+    if check_password(new, user["password_hash"]):
+        raise LoginError("Choose a new password, not the current one")
+    db.execute("UPDATE admin_users SET password_hash = ?, must_change = 0 WHERE id = ?", (hash_password(new), user_id))
+
+
+# ---------- B5: team ----------
+
+def temp_password() -> str:
+    """A one-time password the Super Admin passes on; it must be changed at first login."""
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
+    digits = "23456789"
+    core = [secrets.choice(alphabet) for _ in range(8)] + [secrets.choice(digits) for _ in range(4)]
+    secrets.SystemRandom().shuffle(core)
+    return "".join(core)
+
+
+def team(db: Database) -> list[dict]:
+    return [dict(r) for r in db.all("SELECT id, email, name, role, active, must_change, last_login, created_at, created_by "
+                                    "FROM admin_users ORDER BY active DESC, role, email")]
+
+
+def add_member(db: Database, email: str, name: str, role: str, by: str, roles: dict) -> tuple[int, str]:
+    if role not in roles:
+        raise LoginError("Choose a role")
+    email = (email or "").strip().lower()
+    if db.one("SELECT 1 FROM admin_users WHERE email = ?", (email,)):
+        raise LoginError("Someone with this email is already in the team")
+    pw = temp_password()
+    uid = create_admin(db, email, pw, (name or "").strip(), role)
+    db.execute("UPDATE admin_users SET must_change = 1, created_by = ? WHERE id = ?", (by, uid))
+    return uid, pw
+
+
+def _active_owners(db: Database) -> int:
+    return db.one("SELECT COUNT(*) AS n FROM admin_users WHERE role = 'owner' AND active = 1")["n"]
+
+
+def update_member(db: Database, uid: int, me_id: int, roles: dict, role: str | None = None,
+                  active: bool | None = None, name: str | None = None) -> None:
+    u = db.one("SELECT * FROM admin_users WHERE id = ?", (uid,))
+    if u is None:
+        raise KeyError(uid)
+    if uid == me_id and (role not in (None, u["role"]) or active is False):
+        raise LoginError("You can't change your own role or switch yourself off")
+    losing_owner = u["role"] == "owner" and u["active"] and (role not in (None, "owner") or active is False)
+    if losing_owner and _active_owners(db) <= 1:
+        raise LoginError("There must always be at least one active Super Admin")
+    if role is not None and role not in roles:
+        raise LoginError("Choose a role")
+    db.execute("UPDATE admin_users SET role = COALESCE(?, role), active = COALESCE(?, active), name = COALESCE(?, name) "
+               "WHERE id = ?", (role, None if active is None else int(active), (name or "").strip() or None, uid))
+
+
+def reset_password(db: Database, uid: int) -> str:
+    if db.one("SELECT 1 FROM admin_users WHERE id = ?", (uid,)) is None:
+        raise KeyError(uid)
+    pw = temp_password()
+    db.execute("UPDATE admin_users SET password_hash = ?, must_change = 1, failed_attempts = 0, locked_until = NULL "
+               "WHERE id = ?", (hash_password(pw), uid))   # the old password and every open session stop working
+    return pw
