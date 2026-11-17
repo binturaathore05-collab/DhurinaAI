@@ -146,6 +146,9 @@ def record_violation(db: Database, student_id: int, teacher_id: str, severity: s
     db.execute("INSERT INTO student_violations (student_id, teacher_id, qa_id, severity, category, question, at) "
                "VALUES (?, ?, ?, ?, ?, ?, ?)", (student_id, teacher_id, qa_id, severity, (category or "")[:80],
                                                 question[:1000], now))
+    if severity == "serious":   # B4: a person should look at every clearly harmful request
+        from . import incidents
+        incidents.open_auto(db, "serious_request", student_id, teacher_id, f"{category}: {question[:300]}", qa_id, now)
     st = status(db, student_id, now)
     if not settings["auto_block"] or st in ("review", "disabled"):
         return st
@@ -154,6 +157,9 @@ def record_violation(db: Database, student_id: int, teacher_id: str, severity: s
     until = now + settings["suspend_hours"] * 3600
     if serious >= settings["serious_review"]:
         _set(db, student_id, "review", "auto", "Repeated harmful or unsafe requests", now=now)
+        from . import incidents   # B4: an admin must decide → a high-priority case
+        incidents.open_auto(db, "student_review", student_id, teacher_id,
+                            "Stopped after repeated harmful requests — decide: unblock, keep stopped or disable", qa_id, now)
         return "review"
     if severity == "serious" and serious >= settings["serious_suspend"]:
         _set(db, student_id, "suspended", "auto", "Harmful or unsafe request", until=until, now=now)

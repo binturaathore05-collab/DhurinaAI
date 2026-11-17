@@ -289,6 +289,40 @@ CREATE TABLE IF NOT EXISTS parent_consents (  -- B1: proof of every parent's OK 
     revoke_reason TEXT
 );
 
+CREATE TABLE IF NOT EXISTS incidents (         -- B4: safety cases for the review center
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at REAL NOT NULL,
+    last_at REAL NOT NULL,
+    source TEXT,                                -- auto | admin
+    kind TEXT NOT NULL,                         -- care | student_review | serious_request | ai_stopped | report
+    severity TEXT NOT NULL,                     -- high | medium | low
+    status TEXT NOT NULL,                       -- open | in_review | escalated | resolved
+    student_id INTEGER,
+    teacher_id TEXT,
+    qa_id INTEGER,
+    title TEXT,
+    summary TEXT,
+    events INTEGER NOT NULL DEFAULT 1,
+    flagged_by TEXT,
+    assigned_to TEXT,
+    escalated_at REAL,
+    resolution TEXT,
+    resolution_note TEXT,
+    resolved_by TEXT,
+    resolved_at REAL,
+    ai_failure INTEGER NOT NULL DEFAULT 0       -- 1 = something unsafe reached the student (dashboard B3)
+);
+CREATE INDEX IF NOT EXISTS incidents_status ON incidents (status, severity, last_at);
+
+CREATE TABLE IF NOT EXISTS incident_notes (    -- B4: the timeline of every case
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    at REAL NOT NULL,
+    by_who TEXT NOT NULL,
+    action TEXT NOT NULL,
+    note TEXT
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL

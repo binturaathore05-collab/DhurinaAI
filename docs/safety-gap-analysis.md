@@ -259,8 +259,21 @@ warnings, automatic blocks, blocks / unblocks by admins, waiting for review. Day
 AI answers stopped) with hover values and a table view; by category (from students vs. AI answers stopped, how many
 serious); by AI model (answers given, tried unsafe, stopped %); latest safety-test result. Each stopped AI answer now
 records which model wrote it.
+
+**B4 as built (17 Nov 2026):** admin → **Review center**. Cases open by themselves: an upset student / self-harm
+(HIGH, top), a student stopped until an admin reviews (HIGH), a clearly harmful request (MEDIUM), an AI answer the
+check stopped (LOW); an admin can open one by hand from Audit → "Open a review case" (e.g. a parent's complaint with
+an LT- code). Repeats fold into the open case ("3×"). Opening a case starts the review (reviewer recorded). Case
+page: what happened, student / class / teacher, the whole class conversation exactly as sent with the flagged
+answer marked, timeline; actions: escalate to safety team, add note, stop the class now, warn / suspend / block the
+student (student page), pause this teacher's AI (A4 switch), close with an outcome (no problem · action taken ·
+false alarm · AI failure — something unsafe reached the student · referred to parents / authorities) and required
+remarks, reopen; printable incident report. "AI failure" cases fill the dashboard's "reached a student" number.
+**Privacy:** cases, student pages, flagged messages, conversation lookup and safety events are open only to the
+safety team (roles owner / safety; other roles get "Only the safety team…"); every look is in the audit log. Roles
+are managed in B5.
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
-| B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) |
+| B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) — **built 17 Nov 2026** (see note below) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model. |
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21) |
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) |

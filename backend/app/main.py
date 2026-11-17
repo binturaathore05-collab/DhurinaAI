@@ -31,6 +31,7 @@ from . import ai_setup
 from . import safety_lab
 from .services import consent
 from .services import safety_dashboard
+from .services import incidents
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -63,7 +64,7 @@ app = FastAPI(title="LiveTeach API", version="0.1.0")
 
 # ---------- A5: admin / teacher audit log ----------
 
-_WATCH_GET = re.compile(r"^/admin/api/(students/\d+|verify)$")
+_WATCH_GET = re.compile(r"^/admin/api/(students/\d+|verify|incidents/\d+)$")
 
 
 @app.middleware("http")
@@ -807,6 +808,13 @@ def require_admin(authorization: str = Header("")):
         raise HTTPException(401, str(exc))
 
 
+def require_safety(user=Depends(require_admin)):
+    """B4: flagged conversations and student messages only for the safety team (owner / safety roles)."""
+    if user["role"] not in incidents.REVIEW_ROLES:
+        raise HTTPException(403, "Only the safety team can see student conversations.")
+    return user
+
+
 class AdminLogin(BaseModel):
     email: str
     password: str
@@ -1010,7 +1018,7 @@ class StudentAction(BaseModel):
     hours: int | None = None    # for suspend
 
 
-@app.get("/admin/api/students", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/students", dependencies=[Depends(require_safety)])
 def admin_safety_students(status: str = "", q: str = "", teacher: str = "", offset: int = 0, limit: int = 25):
     return student_safety.list_students(db, status, q, teacher, offset, limit)
 
@@ -1068,7 +1076,7 @@ def admin_safety_tests_run():
     return admin_safety_tests()
 
 
-@app.get("/admin/api/verify", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/verify", dependencies=[Depends(require_safety)])
 def admin_verify(q: str = ""):
     """A5: look up a reported conversation by its reference code (LT-XXXX-XXXX) or by its words."""
     return audit.find(db, AUDIT_SECRET, q)
@@ -1079,20 +1087,86 @@ def admin_audit_log(q: str = "", offset: int = 0, limit: int = 50):
     return {**audit.audit_log(db, AUDIT_SECRET, q, offset, limit), "chain": audit.check_audit_chain(db, AUDIT_SECRET)}
 
 
+# ---------- B4: Human Review Center ----------
+
+class IncidentAction(BaseModel):
+    action: str                 # escalate | note | resolve | reopen | stop_class | pause_teacher
+    note: str = ""
+    resolution: str = ""
+
+
+class IncidentFlag(BaseModel):
+    note: str
+    qa_id: int | None = None
+    student_id: int | None = None
+
+
+@app.get("/admin/api/incidents", dependencies=[Depends(require_safety)])
+def admin_incidents(status: str = "", q: str = "", offset: int = 0):
+    return incidents.list_incidents(db, status, q, offset)
+
+
+@app.get("/admin/api/incidents/{iid}")
+def admin_incident(iid: int, user=Depends(require_safety)):
+    try:
+        return incidents.detail(db, iid, user["email"])
+    except KeyError:
+        raise HTTPException(404, "Case not found")
+
+
+@app.post("/admin/api/incidents/flag")
+def admin_incident_flag(body: IncidentFlag, user=Depends(require_safety)):
+    try:
+        iid = incidents.flag(db, user["email"], body.note, body.qa_id, body.student_id)
+    except KeyError:
+        raise HTTPException(404, "Conversation not found")
+    except incidents.IncidentError as exc:
+        raise HTTPException(400, str(exc))
+    return incidents.detail(db, iid)
+
+
+@app.post("/admin/api/incidents/{iid}/act")
+def admin_incident_act(iid: int, body: IncidentAction, user=Depends(require_safety)):
+    who = user["email"]
+    row = db.one("SELECT student_id, teacher_id FROM incidents WHERE id = ?", (iid,))
+    if row is None:
+        raise HTTPException(404, "Case not found")
+    try:
+        if body.action == "stop_class":   # end the student's class now (to keep them out: suspend them)
+            if not row["student_id"]:
+                raise incidents.IncidentError("This case has no student")
+            ended = classroom.end_session(db, row["student_id"])
+            incidents.record(db, iid, who, "stopped the class" if ended else "no class was running", body.note)
+        elif body.action == "pause_teacher":   # A4 switch for this teacher's AI
+            if not row["teacher_id"]:
+                raise incidents.IncidentError("This case has no teacher")
+            reason = (body.note or "").strip() or f"Review case #{iid}"
+            try:
+                switches.set_switch(db, f"teacher:{row['teacher_id']}", True, reason, who)
+            except ValueError as exc:
+                raise incidents.IncidentError(str(exc))
+            incidents.record(db, iid, who, "paused this teacher's AI (turn back on in Emergency)", reason)
+        else:
+            incidents.act(db, iid, who, body.action, body.note, body.resolution)
+    except incidents.IncidentError as exc:
+        raise HTTPException(400, str(exc))
+    return incidents.detail(db, iid)
+
+
 @app.get("/admin/api/safety-dashboard", dependencies=[Depends(require_admin)])
 def admin_safety_dashboard(days: int = 30, teacher: str = ""):
     """B3: safety numbers for a date range (and optionally one teacher)."""
     return safety_dashboard.build(db, days, teacher)
 
 
-@app.get("/admin/api/safety-events", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/safety-events", dependencies=[Depends(require_safety)])
 def admin_safety_events(limit: int = 30):
     """A2: what the safety check stopped (student messages and AI answers) and when it could not run."""
     return {**moderation.recent_events(db, max(1, min(limit, 100))), "provider": moderator.provider,
             "policy_version": moderation.POLICY_VERSION}
 
 
-@app.get("/admin/api/students/{sid}", dependencies=[Depends(require_admin)])
+@app.get("/admin/api/students/{sid}", dependencies=[Depends(require_safety)])
 def admin_safety_student(sid: int):
     try:
         return student_safety.detail(db, sid)

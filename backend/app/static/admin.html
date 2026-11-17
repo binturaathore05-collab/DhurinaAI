@@ -142,6 +142,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  review: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/>',
   dash: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   lab: '<path d="M9 3h6M10 3v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
   audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -240,7 +241,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety-dash', 'dash', 'Safety dashboard')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety-dash', 'dash', 'Safety dashboard')}${item('#/review', 'review', 'Review center')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/tests', 'lab', 'Safety tests')}${item('#/audit', 'audit', 'Audit')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -768,6 +769,7 @@ function verifyResults(v) {
         <span><span class="muted">Teacher</span> <b>${esc(x.teacher)}</b></span><span><span class="muted">Student</span> <a href="#/s/${x.student_id}">${esc(x.student || x.phone)}</a> ${esc(x.student ? x.phone : '')}</span>
         <span><span class="muted">Class session</span> <b>${x.session_id ?? '—'}</b></span><span><span class="muted">AI model</span> <b>${esc(x.model || '—')}</b></span>
         <span><span class="muted">Safety rules</span> <b>${esc(x.policy_version || '—')}</b></span><span><span class="muted">Type</span> <b>${esc(x.origin)}${x.scope && x.scope !== 'study' ? ' · ' + esc(x.scope) : ''}</b></span></div>
+      <div class="row"><span></span><button type="button" class="btn ghost" data-flag="${x.id}">Open a review case</button></div>
       <div><span class="muted" style="font-size:12px">STUDENT ASKED</span><div>${esc(x.question)}</div></div>
       <div><span class="muted" style="font-size:12px">SIR ANSWERED (exactly as sent)</span><div style="white-space:pre-wrap">${esc(x.answer)}${x.follow_up ? '\n\n' + esc(x.follow_up) : ''}</div></div></div>`;
   }).join('');
@@ -791,6 +793,10 @@ async function auditView() {
 function bindAudit() {
   const again = async (focus) => { $('#app').innerHTML = await auditView(); bindAudit(); if (focus) { const n = $(focus); n.focus(); n.setSelectionRange(n.value.length, n.value.length); } };
   $('#vf').onsubmit = (e) => { e.preventDefault(); AU.vq = $('#vq').value.trim(); again(); };
+  document.querySelectorAll('[data-flag]').forEach((b) => b.onclick = async () => {
+    const note = await textDialog('Open a review case for this conversation?', 'What was reported (e.g. parent’s complaint)', 'Open case'); if (!note) return;
+    try { const d = await api('POST', '/incidents/flag', { qa_id: Number(b.dataset.flag), note }); location.hash = '#/case/' + d.id; } catch (e) { toast(e.message); }
+  });
   let timer; $('#aq').oninput = () => { clearTimeout(timer); timer = setTimeout(() => { AU.q = $('#aq').value.trim(); AU.offset = 0; again('#aq'); }, 400); };
   document.querySelectorAll('[data-ap]').forEach((b) => b.onclick = () => { AU.offset = Number(b.dataset.ap) * 50; again(); });
 }
@@ -858,11 +864,12 @@ async function dashView() {
     <section class="card" style="border-color:${ai.reported_failures ? 'var(--bad)' : 'var(--ok)'};background:${ai.reported_failures ? '#FEF2F2' : '#F0FDF4'}">
       <span class="muted" style="font-size:13px;font-weight:600">MOST IMPORTANT</span>
       <b style="font-size:22px">The AI tried to answer unsafely ${ai.tried} ${ai.tried === 1 ? 'time' : 'times'} — the safety check stopped ${ai.stopped} (${pct}%).</b>
-      <span class="muted">Every answer is checked before the student sees it. Unsafe answers reported after reaching a student: <b>${ai.reported_failures}</b> (the review center will collect these).</span></section>
+      <span class="muted">Every answer is checked before the student sees it. Unsafe answers that reached a student (found in the review center): <b>${ai.reported_failures}</b>.</span></section>
     <div class="stats">${stat('Questions to Sir', c.questions, c.students + ' students')}${stat('Blocked questions', c.blocked, 'harmful or blocked topics')}${stat('Care replies', c.care, 'upset students given help')}
       ${stat('Off-topic, steered back', c.off_topic, 'not punished')}${stat('Safety check could not run', ai.check_failed, 'nothing unchecked was sent')}</div>
     <div class="stats">${stat('Flagged messages', st.flagged, 'counted for warnings / blocks')}${stat('Warnings', st.warnings, 'automatic')}${stat('Automatic blocks', st.auto_blocks, 'suspended or sent for review')}
-      ${stat('Blocked by admins', st.admin_blocks, '')}${stat('Unblocked by admins', st.unblocks, '')}${stat('Waiting for review', st.review_pending, 'right now · <a href="#/safety">open</a>')}</div>
+      ${stat('Blocked by admins', st.admin_blocks, '')}${stat('Unblocked by admins', st.unblocks, '')}${stat('Students waiting for a decision', st.review_pending, 'right now · <a href="#/safety">open</a>')}
+      ${stat('Open review cases', d.review.open, 'right now · <a href="#/review">open</a>')}${stat('Cases closed', d.review.resolved, 'in this period')}</div>
     <section class="card"><h2>Day by day</h2><div class="charts">${barChart('Questions to Sir', d.daily, 'questions')}${barChart('Blocked questions', d.daily, 'blocked')}${barChart('AI answers stopped (never shown)', d.daily, 'ai_stopped')}</div></section>
     <section class="card"><h2>By category</h2><div class="scroll">${cats ? `<table><thead><tr><th>CATEGORY</th><th>TOTAL</th><th>FROM STUDENTS</th><th>OF WHICH SERIOUS</th><th>AI ANSWERS STOPPED</th></tr></thead><tbody>${cats}</tbody></table>` : '<p class="muted">Nothing stopped in this period.</p>'}</div></section>
     <section class="card"><h2>By AI model</h2><div class="scroll">${models ? `<table><thead><tr><th>MODEL</th><th>ANSWERS GIVEN</th><th>TRIED UNSAFE</th><th>STOPPED</th><th>STOPPED %</th></tr></thead><tbody>${models}</tbody></table>` : '<p class="muted">No answers in this period.</p>'}</div></section>
@@ -872,6 +879,106 @@ function bindDash() {
   const again = async () => { $('#app').innerHTML = await dashView(); bindDash(); };
   document.querySelectorAll('[data-days]').forEach((b) => b.onclick = () => { DF.days = Number(b.dataset.days); again(); });
   $('#dteach').onchange = (e) => { DF.teacher = e.target.value; again(); };
+}
+
+// ---------- Review center (B4) ----------
+const RV = { status: 'active', q: '' };
+const SEV = { high: ['High', 'var(--bad)'], medium: ['Medium', 'var(--warn)'], low: ['Low', 'var(--muted)'] };
+const CST = { open: ['New', 'var(--bad)'], in_review: ['In review', 'var(--warn)'], escalated: ['Escalated', 'var(--bad)'], resolved: ['Closed', 'var(--ok)'] };
+const pillOf = (map, k) => { const [t, c] = map[k] || [k, 'var(--muted)']; return `<span class="pill" style="color:${c}">${esc(t)}</span>`; };
+async function reviewView() {
+  const d = await api('GET', '/incidents?' + new URLSearchParams({ status: RV.status, q: RV.q }));
+  const tab = (k, label) => `<button type="button" data-rs="${k}" class="${RV.status === k ? 'on' : ''}">${label}</button>`;
+  const rows = d.items.map((x) => `<tr><td>${pillOf(SEV, x.severity)}</td><td><a href="#/case/${x.id}"><b>${esc(x.title)}</b></a><div class="muted" style="font-size:12px;max-width:420px">${esc((x.summary || '').slice(0, 140))}</div></td>
+    <td>${x.student_id ? `<a href="#/s/${x.student_id}">${esc(x.student_name || x.student_phone || 'ID ' + x.student_id)}</a>` : '—'}<div class="muted" style="font-size:12px">${esc(x.teacher_name || '')}</div></td>
+    <td>${x.events > 1 ? x.events + '×' : '1'}</td><td>${when(x.last_at)}</td><td>${pillOf(CST, x.status)}<div class="muted" style="font-size:12px">${esc(x.assigned_to || '')}</div></td></tr>`).join('');
+  return shell('Review center', `<div class="row"><div><h1>Review center</h1><span class="sub">Safety cases for the safety team. Most urgent first. Only the safety team can open them, and every look is logged.</span></div></div>
+    ${d.high_open ? `<section class="card" style="border-color:var(--bad);background:#FEF2F2"><b style="color:var(--bad)">${d.high_open} high-priority ${d.high_open === 1 ? 'case is' : 'cases are'} open.</b><span class="muted">Upset students and students waiting for a decision come first.</span></section>` : ''}
+    <section class="card" style="gap:12px"><div class="presets">${tab('active', 'Open · ' + (d.counts.open + d.counts.in_review + d.counts.escalated))}${tab('escalated', 'Escalated · ' + d.counts.escalated)}${tab('resolved', 'Closed · ' + d.counts.resolved)}</div>
+      <input type="search" id="rq" placeholder="Search by student, phone, case number or words" value="${esc(RV.q)}" aria-label="Search cases"></section>
+    <section class="card"><div class="scroll">${rows ? `<table><thead><tr><th>PRIORITY</th><th>CASE</th><th>STUDENT · TEACHER</th><th>TIMES</th><th>LAST</th><th>STATUS</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">No cases here.</p>'}</div></section>`);
+}
+function bindReview() {
+  const again = async (f) => { $('#app').innerHTML = await reviewView(); bindReview(); if (f) { const n = $('#rq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); } };
+  document.querySelectorAll('[data-rs]').forEach((b) => b.onclick = () => { RV.status = b.dataset.rs; again(); });
+  let t; $('#rq').oninput = () => { clearTimeout(t); t = setTimeout(() => { RV.q = $('#rq').value.trim(); again(true); }, 400); };
+}
+let CASE = null;
+async function caseView(id) {
+  const x = CASE = await api('GET', '/incidents/' + encodeURIComponent(id));
+  const closed = x.status === 'resolved';
+  const conv = x.conversation.map((m) => `<div class="split" style="gap:6px;${m.flagged ? 'border-color:var(--bad);background:#FEF2F2' : ''}">
+      <div class="row"><span class="muted" style="font-size:12px">${[m.created_at + ' UTC', m.verify_code, m.model].filter(Boolean).map(esc).join(' · ')}</span>${m.flagged ? '<span class="pill" style="color:var(--bad)">This one</span>' : ''}${m.scope && m.scope !== 'study' ? `<span class="pill">${esc(m.scope)}</span>` : ''}</div>
+      <div><b>Student:</b> ${esc(m.question)}</div><div style="white-space:pre-wrap"><b>Sir:</b> ${esc(m.answer)}${m.follow_up ? '\n' + esc(m.follow_up) : ''}</div></div>`).join('');
+  const tl = x.timeline.map((n) => `<tr><td>${when(n.at)}</td><td>${esc(n.by_who)}</td><td><b>${esc(n.action)}</b>${n.note ? `<div class="muted" style="font-size:12px;white-space:pre-wrap">${esc(n.note)}</div>` : ''}</td></tr>`).join('');
+  const btn = (a, label, cls = 'ghost', extra = '') => `<button type="button" class="btn ${cls}" data-ca="${a}" ${extra}>${label}</button>`;
+  return shell('Review center', `<div class="row"><div style="display:flex;gap:14px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="#/review" aria-label="Back to review center">${icon('back')}</a>
+      <div><h1>Case #${x.id} · ${esc(x.title)}</h1><span class="sub">${pillOf(SEV, x.severity)} ${pillOf(CST, x.status)} · opened ${when(x.created_at)} · ${x.events} ${x.events === 1 ? 'time' : 'times'}</span></div></div>
+      <button type="button" class="btn ghost" id="report">Incident report</button></div>
+    <section class="card"><h2>What happened</h2><div style="white-space:pre-wrap">${esc(x.summary || '')}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:14px">
+        <span><span class="muted">Student</span> ${x.student_id ? `<a href="#/s/${x.student_id}">${esc(x.student_name || x.student_phone)}</a> · ${esc(x.student_status || '')}` : '—'}</span>
+        <span><span class="muted">Class</span> <b>${esc(x.class_level || '—')}</b>${x.is_adult ? ' · 18+' : ''}</span><span><span class="muted">Teacher</span> <b>${esc(x.teacher_name || '—')}</b></span>
+        <span><span class="muted">Reviewer</span> <b>${esc(x.assigned_to || '—')}</b></span></div>
+      ${closed ? `<div class="split"><b>Closed: ${esc(x.resolutions[x.resolution] || x.resolution)}</b><div style="white-space:pre-wrap">${esc(x.resolution_note || '')}</div><span class="muted" style="font-size:12px">${esc(x.resolved_by)} · ${when(x.resolved_at)}</span></div>` : ''}</section>
+    <section class="card"><h2>Actions</h2><div class="row" style="justify-content:flex-start;flex-wrap:wrap;gap:10px">
+      ${closed ? btn('reopen', 'Reopen case') : `${x.status !== 'escalated' ? btn('escalate', 'Escalate to safety team') : ''}${btn('note', 'Add a note')}${x.student_id ? btn('stop_class', 'Stop the class now') : ''}
+      ${x.student_id ? `<a class="btn ghost" href="#/s/${x.student_id}">Warn / suspend / block student</a>` : ''}${x.teacher_id ? btn('pause_teacher', 'Pause this teacher’s AI', 'ghost', 'style="color:var(--bad)"') : ''}${btn('resolve', 'Close case', 'primary')}`}</div></section>
+    <section class="card"><div class="row"><h2>Conversation</h2><span class="muted" style="font-size:12px">Exactly as sent · admins of the safety team only</span></div>${conv || '<p class="muted">No conversation on record.</p>'}</section>
+    <section class="card"><h2>Timeline</h2><div class="scroll"><table><thead><tr><th>WHEN</th><th>WHO</th><th>WHAT</th></tr></thead><tbody>${tl}</tbody></table></div></section>`);
+}
+function textDialog(title, label, ok, { required = true, danger = false, hint = '' } = {}) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    m.innerHTML = `<form class="box"><h3>${esc(title)}</h3>${hint ? `<p>${esc(hint)}</p>` : ''}<label class="f">${esc(label)}<textarea id="tx" maxlength="2000"></textarea></label><span class="err" id="te"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="submit" class="btn ${danger ? 'risk' : 'primary'}">${esc(ok)}</button></div></form>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m || e.target.closest('[data-c="0"]')) close(null); };
+    m.querySelector('form').onsubmit = (e) => { e.preventDefault(); const v = m.querySelector('#tx').value.trim();
+      if (required && !v) { m.querySelector('#te').textContent = 'Please write something'; return; } close(v); };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('#tx').focus();
+  });
+}
+function resolveDialog(resolutions) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    m.innerHTML = `<form class="box"><h3>Close this case</h3><label class="f">Outcome<select id="rr"><option value="">Choose</option>${Object.entries(resolutions).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></label>
+      <label class="f">Resolution remarks<textarea id="rn" maxlength="2000" placeholder="What you found and what was done"></textarea></label><span class="err" id="re"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="submit" class="btn primary">Close case</button></div></form>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m || e.target.closest('[data-c="0"]')) close(null); };
+    m.querySelector('form').onsubmit = (e) => { e.preventDefault(); const r = m.querySelector('#rr').value, n = m.querySelector('#rn').value.trim();
+      if (!r || !n) { m.querySelector('#re').textContent = 'Choose an outcome and write remarks'; return; } close({ resolution: r, note: n }); };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('#rr').focus();
+  });
+}
+function caseReport(x) {
+  const w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to open the report');
+  const rows = (a) => a.map((r) => `<tr>${r.map((c) => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`).join('');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Incident report #${x.id}</title><style>body{font:14px/1.5 system-ui,sans-serif;margin:32px;color:#111}h1{font-size:20px}table{border-collapse:collapse;width:100%;margin:8px 0 18px}td,th{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f5f5f5}.m{color:#555}</style></head><body>
+    <h1>Incident report #${x.id} — ${esc(x.title)}</h1><p class="m">LiveTeach · Dhurina · generated ${new Date().toLocaleString('en-IN')}</p>
+    <table>${rows([['Priority', x.severity], ['Status', x.status], ['Opened', when(x.created_at)], ['Times', x.events], ['Student', (x.student_name || '') + ' ' + (x.student_phone || '') + ' (ID ' + (x.student_id ?? '—') + ')'],
+      ['Class', x.class_level || '—'], ['Teacher', x.teacher_name || '—'], ['Reviewer', x.assigned_to || '—'], ['Summary', x.summary], ['Outcome', x.resolution ? x.resolutions[x.resolution] : 'open'], ['Resolution remarks', x.resolution_note || ''], ['Closed by', (x.resolved_by || '') + ' ' + (x.resolved_at ? when(x.resolved_at) : '')]])}</table>
+    <h2>Conversation</h2><table><tr><th>When (UTC)</th><th>Ref</th><th>Student</th><th>Sir</th></tr>${rows(x.conversation.map((m) => [m.created_at, m.verify_code, m.question, m.answer]))}</table>
+    <h2>Timeline</h2><table><tr><th>When</th><th>Who</th><th>What</th><th>Note</th></tr>${rows(x.timeline.map((n) => [when(n.at), n.by_who, n.action, n.note]))}</table>
+    <p class="m">Confidential — contains a minor's data. Share only with people who need it.</p><script>print()<\/script></body></html>`);
+  w.document.close();
+}
+function bindCase(id) {
+  $('#report').onclick = () => caseReport(CASE);
+  document.querySelectorAll('[data-ca]').forEach((b) => b.onclick = async () => {
+    const a = b.dataset.ca; let body = { action: a };
+    if (a === 'resolve') { const r = await resolveDialog(CASE.resolutions); if (!r) return; body = { ...body, ...r }; }
+    else {
+      const D = { note: ['Add a note', 'Note', 'Add note', {}], escalate: ['Escalate to the safety team?', 'Why (optional)', 'Escalate', { required: false }],
+        reopen: ['Reopen this case?', 'Why', 'Reopen', {}], stop_class: ['Stop the student’s class now?', 'Note (optional)', 'Stop class', { required: false, hint: 'The current class ends. To keep the student out, suspend them on their page.' }],
+        pause_teacher: ['Pause this teacher’s AI for every student?', 'Why', 'Pause AI', { danger: true, hint: 'All students of this teacher see “Sir is taking a short break”. Turn it back on in Emergency.' }] }[a];
+      const n = await textDialog(D[0], D[1], D[2], D[3]); if (n === null) return; body.note = n;
+    }
+    try { await api('POST', `/incidents/${encodeURIComponent(id)}/act`, body); toast('Saved'); $('#app').innerHTML = await caseView(id); bindCase(id); } catch (e) { toast(e.message); }
+  });
 }
 
 // ---------- router ----------
@@ -900,6 +1007,8 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/review') { $('#app').innerHTML = await reviewView(); bindReview(); }
+    else if (h.startsWith('#/case/')) { const id = h.slice(7); $('#app').innerHTML = await caseView(id); bindCase(id); }
     else if (h === '#/safety-dash') { $('#app').innerHTML = await dashView(); bindDash(); }
     else if (h === '#/tests') { $('#app').innerHTML = await testsView(); bindTests(); }
     else if (h === '#/audit') { $('#app').innerHTML = await auditView(); bindAudit(); }
