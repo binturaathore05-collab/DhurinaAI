@@ -134,6 +134,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
@@ -228,7 +229,7 @@ function shell(active, inner) {
   const item = (href, ic, label) => `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>`;
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">Dhurina Admin</span></span></div>
-    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/settings', 'gear', 'Settings')}
+    ${item('#/', 'users', 'Teachers')}${item('#/new', 'plus', 'Add teacher')}${item('#/reports', 'chart', 'Reports')}${item('#/safety', 'shield', 'Student safety')}${item('#/emergency', 'alert', 'Emergency')}${item('#/settings', 'gear', 'Settings')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -671,6 +672,59 @@ async function bindStudent(id) {
   });
 }
 
+// ---------- Emergency kill switches (A4) ----------
+async function emergencyView() {
+  const d = await api('GET', '/emergency');
+  const row = (key, label, sub, off, since, reason, soon = false) => `<div class="row" style="padding:14px 0;border-top:1px solid var(--border)">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 320px"><b>${esc(label)}${soon ? ' <span class="muted" style="font-weight:500;font-size:12px">· feature not live yet; switch ready</span>' : ''}</b>
+        <span class="muted" style="font-size:13px">${off ? `Off since ${when(since)} · ${esc(reason || '')}` : esc(sub)}</span></div>
+      <div style="display:flex;gap:12px;align-items:center"><span class="pill" style="color:${off ? 'var(--bad)' : 'var(--ok)'}">${off ? 'OFF' : 'On'}</span>
+        <button type="button" class="btn ${off ? 'primary' : 'ghost'}" style="${off ? '' : 'color:var(--bad)'}" data-key="${esc(key)}" data-off="${off ? 0 : 1}" data-label="${esc(label)}">${off ? 'Turn back on' : 'Turn off'}</button></div></div>`;
+  const f = Object.fromEntries(d.features.map((x) => [x.key, x]));
+  const subs = { all_ai: 'Questions, class notes and tests stop for every teacher. Notes, library and payments keep working.',
+    voice: 'Students can’t speak to Sir; typing still works.', photo: 'Students can’t ask with a photo.' };
+  const banner = d.any_off || !d.ai_available
+    ? `<section class="card" style="border-color:var(--bad);background:#FEF2F2"><b style="color:var(--bad)">Something is switched off right now.</b><span class="muted">Students see a polite “Sir is taking a short break” message for what is off.${d.ai_available ? '' : ' <b>No AI model is available — AI chat is paused.</b>'}</span></section>`
+    : `<section class="card" style="border-color:var(--ok);background:#F0FDF4"><b style="color:var(--ok)">Everything is running normally.</b></section>`;
+  const hist = d.log.map((h) => `<tr><td>${when(h.at)}</td><td>${esc(h.label)}</td><td><span class="pill" style="color:${h.off ? 'var(--bad)' : 'var(--ok)'}">${h.off ? 'Turned off' : 'Turned on'}</span></td><td>${esc(h.by_who)}</td><td>${esc(h.reason || '')}</td></tr>`).join('');
+  return shell('Emergency', `<div class="row"><div><h1>Emergency</h1><span class="sub">Stop a part of the AI at once if something goes wrong. Works immediately, for every student, no app update needed.</span></div></div>
+    ${banner}
+    <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Whole platform</h2>
+      ${row('all_ai', f.all_ai.label, subs.all_ai, f.all_ai.off, f.all_ai.since, f.all_ai.reason)}
+      ${row('voice', f.voice.label, subs.voice, f.voice.off, f.voice.since, f.voice.reason, true)}
+      ${row('photo', f.photo.label, subs.photo, f.photo.off, f.photo.since, f.photo.reason, true)}</section>
+    <section class="card" style="gap:0"><h2 style="margin-bottom:6px">One teacher’s AI</h2>
+      ${d.teachers.map((t) => row('teacher:' + t.id, t.name, 'Only this teacher’s students are affected.', t.off, t.since, t.reason)).join('') || '<p class="muted">No teachers yet.</p>'}</section>
+    <section class="card" style="gap:0"><h2 style="margin-bottom:6px">AI models</h2><span class="muted" style="font-size:13px;padding-bottom:6px">When a model is off, its work moves to the next model in line. If none is left, AI chat pauses.</span>
+      ${d.models.map((m) => row(m.key, m.name, m.role, m.off, m.since, m.reason)).join('') || '<p class="muted" style="padding-top:8px">No AI model is set on the server yet.</p>'}</section>
+    <section class="card"><h2>History</h2><div class="scroll">${hist ? `<table><thead><tr><th>WHEN</th><th>WHAT</th><th>CHANGE</th><th>BY</th><th>WHY</th></tr></thead><tbody>${hist}</tbody></table>` : '<p class="muted">Nothing has been switched off yet.</p>'}</div></section>`);
+}
+function switchDialog(label, off) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    m.innerHTML = `<form class="box"><h3>${off ? 'Turn off' : 'Turn back on'}: ${esc(label)}?</h3>
+      <p>${off ? 'This works immediately for every affected student.' : 'Students can use it again straight away. Only turn it back on after you have checked the problem is fixed.'}</p>
+      <label class="f">${off ? 'What happened?' : 'What did you check?'}<textarea id="sr" maxlength="500" required placeholder="${off ? 'e.g. wrong answers about …' : 'e.g. asked 20 test questions, all answers fine'}"></textarea></label>
+      ${off ? '' : '<label class="chk"><input type="checkbox" id="sc">I have checked that the problem is fixed</label>'}
+      <span class="err" id="se"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button><button type="submit" class="btn ${off ? 'risk' : 'primary'}" ${off ? '' : 'disabled'}>${off ? 'Turn off now' : 'Turn back on'}</button></div></form>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m || e.target.closest('[data-c="0"]')) close(null); };
+    if (!off) m.querySelector('#sc').onchange = (e) => { m.querySelector('[type=submit]').disabled = !e.target.checked; };
+    m.querySelector('form').onsubmit = (e) => { e.preventDefault(); const r = m.querySelector('#sr').value.trim();
+      if (!r) { m.querySelector('#se').textContent = off ? 'Write what happened' : 'Write what you checked'; return; } close(r); };
+    document.addEventListener('keydown', key, true); document.body.append(m); m.querySelector('#sr').focus();
+  });
+}
+function bindEmergency() {
+  document.querySelectorAll('[data-key]').forEach((b) => b.onclick = async () => {
+    const off = b.dataset.off === '1', reason = await switchDialog(b.dataset.label, off); if (!reason) return;
+    try { await api('POST', '/emergency', { key: b.dataset.key, off, reason }); toast(off ? 'Switched off' : 'Back on');
+      $('#app').innerHTML = await emergencyView(); bindEmergency(); } catch (e) { toast(e.message); }
+  });
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -697,6 +751,7 @@ async function render() {
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
+    else if (h === '#/emergency') { $('#app').innerHTML = await emergencyView(); bindEmergency(); }
     else if (h === '#/safety') { app.innerHTML = await safetyView(); bindSafety(); }
     else if (h.startsWith('#/s/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await studentView(id); bindStudent(id); }
     else {

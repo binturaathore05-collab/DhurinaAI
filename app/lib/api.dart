@@ -44,9 +44,14 @@ class Access {
   /// Safety status from the server (A3): active | warning | suspended | review | disabled, with a ready message.
   final String accountStatus;
   final String? accountMessage;
+  /// Set when the AI is switched off in admin → Emergency (for everyone or this teacher).
+  final String? serviceMessage;
   Access(this.state, this.demoLeft,
       {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0,
-      this.accountStatus = 'active', this.accountMessage});
+      this.accountStatus = 'active', this.accountMessage, this.serviceMessage});
+
+  /// What the call screen shows above Sir (account first, then a platform pause).
+  String? get notice => accountMessage ?? serviceMessage;
 
   /// Sir's AI is paused for this student (notes and library still work).
   bool get aiPaused => accountStatus == 'suspended' || accountStatus == 'review' || accountStatus == 'disabled';
@@ -65,6 +70,7 @@ class Access {
       graceLeft: (j['grace_questions_left'] as num? ?? 0).toInt(),
       accountStatus: j['account_status'] as String? ?? 'active',
       accountMessage: j['account_message'] as String?,
+      serviceMessage: j['service_message'] as String?,
     );
   }
 }

@@ -217,6 +217,23 @@ CREATE TABLE IF NOT EXISTS moderation_cache (  -- A2: the same text is never che
     at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS kill_switches (     -- A4: what is switched off right now
+    key TEXT PRIMARY KEY,                       -- all_ai | voice | photo | teacher:<id> | model:<name>
+    off INTEGER NOT NULL,
+    reason TEXT,
+    by_who TEXT,
+    at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kill_switch_log (   -- A4: every switch off / on, who and why
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL,
+    off INTEGER NOT NULL,
+    reason TEXT,
+    by_who TEXT NOT NULL,
+    at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
