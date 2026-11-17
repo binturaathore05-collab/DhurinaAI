@@ -560,7 +560,7 @@ class Database:
         ("students", "active_faculty_id", "INTEGER"), ("qa_history", "faculty_id", "INTEGER"),
         ("tests", "faculty_id", "INTEGER"), ("class_sessions", "faculty_id", "INTEGER"),
         ("kb_chunks", "faculty_id", "INTEGER"), ("verified_answers", "faculty_id", "INTEGER"),
-        ("moderation_cache", "subject", "TEXT"),
+        ("moderation_cache", "subject", "TEXT"), ("query_rewrites", "subject", "TEXT"),
     ]
 
     def _migrate(self) -> None:

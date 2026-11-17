@@ -182,24 +182,38 @@ class Tutor:
         topics = admin_mod.get_settings(self.db).get("ai", {}).get("blocked_topics") or []
         return [str(x).strip() for x in topics if str(x).strip()]
 
-    def _search_queries(self, question: str) -> list[str]:
-        """The question itself plus an English keyword version, so Hindi/Punjabi questions match English notes.
-        The keywords are remembered: the same question from any student costs no second AI call."""
+    REWRITE = ("Rewrite the student's question as short English search keywords, and name its study subject: one of "
+               "{keys}, or \"none\" for greetings, thanks, \"ok\" or anything not clearly one subject. "
+               "Return JSON {{\"query\": str, \"subject\": str}}.")
+
+    def rewrite(self, question: str, need_subject: bool = False) -> tuple[list[str], str | None]:
+        """The question plus an English keyword version (so Hindi/Punjabi questions match English notes), and its
+        subject (multi-teacher routing). One small-model call, remembered: the same question from any student costs
+        no second call. An old remembered row without a subject is asked again only when the subject is needed."""
+        from .faculty import SUBJECT_KEYS
         key = _padded(question).strip()[:300]
-        row = self.db.one("SELECT query FROM query_rewrites WHERE question = ?", (key,))
-        if row:
-            return [question, row["query"]]
+        row = self.db.one("SELECT query, subject FROM query_rewrites WHERE question = ?", (key,))
+        if row and (row["subject"] is not None or not need_subject):
+            return [question, row["query"]], row["subject"]
         try:
-            out = self.side_llm.chat_json(
-                "Rewrite the student's question as short English search keywords. Return JSON {\"query\": str}.",
-                question)
+            out = self.side_llm.chat_json(self.REWRITE.format(keys=SUBJECT_KEYS), question)
             q = str(out.get("query", "")).strip()[:200]
+            subject = str(out.get("subject") or "").strip().lower()
         except Exception:
-            return [question]
-        if not q:
-            return [question]
-        self.db.execute("INSERT OR IGNORE INTO query_rewrites (question, query) VALUES (?, ?)", (key, q))
-        return [question, q]
+            return [question], None
+        subject = subject if subject in SUBJECT_KEYS or subject == "none" else None
+        q = q or question[:200]   # nothing to rewrite: still remember the subject (no second call)
+        self.db.execute("INSERT OR REPLACE INTO query_rewrites (question, query, subject) VALUES (?, ?, ?)",
+                        (key, q, subject))
+        return [question, q], subject
+
+    def subject_of(self, question: str) -> str | None:
+        """For routing (faculty.route): the subject from the search-keyword call; None when not sure."""
+        s = self.rewrite(question, need_subject=True)[1]
+        return None if s in (None, "none") else s
+
+    def _search_queries(self, question: str) -> list[str]:
+        return self.rewrite(question)[0]
 
     def answer(self, student_id: int, teacher: TeacherProfile, question: str,
                session_id: int | None = None) -> TutorAnswer:

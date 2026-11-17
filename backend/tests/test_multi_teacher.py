@@ -91,6 +91,25 @@ def test_automatic_switch_sticky_and_by_voice_command(setup):
     assert student.get("/teacher").json()["faculty"][1]["name"] == "Gupta Sir"
 
 
+def test_unsure_keywords_ask_the_search_keyword_call_once(setup):
+    """With OpenAI's free check (no subject) and no subject words, the search-keyword call the teacher makes anyway
+    also names the subject. Remembered per question: no second call, not even for another student."""
+    admin, student, main = setup
+    ids = _add_teachers(admin)
+    rewrites = lambda: sum(1 for sys_, _ in main.raw_llm.calls if "search keywords" in sys_)
+    main.llm.replies = [{"query": "solve this sum", "subject": "maths"},
+                        {"answer": "Chaliye hal karte hain.", "follow_up": "", "found_in_notes": False, "scope": "study"}]
+    r = student.post("/class/ask", json={"question": "isko solve karo please"}).json()
+    assert r["faculty"]["id"] == ids["maths"] and rewrites() == 1   # routing and search shared one call
+    r = student.post("/class/ask", json={"question": "theek hai"}).json()
+    assert r["faculty"]["id"] == ids["maths"]                         # "ok"-type reply: stays, routing asks nothing
+    r = student.post("/class/ask", json={"question": "Haldighati ka yudh kab hua tha?"}).json()
+    assert r["faculty"]["id"] == ids["history"]                       # keywords sure: free
+    before = rewrites()
+    r = student.post("/class/ask", json={"question": "isko solve karo please"}).json()
+    assert r["faculty"]["id"] == ids["maths"] and rewrites() == before   # remembered: no call at all
+
+
 def test_subject_rides_on_the_safety_check(tmp_path):
     """The input check's one small-model call also returns the subject: routing needs no extra AI call."""
     from app.services.llm import FakeLLM

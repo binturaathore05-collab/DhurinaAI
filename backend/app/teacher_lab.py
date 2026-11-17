@@ -2,8 +2,9 @@
 (History, Hindi, English, Maths, Reasoning), like the safety lab. No real student or institute is touched.
 
 mode "free": subject from the free keyword match (what runs when the AI is off) — costs nothing.
-mode "ai":   subject from the real small model inside the safety check, and the real file classifier (a few
-             small-model calls). Needs the AI key on the server.
+mode "ai":   subject from the real small model (our own safety checker, or — with OpenAI's free check — the search
+             keyword call when the keywords are unsure), and the real file classifier. A few small-model calls; needs
+             the AI key on the server.
 """
 import json
 import os
@@ -49,13 +50,13 @@ def _check(name: str, ok: bool, detail: str) -> dict:
 def run(mode: str = "free", settings=None) -> list[dict]:
     tmp = tempfile.mkdtemp(prefix="teacher-lab-")
     db = Database(os.path.join(tmp, "lab.db"))
-    side_llm = moderator = None
+    side_llm = moderator = ai_subject = None
     if mode == "ai":
         from . import ai_setup
+        if not getattr(settings, "llm_api_key", ""):
+            raise RuntimeError("The AI check needs the AI key on the server (LLM_API_KEY)")
         ai = ai_setup.build(db, settings)
-        if ai.provider != "llm":
-            raise RuntimeError("The AI check needs the AI key on the server (MODERATION_PROVIDER = llm)")
-        side_llm, moderator = ai.side_llm, ai.moderator
+        side_llm, moderator, ai_subject = ai.side_llm, ai.moderator, ai.tutor.subject_of
     db.execute("INSERT INTO teachers (id, name, subject) VALUES ('lab', 'Lab Institute', 'History')")
     db.execute("INSERT INTO teachers (id, name, subject) VALUES ('other', 'Other Institute', 'Maths')")
     fac.ensure_default(db, "lab")
@@ -67,6 +68,7 @@ def run(mode: str = "free", settings=None) -> list[dict]:
     sid = db.execute("INSERT INTO students (teacher_id, phone) VALUES ('lab', '9000000001')").lastrowid
 
     def subject_of(q: str):
+        """What the live app has before routing: the subject from our own AI checker (None with OpenAI's check)."""
         if moderator is None:
             return None
         return moderator.check_input(q).subject
@@ -77,6 +79,9 @@ def run(mode: str = "free", settings=None) -> list[dict]:
     for q, want in QUESTIONS:
         s = subject_of(q)
         found = [s] if s and s != "none" else fac.subject_candidates(q)
+        if len(found) != 1 and ai_subject and s != "none":   # keywords unsure → the search-keyword call says it
+            got = ai_subject(q)
+            found = [got] if got else found
         got.append((q, want, found))
     teacher_of = {subs[0]: subs for _, subs in TEACHERS}
     bad = [f"“{q}” → {', '.join(s) or 'not sure'} (should be {w})" for q, w, s in got
@@ -87,7 +92,7 @@ def run(mode: str = "free", settings=None) -> list[dict]:
     bad = []
     for i, (q, want) in enumerate(QUESTIONS):
         s2 = db.execute("INSERT INTO students (teacher_id, phone) VALUES ('lab', ?)", (f"91{i:08d}",)).lastrowid
-        r = fac.route(db, "lab", s2, q, subject_of(q))
+        r = fac.route(db, "lab", s2, q, subject_of(q), ai_subject)
         if r.faculty.id != facs[want]:
             bad.append(f"“{q}” → {r.faculty.name}")
     out.append(_check("2. Right teacher answers", not bad, "; ".join(bad) or "every question went to its subject teacher"))
@@ -99,7 +104,7 @@ def run(mode: str = "free", settings=None) -> list[dict]:
              ("English teacher ko bulao", "english", True)]
     bad = []
     for q, want, should_switch in steps:
-        r = fac.route(db, "lab", sid, q, subject_of(q) if len(q.split()) > 2 else None)
+        r = fac.route(db, "lab", sid, q, subject_of(q) if len(q.split()) > 2 else None, ai_subject)
         line = fac.handover_line(r, "hi-Latn")
         if r.faculty.id != facs[want] or r.switched != should_switch or (should_switch and not line):
             bad.append(f"“{q}” → {r.faculty.name}{' (switched)' if r.switched else ''}")
@@ -151,7 +156,8 @@ def run(mode: str = "free", settings=None) -> list[dict]:
     geo = fac.save(db, "lab", {"name": "Meena Ma'am", "subjects": ["geography"]})
     library.upload(db, "lab", "Geography/rivers.txt", "चंबल नदी राजस्थान की एकमात्र बारहमासी नदी है। माही नदी कर्क रेखा को "
                    "दो बार काटती है। थार मरुस्थल पश्चिम में है।".encode(), moderator=moderator, side_llm=side_llm)
-    r = fac.route(db, "lab", sid, "चंबल नदी के बारे में बताइए, भूगोल", subject_of("चंबल नदी के बारे में बताइए, भूगोल"))
+    r = fac.route(db, "lab", sid, "चंबल नदी के बारे में बताइए, भूगोल", subject_of("चंबल नदी के बारे में बताइए, भूगोल"),
+                  ai_subject)
     hits = library.search(db, geo, ["चंबल नदी"])[0]
     ok = r.faculty.id == geo.id and bool(hits)
     out.append(_check("7. New teacher and content without code", ok,

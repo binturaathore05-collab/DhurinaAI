@@ -505,8 +505,9 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
         _tag(result, f, session_id)
         return {"type": "answer", **result.__dict__, **_access(student["id"])}
     _consume(student["id"], teacher)
-    # multi-teacher: the subject came with the safety check (no extra AI call); sticky; "Maths wale sir ko bulao"
-    r = faculty_mod.route(db, teacher.id, student["id"], body.question, verdict.subject)
+    # multi-teacher: subject from the safety check (our own checker) or the free keyword match, else from the search
+    # keyword call the teacher makes anyway (no extra AI call); sticky; "Maths wale sir ko bulao"
+    r = faculty_mod.route(db, teacher.id, student["id"], body.question, verdict.subject, tutor.subject_of)
     result = _answer_safely(student["id"], teacher.as_faculty(r.faculty, r.previous.name if r.switched else None),
                             body.question, session_id)
     _tag(result, r.faculty, session_id)

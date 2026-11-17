@@ -297,7 +297,11 @@ class Route:
     subject: str | None = None
 
 
-def route(db: Database, institute_id: str, student_id: int, question: str, model_subject: str | None = None) -> Route:
+def route(db: Database, institute_id: str, student_id: int, question: str, model_subject: str | None = None,
+          ai_subject=None) -> Route:
+    """model_subject: the subject the safety check gave (our own AI checker), "none", or None (OpenAI's check gives none).
+    ai_subject(question): asked only when that and the free keyword match are both unsure (it rides on the search
+    keyword call the AI teacher makes anyway, and is remembered per question — no extra AI call)."""
     facs = list_faculty(db, institute_id)
     if not facs:
         raise FacultyError("No teacher")
@@ -318,6 +322,12 @@ def route(db: Database, institute_id: str, student_id: int, question: str, model
         target, reason = called, "asked"
     elif len(facs) > 1 and not is_stay_reply(question):
         own = _keyword_faculty(question, facs)
+        if subject is None and not own and model_subject != "none" and ai_subject is not None:
+            try:
+                got = ai_subject(question)
+            except Exception:
+                got = None
+            subject = got if got in SUBJECTS else None
         if own and own is not current:
             target, reason = own, "subject"
         elif subject and not (current and covers(current, subject)) and not own:
