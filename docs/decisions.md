@@ -175,3 +175,9 @@ While we are testing, keep the OpenAI bill as low as possible: $5 prepaid, auto-
 Demo server: `LLM_MODEL=gpt-4o-mini` for everything (no separate small model), free OpenAI safety check,
 `SAFETY_LAB_AUTORUN=0` (the 160-case safety test runs only when someone presses it in admin, not on every restart of
 the free server). Any test Claude runs with the real AI uses the fewest calls needed; bigger models only after testing.
+
+## Audio first, video avatar later (owner, 17 Nov 2026)
+No video / AI avatar for now. The app is built and tested end to end in **audio**: the student speaks or types, Sir
+answers in voice (and text). Questions, answers, notes and tests all work in audio mode first; video mode comes
+later, after a small cost trial of avatar providers (per-minute billing). While testing, voice uses the phone's own
+free speech-to-text and text-to-speech; the teacher's own cloned voice is a later step.
