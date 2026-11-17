@@ -297,11 +297,21 @@ in Library → ⋮ → "Delete my account & data", or by telling Sir ("mera data
 or Super Admin / Support on a parent's request (reason required). Questions, answers, notes + PDFs, tests, sessions,
 name, class are deleted; the account is made anonymous and closed; payments, consents and safety records stay. All
 requests are listed on the Data page. **Lawyer check (DPDP):** the keeping periods and what is kept after deletion.
+
+**B7 as built (17 Nov 2026):** alerts raised at once for: an upset student (critical), a case closed as "AI failure"
+(critical), an Emergency switch turned off (critical; back on = info), the safety check failing ≥ 5 times in 10 min
+(critical), an automatic suspension / stop-for-review (high), the same student making 3+ harmful requests (high), a
+high-priority case waiting > 2 h (high), a spike of blocked questions or stopped AI answers (≥ 10 in an hour and 3×
+the usual hour; high), failed safety tests (high). The same alert isn't repeated within an hour. **Admin panel:** 🔔
+"Alerts" at the top of the menu with the count of new alerts (refreshes every minute), Alerts page (open the case /
+page, mark as seen — logged with who). **Email** via any SMTP (`SMTP_HOST` …) to the addresses in Settings → Alerts,
+for critical only / critical + high / all; the email never contains what a child wrote — only what happened and a
+link (the B5 permissions decide who can open it). **WhatsApp** needs a WhatsApp Business API provider — not built.
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) — **built 17 Nov 2026** (see note below) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model.  — **built 17 Nov 2026** (see note below) |
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21)  — **built 17 Nov 2026** (see note below) |
-| B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) |
+| B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) — **built 17 Nov 2026**, email yes, WhatsApp needs a provider (see note below) |
 | B8 | Safety policy versions with compare and rollback (18) |
 
 ### Phase C — before launch for any voice / photo / video feature that ships

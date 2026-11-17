@@ -89,6 +89,11 @@ def _set(db: Database, student_id: int, new: str, by: str, reason: str, remarks:
     db.execute("UPDATE students SET status = ?, status_until = ?, status_reason = ? WHERE id = ?",
                (new, until, reason[:200], student_id))
     _log(db, student_id, old, new, by, reason, remarks, until, now)
+    if by == "auto" and new in ("suspended", "review"):   # B7
+        from . import alerts
+        alerts.raise_alert(db, "auto_block", "high",
+                           f"Student {'stopped until review' if new == 'review' else 'suspended'} automatically",
+                           f"Reason: {reason}.", f"#/s/{student_id}", f"auto_block:{student_id}:{new}", student_id, now=now)
 
 
 def _count(db: Database, student_id: int, severity: str, days: int, now: float) -> int:

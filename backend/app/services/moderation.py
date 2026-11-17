@@ -237,6 +237,9 @@ class Moderator:
             (time.time(), ctx.get("student_id"), ctx.get("teacher_id"), stage, v.category, v.severity, v.source,
              action, (text or "")[:1000], self.model_name or self.provider, POLICY_VERSION,
              (used_model.get() or None) if stage == "output" else None))
+        if action == "retry":   # B7: the check keeps failing → alert without waiting
+            from . import admin as admin_mod, alerts
+            alerts.check_down_now(self.db, admin_mod.get_settings(self.db))
         if action in ("care_reply", "replaced"):   # B4: open a case for the review center
             from . import incidents
             incidents.open_auto(self.db, "care" if action == "care_reply" else "ai_stopped", ctx.get("student_id"),

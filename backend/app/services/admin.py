@@ -9,6 +9,7 @@ from .limits import DEFAULT_LIMITS
 from . import student_safety
 from . import age_policy
 from . import data_protection
+from . import alerts
 import copy
 
 CHECKLIST = [
@@ -27,6 +28,7 @@ DEFAULT_SETTINGS = {
     "students": {"min_class": 6},    # B1: lowest class allowed at signup
     "age_groups": copy.deepcopy(age_policy.DEFAULT_AGE_GROUPS),   # B2: rules per age group
     "data": dict(data_protection.DEFAULT_DATA),   # B6: how long data is kept, backups kept
+    "alerts": dict(alerts.DEFAULT_ALERTS),        # B7: who gets emails, thresholds
     "limits": dict(DEFAULT_LIMITS),
     "safety": dict(student_safety.DEFAULT_SAFETY),   # A3 warnings ladder (see services/student_safety.py)   # A6 rate limits (see services/limits.py)
     "ai": {"trusted_sites": ["pib.gov.in", "india.gov.in", "ncert.nic.in"],
@@ -63,6 +65,10 @@ def save_settings(db: Database, data: dict) -> dict:
     try:
         current["safety"].update(student_safety.validate_settings(current["safety"]))
     except student_safety.SafetyError as exc:
+        raise AdminError(str(exc))
+    try:
+        current["alerts"].update(alerts.validate(current["alerts"]))
+    except ValueError as exc:
         raise AdminError(str(exc))
     try:
         current["data"].update(data_protection.validate(current["data"]))

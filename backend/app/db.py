@@ -347,6 +347,25 @@ CREATE TABLE IF NOT EXISTS retention_tombstones (  -- B6: seal of a deleted answ
     deleted_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS alerts (            -- B7: what the team is told at once (never a child's words)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    kind TEXT NOT NULL,
+    level TEXT NOT NULL,                        -- critical | high | medium
+    title TEXT NOT NULL,
+    body TEXT,
+    link TEXT,                                  -- where in the admin panel
+    dedup_key TEXT,
+    student_id INTEGER,
+    teacher_id TEXT,
+    emailed INTEGER NOT NULL DEFAULT 0,         -- 1 sent, -1 failed
+    ack_at REAL,
+    ack_by TEXT,
+    ack_note TEXT
+);
+CREATE INDEX IF NOT EXISTS alerts_open ON alerts (ack_at, level, at);
+CREATE INDEX IF NOT EXISTS alerts_dedup ON alerts (dedup_key, at);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL

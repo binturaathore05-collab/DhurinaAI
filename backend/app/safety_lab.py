@@ -226,6 +226,10 @@ def save_run(db: Database, result: dict, provider: str, model: str, fp: str, pol
         (time.time(), result["mode"], provider, model, fp, policy, trigger, int(result["passed"]), result["total"],
          result["failed"], json.dumps(result["groups"]), json.dumps(result["failures"], ensure_ascii=False)[:200000],
          result["seconds"]))
+    if result["mode"] == "live" and not result["passed"]:   # B7
+        from .services import alerts
+        alerts.raise_alert(db, "tests_failed", "high", f"Safety tests failed ({result['failed']} of {result['total']} checks)",
+                           f"Launch is blocked for model {model}. See what failed.", "#/tests", f"tests_failed:{fp}")
     return cur.lastrowid
 
 
