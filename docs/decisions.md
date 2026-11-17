@@ -113,6 +113,7 @@ the switches to certain roles waits for Team & roles (B5).
 Every answer shows a small reference code (LT-XXXX-XXXX) in the app, so a viral clip can be checked in admin →
 Audit. Every admin / teacher-panel change and every look at flagged student messages is logged (no passwords or keys).
 
-## AI disclosure — A7 (17 Nov 2026)
-The app always shows that Sir is an AI ("AI" tag, "AI Teacher" on the video, opening line "an AI, not a real
-person"); every notes PDF says "AI Teacher", has a faint watermark and an "AI can make mistakes" note.
+## AI disclosure — A7 (owner, 17 Nov 2026)
+Don't show "AI Teacher" / "AI" labels everywhere — the student must feel it is a real class. Tell it once at the start
+(login screen: "Call your AI teacher, anytime") and put it in the policy / terms. No label on the video, no AI note or
+watermark on notes PDFs; PDFs keep only the small reference code (A5).

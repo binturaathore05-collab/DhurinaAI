@@ -108,17 +108,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "सर थोड़ी देर के ब्रेक पर हैं। कुछ देर बाद फिर आइए — आपके नोट्स और लाइब्रेरी खुले हैं।",
         "pa": "ਸਰ ਥੋੜ੍ਹੀ ਦੇਰ ਦੀ ਬ੍ਰੇਕ 'ਤੇ ਹਨ। ਕੁਝ ਦੇਰ ਬਾਅਦ ਫਿਰ ਆਓ — ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ।",
     },
-    "ai_disclosure": {
-        "en": "Namaste! I'm the AI teacher of {teacher} — an AI, not a real person. Ask me anything, in Hindi, English, Punjabi or any language.",
-        "hi": "नमस्ते! मैं {teacher} का AI टीचर हूँ — एक AI, असली इंसान नहीं। मुझसे कुछ भी पूछो, हिंदी, अंग्रेज़ी, पंजाबी या किसी भी भाषा में।",
-        "pa": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ {teacher} ਦਾ AI ਟੀਚਰ ਹਾਂ — ਇੱਕ AI, ਅਸਲੀ ਇਨਸਾਨ ਨਹੀਂ। ਮੈਨੂੰ ਕੁਝ ਵੀ ਪੁੱਛੋ, ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ।",
-    },
-    "notes_ai_badge": {"en": "AI Teacher", "hi": "AI टीचर", "pa": "AI ਟੀਚਰ"},
-    "notes_ai_note": {
-        "en": "Made by the AI teacher of {teacher}. AI can make mistakes — check important facts with your textbook or teacher.",
-        "hi": "{teacher} के AI टीचर ने बनाया। AI से गलती हो सकती है — ज़रूरी बातें अपनी किताब या टीचर से ज़रूर मिलाएँ।",
-        "pa": "{teacher} ਦੇ AI ਟੀਚਰ ਨੇ ਬਣਾਇਆ। AI ਤੋਂ ਗਲਤੀ ਹੋ ਸਕਦੀ ਹੈ — ਜ਼ਰੂਰੀ ਗੱਲਾਂ ਆਪਣੀ ਕਿਤਾਬ ਜਾਂ ਟੀਚਰ ਨਾਲ ਮਿਲਾਓ।",
-    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},
