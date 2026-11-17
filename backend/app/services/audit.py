@@ -135,7 +135,9 @@ def _is_secret(name: str) -> bool:
 
 def _redact(value):
     if isinstance(value, dict):
-        return {k: ("•••" if _is_secret(k) and v not in (None, "") else _redact(v)) for k, v in value.items()}
+        return {k: ("•••" if _is_secret(k) and v not in (None, "") else
+                    f"(file, {len(v)} chars)" if k.endswith("_base64") and isinstance(v, str) else _redact(v))
+                for k, v in value.items()}
     if isinstance(value, list):
         return [_redact(v) for v in value[:50]]
     if isinstance(value, str):

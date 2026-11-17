@@ -393,6 +393,73 @@ CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per co
     at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rate_events_key_at ON rate_events (key, at);
+
+-- Multi-teacher: AI teachers (faculty) inside one institute (= one row in teachers = one app)
+CREATE TABLE IF NOT EXISTS faculty (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id TEXT NOT NULL REFERENCES teachers(id),   -- the institute / app
+    name TEXT NOT NULL,
+    subjects TEXT NOT NULL DEFAULT '[]',     -- JSON list of subject keys (faculty.SUBJECTS) or "general"
+    keywords TEXT NOT NULL DEFAULT '[]',     -- JSON: extra words that mean this teacher ("RAS", "Patwari")
+    instructions TEXT,                       -- teaching style / instructions for this teacher
+    avatar_url TEXT,
+    voice_id TEXT,                           -- for the voice phase
+    active INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at REAL
+);
+-- One content library: every file stored ONCE by fingerprint; institutes (and the Common Library) get links to it
+CREATE TABLE IF NOT EXISTS content_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sha256 TEXT UNIQUE NOT NULL,             -- fingerprint of the bytes
+    text_hash TEXT,                          -- fingerprint of the normalized extracted text
+    size INTEGER NOT NULL,
+    kind TEXT NOT NULL,                      -- pdf | txt | docx
+    text TEXT NOT NULL,                      -- extracted text (for preview and search)
+    ai_subject TEXT,                         -- the one small-model guess (kept, so it never runs twice)
+    safety TEXT NOT NULL DEFAULT 'ok',       -- ok | blocked | retry (the check could not run)
+    safety_note TEXT,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS content_files_text ON content_files (text_hash);
+CREATE TABLE IF NOT EXISTS content_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL REFERENCES content_files(id),
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS content_chunks_file ON content_chunks (file_id);
+CREATE TABLE IF NOT EXISTS content_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL REFERENCES content_files(id),
+    owner TEXT NOT NULL,                     -- institute id, or "common" for Dhurina's Common Library
+    title TEXT NOT NULL,                     -- the file name as this owner uploaded it
+    subject TEXT,                            -- subject key or "general"; NULL = not decided yet
+    faculty_id INTEGER,                      -- a fixed teacher (else every teacher of the subject)
+    assigned_by TEXT,                        -- upload | name | ai | admin
+    status TEXT NOT NULL DEFAULT 'live',     -- live | pending (subject unsure) | blocked (safety) | checking
+    allow_common INTEGER NOT NULL DEFAULT 0, -- uploader allows it in the Common Library
+    uploaded_by TEXT,
+    created_at REAL NOT NULL,
+    UNIQUE (file_id, owner)
+);
+CREATE INDEX IF NOT EXISTS content_links_owner ON content_links (owner, status);
+CREATE TABLE IF NOT EXISTS teacher_lab_runs (   -- runs of the multi-teacher test lab (the brief's 7 checks)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    by TEXT,
+    mode TEXT NOT NULL,                      -- free (keyword routing) | ai (the real small model)
+    passed INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    results TEXT NOT NULL                    -- JSON list of checks
+);
+CREATE TABLE IF NOT EXISTS common_attachments (   -- Common Library subject linked to one institute teacher
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    faculty_id INTEGER NOT NULL REFERENCES faculty(id),
+    subject TEXT NOT NULL,
+    attached_by TEXT,
+    at REAL NOT NULL,
+    UNIQUE (faculty_id, subject)
+);
 """
 
 
@@ -489,6 +556,11 @@ class Database:
         ("qa_history", "model", "TEXT"), ("qa_history", "policy_version", "TEXT"), ("qa_history", "prev_hash", "TEXT"),
         ("qa_history", "record_hash", "TEXT"), ("qa_history", "verify_code", "TEXT"), ("qa_history", "sealed_at", "REAL"),
         ("verified_answers", "active", "INTEGER NOT NULL DEFAULT 1"), ("verified_answers", "updated_at", "TEXT"),
+        # multi-teacher: who answered / which teacher a test, class or note belongs to
+        ("students", "active_faculty_id", "INTEGER"), ("qa_history", "faculty_id", "INTEGER"),
+        ("tests", "faculty_id", "INTEGER"), ("class_sessions", "faculty_id", "INTEGER"),
+        ("kb_chunks", "faculty_id", "INTEGER"), ("verified_answers", "faculty_id", "INTEGER"),
+        ("moderation_cache", "subject", "TEXT"), ("query_rewrites", "subject", "TEXT"),
     ]
 
     def _migrate(self) -> None:

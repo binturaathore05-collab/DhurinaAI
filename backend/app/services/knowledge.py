@@ -68,39 +68,48 @@ class KnowledgeBase:
         """Top chunks for any of the queries. A chunk must contain at least min_coverage of a query's words."""
         rows = self.db.all("SELECT id, source_title, source_ref, text FROM kb_chunks WHERE teacher_id = ?",
                            (teacher_id,))
-        if not rows:
-            return []
-        docs = [tokenize(r["text"]) for r in rows]
-        n = len(docs)
-        avgdl = sum(len(d) for d in docs) / n or 1
-        df = Counter(w for d in docs for w in set(d))
-        k1, b = 1.5, 0.75
-        best: dict[int, float] = {}
-        for q in queries:
-            q_terms = set(tokenize(q))
-            for i, d in enumerate(docs):
-                tf = Counter(d)
-                if not q_terms or len(q_terms & tf.keys()) / len(q_terms) < min_coverage:
-                    continue
-                s = 0.0
-                for w in q_terms:
-                    if w in tf:
-                        idf = math.log(1 + (n - df[w] + 0.5) / (df[w] + 0.5))
-                        s += idf * tf[w] * (k1 + 1) / (tf[w] + k1 * (1 - b + b * len(d) / avgdl))
-                best[i] = max(best.get(i, 0.0), s)
-        ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
-        return [Hit(rows[i]["id"], rows[i]["source_title"], rows[i]["source_ref"], rows[i]["text"], s)
-                for i, s in ranked[:k] if s > 0]
+        return bm25([(r["id"], r["source_title"], r["source_ref"], r["text"]) for r in rows], queries, k, min_coverage)
 
-    def find_verified(self, teacher_id: str, question: str, threshold: float = 0.75):
-        """A teacher-approved answer to (nearly) the same question, if one exists."""
+    def find_verified(self, teacher_id: str, question: str, threshold: float = 0.75, faculty_id: int | None = None):
+        """A teacher-approved answer to (nearly) the same question, if one exists (of this faculty, or app-wide)."""
         q = set(tokenize(question))
         if not q:
             return None
         best, best_score = None, 0.0
-        for row in self.db.all("SELECT * FROM verified_answers WHERE teacher_id = ? AND active = 1", (teacher_id,)):
+        sql = "SELECT * FROM verified_answers WHERE teacher_id = ? AND active = 1"
+        args: tuple = (teacher_id,)
+        if faculty_id is not None:
+            sql += " AND (faculty_id IS NULL OR faculty_id = ?)"
+            args = (teacher_id, faculty_id)
+        for row in self.db.all(sql, args):
             v = set(tokenize(row["question"]))
             score = len(q & v) / len(q | v) if v else 0
             if score > best_score:
                 best, best_score = row, score
         return best if best_score >= threshold else None
+
+
+def bm25(rows: list[tuple], queries: list[str], k: int = 4, min_coverage: float = 0.34) -> list[Hit]:
+    """BM25 over (id, title, ref, text) rows. A chunk must contain at least min_coverage of a query's words."""
+    if not rows:
+        return []
+    docs = [tokenize(r[3]) for r in rows]
+    n = len(docs)
+    avgdl = sum(len(d) for d in docs) / n or 1
+    df = Counter(w for d in docs for w in set(d))
+    k1, b = 1.5, 0.75
+    best: dict[int, float] = {}
+    for q in queries:
+        q_terms = set(tokenize(q))
+        for i, d in enumerate(docs):
+            tf = Counter(d)
+            if not q_terms or len(q_terms & tf.keys()) / len(q_terms) < min_coverage:
+                continue
+            s = 0.0
+            for w in q_terms:
+                if w in tf:
+                    idf = math.log(1 + (n - df[w] + 0.5) / (df[w] + 0.5))
+                    s += idf * tf[w] * (k1 + 1) / (tf[w] + k1 * (1 - b + b * len(d) / avgdl))
+            best[i] = max(best.get(i, 0.0), s)
+    ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
+    return [Hit(rows[i][0], rows[i][1], rows[i][2], rows[i][3], s) for i, s in ranked[:k] if s > 0]

@@ -15,7 +15,8 @@ PERMS = {
     "dashboard": _ALL,                                        # safety numbers (no personal data)
     "tests_view": _ALL,
     "teachers_view": {"owner", "technical", "support", "auditor"},
-    "teachers_edit": {"owner", "technical"},
+    "teachers_edit": {"owner", "technical"},                  # also: AI teachers (faculty) and the content library
+    "library_common": {"owner"},                              # Dhurina's Common Library and linking it to institutes
     "money": {"owner", "auditor"},                            # reports, payments, exports
     "settings_view": {"owner", "safety", "technical", "auditor"},
     "settings_safety": {"owner", "safety"},                   # AI topics, safety, limits, age groups, students

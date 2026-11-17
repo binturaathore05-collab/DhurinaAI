@@ -48,6 +48,7 @@ class Verdict:
     category: str = "none"
     severity: str = "none"      # none | minor | serious | care
     source: str = "rules"       # rules | model | cache
+    subject: str | None = None  # multi-teacher: the question's subject, from the same call (input check only)
 
     @property
     def safe(self) -> bool:
@@ -115,21 +116,33 @@ insults, bullying words, personal_info or dangerous_advice; self_harm is always 
 severity "serious". Use "none" when you are not sure it is harmful — never block a real study question.
 
 {age}
-Return JSON only: {{"category": one of {cats}, "severity": "none" | "minor" | "serious"}}"""
+Return JSON only: {{"category": one of {cats}, "severity": "none" | "minor" | "serious"{subject_field}}}"""
+
+# multi-teacher routing rides on the input check (no extra AI call): the study subject of the student's message
+SUBJECT_FIELD = (', "subject": the study subject of the message, one of {keys}, or "none" for greetings, thanks, '
+                 '"ok" or anything that is not clearly one subject')
+
+
+def _subject_keys() -> list[str]:
+    from .faculty import SUBJECT_KEYS
+    return SUBJECT_KEYS
 
 
 def _model_llm(llm, text: str, stage: str, age: str = "") -> Verdict:
     what = "student's message to the teacher" if stage == "input" else "text the AI teacher wrote for a student"
     try:
-        out = llm.chat_json(CLASSIFIER.format(what=what, cats=list(CATEGORIES), age=age), text[:6000])
+        field = SUBJECT_FIELD.format(keys=_subject_keys()) if stage == "input" else ""
+        out = llm.chat_json(CLASSIFIER.format(what=what, cats=list(CATEGORIES), age=age, subject_field=field), text[:6000])
         category = str(out["category"]).strip().lower()
         severity = str(out["severity"]).strip().lower()
+        subject = str(out.get("subject") or "").strip().lower() if stage == "input" else ""
     except Exception as exc:   # down, slow, or not the JSON we asked for → fail closed
         raise Unavailable(str(exc)) from exc
     if category not in CATEGORIES or severity not in ("none", "minor", "serious"):
         raise Unavailable(f"unexpected answer {category}/{severity}")
+    subject = subject if subject in _subject_keys() or subject == "none" else None   # unknown → keyword fallback
     if category == "none" or severity == "none":
-        return Verdict(source="model")
+        return Verdict(source="model", subject=subject)
     if category == "self_harm":
         return Verdict("self_harm", "care", "model")
     if category in SERIOUS or (category in ("violence", "harassment") and severity == "serious"):
@@ -199,15 +212,15 @@ class Moderator:
             age = f"{age}\n{extra}".strip()
             level = f"{level}|{hashlib.sha256(extra.encode()).hexdigest()[:8]}"
         key = hashlib.sha256(f"{POLICY_VERSION}|{self.provider}|{stage}|{level}|{_norm(text)}".encode()).hexdigest()
-        row = self.db.one("SELECT category, severity FROM moderation_cache WHERE key = ?", (key,))
+        row = self.db.one("SELECT category, severity, subject FROM moderation_cache WHERE key = ?", (key,))
         if row:
-            return Verdict(row["category"], row["severity"], "cache")
+            return Verdict(row["category"], row["severity"], "cache", row["subject"])
         if self.provider == "openai":
             v = _model_openai(self.base_url, self.api_key, text, stage)
         else:
             v = _model_llm(self.llm, text, stage, age)
-        self.db.execute("INSERT OR REPLACE INTO moderation_cache (key, category, severity, at) VALUES (?, ?, ?, ?)",
-                        (key, v.category, v.severity, time.time()))
+        self.db.execute("INSERT OR REPLACE INTO moderation_cache (key, category, severity, at, subject) "
+                        "VALUES (?, ?, ?, ?, ?)", (key, v.category, v.severity, time.time(), v.subject))
         return v
 
     def check(self, text: str, stage: str) -> Verdict:

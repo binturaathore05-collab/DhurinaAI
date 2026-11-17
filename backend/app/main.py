@@ -39,6 +39,7 @@ from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
 from .services.tutor import is_delete_command
+from .services import faculty as faculty_mod, library
 import threading
 import hashlib
 from .languages import detect_language
@@ -65,6 +66,7 @@ if _provider == "rules":
 elif os.environ.get("SAFETY_LAB_AUTORUN", "1") == "1":
     safety_lab.start_background(settings, db, "startup")   # A8: new model / instructions on the server → test them
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
+faculty_mod.ensure_all(db)   # multi-teacher migration: every existing app gets its one teacher as faculty
 parent_notify.sender["sms"] = sms_console   # B9: parent SMS goes through the same SMS service as login codes
 i18n.overrides["get"] = lambda: admin.get_settings(db).get("messages")   # B9: messages changed by the admin
 AUDIT_SECRET = settings.audit_secret or hashlib.sha256(f"audit|{settings.jwt_secret}".encode()).hexdigest()
@@ -162,6 +164,7 @@ def teacher_info(request: Request, teacher: TeacherProfile = Depends(teacher_fro
     return {"id": row["id"], "name": row["name"], "subject": row["subject"], "avatar_url": row["avatar_url"],
             "brand_color": row["brand_color"], "plans": plans, "demo_questions": _limits(teacher.id)["demo"],
             "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url)),
+            "faculty": [f.public() for f in faculty_mod.list_faculty(db, teacher.id)],
             "features": {"ai_chat": not switches.ai_paused_for(db, teacher.id), "voice": not switches.is_off(db, "voice"),
                          "photo": not switches.is_off(db, "photo")}}
 
@@ -499,10 +502,34 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     verdict = _check_input(body.question)
     if not verdict.safe:
         result = _safe_reply(student["id"], teacher, body.question, verdict, session_id)
+        f = _active_faculty(teacher.id, student["id"])
+        _tag(result, f, session_id)
         return {"type": "answer", **result.__dict__, **_access(student["id"])}
     _consume(student["id"], teacher)
-    result = _answer_safely(student["id"], teacher, body.question, session_id)
+    # multi-teacher: subject from the safety check (our own checker) or the free keyword match, else from the search
+    # keyword call the teacher makes anyway (no extra AI call); sticky; "Maths wale sir ko bulao"
+    r = faculty_mod.route(db, teacher.id, student["id"], body.question, verdict.subject, tutor.subject_of)
+    result = _answer_safely(student["id"], teacher.as_faculty(r.faculty, r.previous.name if r.switched else None),
+                            body.question, session_id)
+    _tag(result, r.faculty, session_id)
+    result.switched, result.handover = r.switched, faculty_mod.handover_line(r, result.language)
     return {"type": "answer", **result.__dict__, **_access(student["id"])}
+
+
+def _active_faculty(institute: str, student_id: int):
+    facs = faculty_mod.list_faculty(db, institute)
+    st = db.one("SELECT active_faculty_id FROM students WHERE id = ?", (student_id,))
+    return next((f for f in facs if st and f.id == st["active_faculty_id"]), facs[0] if facs else None)
+
+
+def _tag(result, f, session_id) -> None:
+    """Who answered: on the answer (app shows name / photo / voice), in the history, on the class."""
+    if f is None:
+        return
+    result.faculty = f.public()
+    db.execute("UPDATE qa_history SET faculty_id = ? WHERE id = ?", (f.id, result.qa_id))
+    if session_id:
+        db.execute("UPDATE class_sessions SET faculty_id = ? WHERE id = ? AND faculty_id IS NULL", (f.id, session_id))
 
 
 @app.get("/class/current")
@@ -559,10 +586,23 @@ def new_test(body: NewTest, student=Depends(current_student), teacher: TeacherPr
         raise HTTPException(400, "Choose MCQ, written or oral")
     _limit_questions(student["id"])
     _consume(student["id"], teacher)   # a test counts as one question of the plan / demo
+    f = _session_faculty(teacher.id, student["id"], classroom.latest_session_with_content(db, student["id"], sid))
     try:
-        return quiz.create_test(db, llm, student["id"], teacher.id, teacher.name, body.mode, sid, body.topics)
+        out = quiz.create_test(db, llm, student["id"], teacher.id, f.name if f else teacher.name, body.mode, sid, body.topics)
     except quiz.TestError as exc:
         raise HTTPException(400, str(exc))
+    if f:   # subject-wise tests and progress
+        db.execute("UPDATE tests SET faculty_id = ? WHERE id = ?", (f.id, out["id"]))
+        out["faculty"] = f.public()
+    return out
+
+
+def _session_faculty(institute: str, student_id: int, session_id: int | None):
+    """The teacher who taught most of this class (a test is that teacher's test)."""
+    row = db.one("SELECT faculty_id FROM qa_history WHERE session_id = ? AND student_id = ? AND faculty_id IS NOT NULL "
+                 "GROUP BY faculty_id ORDER BY COUNT(*) DESC, MAX(id) DESC LIMIT 1", (session_id, student_id)) \
+        if session_id else None
+    return (faculty_mod.get(db, institute, row["faculty_id"]) if row else None) or _active_faculty(institute, student_id)
 
 
 @app.get("/tests")
@@ -592,8 +632,10 @@ def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student)
                     student_safety.record_violation(db, student["id"], teacher.id, v.severity, v.category, body.answer,
                                                     None, student_safety.safety_settings(admin.get_settings(db)))
                 raise HTTPException(400, t("care_message" if v.severity == "care" else "safety_refusal", "en"))
+    frow = db.one("SELECT faculty_id FROM tests WHERE id = ? AND student_id = ?", (test_id, student["id"]))
+    f = faculty_mod.get(db, teacher.id, frow["faculty_id"]) if frow and frow["faculty_id"] else None
     try:
-        return quiz.answer_question(db, llm, student["id"], test_id, body.answer, teacher.name)
+        return quiz.answer_question(db, llm, student["id"], test_id, body.answer, f.name if f else teacher.name)
     except KeyError:
         raise HTTPException(404, "Test not found")
     except quiz.TestError as exc:
@@ -1541,6 +1583,239 @@ def admin_safety_action(sid: int, body: StudentAction, user=Depends(need("block"
     except KeyError:
         raise HTTPException(404, "Student not found")
     except student_safety.SafetyError as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ---------- multi-teacher: AI teachers (faculty) and the content library ----------
+
+def _b64(data: str) -> bytes:
+    try:
+        return base64.b64decode((data or "").split(",", 1)[-1], validate=False)
+    except Exception:
+        raise HTTPException(400, "Could not read the file")
+
+
+def _lib(fn):
+    try:
+        return fn()
+    except KeyError:
+        raise HTTPException(404, "Not found")
+    except (library.LibraryError, faculty_mod.FacultyError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+def _faculty_list(tid: str) -> dict:
+    if not db.one("SELECT 1 FROM teachers WHERE id = ?", (tid,)):
+        raise HTTPException(404, "Teacher not found")
+    files = library.faculty_stats(db, tid)
+    att = library.attachments(db, tid)
+    items = [{**f.__dict__, "files": files.get(f.id, 0),
+              "subject_labels": [faculty_mod.subject_label(x) for x in f.subjects],
+              "common": [a for a in att if a["faculty_id"] == f.id]}
+             for f in faculty_mod.list_faculty(db, tid, active_only=False)]
+    return {"items": items, "subjects": _subjects()}
+
+
+def _subjects() -> list[dict]:
+    return [{"key": k, "label": v[0]} for k, v in faculty_mod.SUBJECTS.items()] + \
+           [{"key": faculty_mod.GENERAL, "label": "General (every teacher)"}]
+
+
+def _save_faculty(tid: str, data: dict, fid: int | None):
+    f = _lib(lambda: faculty_mod.save(db, tid, data, fid))
+    photo = data.get("photo_base64")
+    if photo:
+        raw = _b64(photo)
+        if len(raw) > 5_000_000:
+            raise HTTPException(400, "Photo must be under 5 MB")
+        os.makedirs(AVATAR_DIR, exist_ok=True)
+        with open(os.path.join(AVATAR_DIR, f"faculty-{f.id}.jpg"), "wb") as fh:
+            fh.write(raw)
+        faculty_mod.set_avatar(db, tid, f.id, f"/faculty/{f.id}/avatar?v={int(time.time())}")
+        f = faculty_mod.get(db, tid, f.id)
+    return {**f.__dict__}
+
+
+def _upload(owner: str, data: dict, by: str):
+    return _lib(lambda: library.upload(
+        db, owner, str(data.get("filename", "")), _b64(data.get("data_base64", "")),
+        subject=data.get("subject") or None, faculty_id=data.get("faculty_id") or None,
+        allow_common=bool(data.get("allow_common")), by=by, side_llm=side_llm, moderator=moderator))
+
+
+def _kw():
+    return {"side_llm": side_llm, "moderator": moderator}
+
+
+@app.get("/admin/api/subjects", dependencies=[Depends(need("teachers_view"))])
+def admin_subjects():
+    return {"items": _subjects()}
+
+
+@app.get("/admin/api/teachers/{tid}/faculty", dependencies=[Depends(need("teachers_view"))])
+def admin_faculty(tid: str):
+    return _faculty_list(tid)
+
+
+@app.post("/admin/api/teachers/{tid}/faculty", dependencies=[Depends(need("teachers_edit"))])
+async def admin_faculty_add(tid: str, request: Request):
+    return _save_faculty(tid, await request.json(), None)
+
+
+@app.put("/admin/api/teachers/{tid}/faculty/{fid}", dependencies=[Depends(need("teachers_edit"))])
+async def admin_faculty_edit(tid: str, fid: int, request: Request):
+    return _save_faculty(tid, await request.json(), fid)
+
+
+@app.delete("/admin/api/teachers/{tid}/faculty/{fid}", dependencies=[Depends(need("teachers_edit"))])
+def admin_faculty_delete(tid: str, fid: int):
+    _lib(lambda: faculty_mod.delete(db, tid, fid))
+    return {"ok": True}
+
+
+@app.get("/faculty/{fid}/avatar")
+def faculty_avatar(fid: int):
+    path = os.path.join(AVATAR_DIR, f"faculty-{int(fid)}.jpg")
+    if not os.path.exists(path):
+        raise HTTPException(404, "No photo")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.get("/admin/api/teachers/{tid}/library", dependencies=[Depends(need("teachers_view"))])
+def admin_library(tid: str, status: str = "", subject: str = "", q: str = ""):
+    return library.list_links(db, tid, status, subject, q)
+
+
+@app.post("/admin/api/teachers/{tid}/library")
+async def admin_library_upload(tid: str, request: Request, user=Depends(need("teachers_edit"))):
+    return _upload(tid, await request.json(), user["email"])
+
+
+@app.get("/admin/api/teachers/{tid}/library/{lid}", dependencies=[Depends(need("teachers_view"))])
+def admin_library_preview(tid: str, lid: int):
+    return _lib(lambda: library.preview(db, tid, lid))
+
+
+@app.put("/admin/api/teachers/{tid}/library/{lid}", dependencies=[Depends(need("teachers_edit"))])
+async def admin_library_assign(tid: str, lid: int, request: Request):
+    d = await request.json()
+    return _lib(lambda: library.assign(db, tid, lid, d.get("subject") or None, d.get("faculty_id") or None))
+
+
+@app.put("/admin/api/teachers/{tid}/library/{lid}/text", dependencies=[Depends(need("teachers_edit"))])
+async def admin_library_edit(tid: str, lid: int, request: Request):
+    d = await request.json()
+    return _lib(lambda: library.edit_text(db, tid, lid, str(d.get("text", "")), **_kw()))
+
+
+@app.post("/admin/api/teachers/{tid}/library/{lid}/replace", dependencies=[Depends(need("teachers_edit"))])
+async def admin_library_replace(tid: str, lid: int, request: Request):
+    d = await request.json()
+    return _lib(lambda: library.replace(db, tid, lid, str(d.get("filename", "")), _b64(d.get("data_base64", "")), **_kw()))
+
+
+@app.post("/admin/api/teachers/{tid}/library/{lid}/recheck", dependencies=[Depends(need("teachers_edit"))])
+def admin_library_recheck(tid: str, lid: int):
+    _lib(lambda: library.preview(db, tid, lid))   # belongs to this institute
+    return library.recheck(db, lid, moderator)
+
+
+@app.delete("/admin/api/teachers/{tid}/library/{lid}", dependencies=[Depends(need("teachers_edit"))])
+def admin_library_delete(tid: str, lid: int):
+    _lib(lambda: library.remove(db, tid, lid))
+    return {"ok": True}
+
+
+@app.post("/admin/api/teachers/{tid}/library/{lid}/promote")
+def admin_library_promote(tid: str, lid: int, user=Depends(need("library_common"))):
+    return _lib(lambda: library.promote(db, tid, lid, user["email"]))
+
+
+# Common Library (Super Admin): Dhurina's shared content by subject, linked (not copied) to institute teachers
+
+@app.get("/admin/api/common", dependencies=[Depends(need("library_common"))])
+def admin_common(status: str = "", subject: str = "", q: str = ""):
+    return {**library.list_links(db, library.COMMON, status, subject, q), "subjects": library.common_subjects(db)}
+
+
+@app.post("/admin/api/common")
+async def admin_common_upload(request: Request, user=Depends(need("library_common"))):
+    return _upload(library.COMMON, await request.json(), user["email"])
+
+
+@app.get("/admin/api/common/{lid}", dependencies=[Depends(need("library_common"))])
+def admin_common_preview(lid: int):
+    return _lib(lambda: library.preview(db, library.COMMON, lid))
+
+
+@app.put("/admin/api/common/{lid}", dependencies=[Depends(need("library_common"))])
+async def admin_common_assign(lid: int, request: Request):
+    d = await request.json()
+    return _lib(lambda: library.assign(db, library.COMMON, lid, d.get("subject") or None, None))
+
+
+@app.delete("/admin/api/common/{lid}", dependencies=[Depends(need("library_common"))])
+def admin_common_delete(lid: int):
+    _lib(lambda: library.remove(db, library.COMMON, lid))
+    return {"ok": True}
+
+
+@app.post("/admin/api/teachers/{tid}/faculty/{fid}/common")
+async def admin_common_attach(tid: str, fid: int, request: Request, user=Depends(need("library_common"))):
+    d = await request.json()
+    _lib(lambda: library.attach(db, tid, fid, str(d.get("subject", "")), user["email"]))
+    return {"ok": True}
+
+
+@app.delete("/admin/api/teachers/{tid}/faculty/{fid}/common/{subject}", dependencies=[Depends(need("library_common"))])
+def admin_common_detach(tid: str, fid: int, subject: str):
+    _lib(lambda: library.detach(db, tid, fid, subject))
+    return {"ok": True}
+
+
+# the institute's own panel (teacher.html, teacher id + key): teachers and the content library
+
+@app.get("/teacher/faculty")
+def institute_faculty(teacher_id: str = Depends(teacher_admin)):
+    return _faculty_list(teacher_id)
+
+
+@app.get("/teacher/library")
+def institute_library(status: str = "", subject: str = "", q: str = "", teacher_id: str = Depends(teacher_admin)):
+    return library.list_links(db, teacher_id, status, subject, q)
+
+
+@app.post("/teacher/library")
+async def institute_library_upload(request: Request, teacher_id: str = Depends(teacher_admin)):
+    return _upload(teacher_id, await request.json(), f"teacher:{teacher_id}")
+
+
+@app.put("/teacher/library/{lid}")
+async def institute_library_assign(lid: int, request: Request, teacher_id: str = Depends(teacher_admin)):
+    d = await request.json()
+    return _lib(lambda: library.assign(db, teacher_id, lid, d.get("subject") or None, d.get("faculty_id") or None))
+
+
+@app.delete("/teacher/library/{lid}")
+def institute_library_delete(lid: int, teacher_id: str = Depends(teacher_admin)):
+    _lib(lambda: library.remove(db, teacher_id, lid))
+    return {"ok": True}
+
+
+# test lab for the brief's 7 checks (5 prototype teachers, a throw-away database; no AI cost)
+
+@app.get("/admin/api/teacher-lab", dependencies=[Depends(need("tests_view"))])
+def admin_teacher_lab():
+    from . import teacher_lab
+    return teacher_lab.last(db)
+
+
+@app.post("/admin/api/teacher-lab/run")
+def admin_teacher_lab_run(mode: str = "free", user=Depends(need("tests_run"))):
+    from . import teacher_lab
+    try:
+        return teacher_lab.run_and_save(db, user["email"], "ai" if mode == "ai" else "free", settings)
+    except RuntimeError as exc:
         raise HTTPException(400, str(exc))
 
 

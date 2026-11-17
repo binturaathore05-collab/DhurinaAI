@@ -255,8 +255,8 @@ function shell(active, inner) {
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
     ${can('dashboard') ? `<a class="item ${active === 'Alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${ALERTS.open ? ` <span class="pill" style="margin-left:auto;color:${ALERTS.critical ? 'var(--bad)' : 'var(--warn)'}">${ALERTS.open}</span>` : ''}</a>` : ''}
-    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}
-    <span class="navh">AI Teacher Safety Center</span>${item('#/center', 'hub', 'Safety Center', 'dashboard')}${item('#/filters', 'filter', 'Content filters', 'settings_view')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}
+    ${item('#/', 'users', 'Institutes / Apps', 'teachers_view')}${item('#/new', 'plus', 'Add institute', 'teachers_edit')}${item('#/common', 'data', 'Common content', 'library_common')}${item('#/reports', 'chart', 'Reports', 'money')}
+    <span class="navh">AI Teacher Safety Center</span>${item('#/center', 'hub', 'Safety Center', 'dashboard')}${item('#/filters', 'filter', 'Content filters', 'settings_view')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/teacher-lab', 'lab', 'Multi-teacher tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}
     <span class="navh">Admin</span>${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
@@ -283,14 +283,14 @@ async function teachersView() {
       <td><a class="who" href="#/t/${encodeURIComponent(t.id)}">${avatar(t)}<span style="display:flex;flex-direction:column"><b>${esc(t.name)}</b><span class="muted" style="font-size:12px">${esc(t.subject)}</span></span></a></td>
       <td>${pill(t.status)}</td><td><b>${t.teacher_percent} / ${t.platform_percent}</b></td><td>${t.students}</td><td>${t.active_plans}</td>
       <td><b>${rupees(t.this_month.total_paise)}</b></td><td style="text-align:right"><a href="#/t/${encodeURIComponent(t.id)}"><b>Open</b></a></td></tr>`).join('');
-  return shell('Teachers', `
-    <div class="row"><div><h1>Teachers</h1><span class="sub">Every teacher is one white-label app. Add a teacher, then build their app.</span></div>
-      <a class="btn primary" href="#/new">${icon('plus', 18)}Add teacher</a></div>
-    <div class="stats">${stat('Teachers', o.teachers, o.live + ' live on Play Store')}${stat('Students', o.students, 'signed up across all apps')}
+  return shell('Institutes / Apps', `
+    <div class="row"><div><h1>Institutes / Apps</h1><span class="sub">Every institute is one white-label app with one or more AI teachers inside. Add an institute, then build its app.</span></div>
+      <a class="btn primary" href="#/new">${icon('plus', 18)}Add institute</a></div>
+    <div class="stats">${stat('Institutes', o.teachers, o.live + ' live on Play Store')}${stat('Students', o.students, 'signed up across all apps')}
       ${stat('Active subscriptions', o.active_plans, 'paying right now')}${stat('Revenue this month', rupees(o.this_month.total_paise), 'all teachers, before split')}
       ${stat('Dhurina share', rupees(o.this_month.platform_paise), 'each teacher’s own % · auto-split')}</div>
-    <section class="card"><div class="row"><h2>All teachers</h2><input type="search" id="q" placeholder="Search teachers" aria-label="Search teachers" style="min-width:240px"></div>
-      <div class="scroll">${teachers.length ? `<table><thead><tr><th>TEACHER</th><th>APP</th><th>SPLIT · TEACHER / DHURINA</th><th>STUDENTS</th><th>ACTIVE PLANS</th><th>THIS MONTH</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    <section class="card"><div class="row"><h2>All institutes</h2><input type="search" id="q" placeholder="Search institutes" aria-label="Search institutes" style="min-width:240px"></div>
+      <div class="scroll">${teachers.length ? `<table><thead><tr><th>INSTITUTE</th><th>APP</th><th>SPLIT · INSTITUTE / DHURINA</th><th>STUDENTS</th><th>ACTIVE PLANS</th><th>THIS MONTH</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
         : `<p class="muted">No teachers yet. <a href="#/new">Add the first teacher</a>.</p>`}</div></section>`);
 }
 
@@ -305,7 +305,7 @@ async function formView(id) {
   window.__subjects = t.subjects || (t.subject ? t.subject.split(',').map((x) => x.trim()).filter(Boolean) : []);
   const f = (name, label, value, type = 'text', hint = '', extra = '') => `<label class="f">${label}<input name="${name}" type="${type}" value="${esc(value ?? '')}" ${extra}>${hint ? `<span class="h">${hint}</span>` : ''}</label>`;
   const sec = (n, title, sub, inner) => `<section class="card"><div class="sec-h"><span class="num">${n}</span><div><h2>${title}</h2><span class="sub">${sub}</span></div></div>${inner}</section>`;
-  return shell(id ? 'Teachers' : 'Add teacher', `
+  return shell(id ? 'Institutes / Apps' : 'Add institute', `
     <form id="tf" style="display:contents">
     <div class="row"><div style="display:flex;gap:12px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="${id ? '#/t/' + encodeURIComponent(id) : '#/'}" aria-label="Back">${icon('back')}</a>
       <div><h1>${id ? 'Edit ' + esc(t.name) : 'Add a teacher'}</h1><span class="sub">Fill this once — the teacher’s app is built from it. No code needed.</span></div></div>
@@ -417,7 +417,7 @@ async function detailView(id) {
   const bars = t.months.map((m) => `<div class="b"><div style="height:${Math.max(2, Math.round(m.total_paise / max * 150))}px" title="${rupees(m.total_paise)}"></div><span class="muted" style="font-size:12px">${m.label}</span></div>`).join('');
   const checks = t.checklist.map((c) => `<label class="check"><input type="checkbox" data-item="${c.key}" ${c.done ? 'checked' : ''}>${esc(c.label)}</label>`).join('');
   const kv = (k, v) => `<span class="muted">${k}</span><b>${v}</b>`;
-  return shell('Teachers', `
+  return shell('Institutes / Apps', `
     <div class="row"><div style="display:flex;gap:14px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="#/" aria-label="Back to teachers">${icon('back')}</a>
       ${t.has_avatar ? `<img class="av" style="width:60px;height:60px;border:3px solid var(--acc)" src="/teachers/${encodeURIComponent(t.id)}/avatar" alt="${esc(t.name)}">` : ''}
       <div><h1>${esc(t.name)}</h1><span class="sub" style="display:flex;gap:10px;align-items:center">${esc(t.subject)} · ${esc(t.app_name || '')} ${pill(t.status)}</span></div></div>
@@ -433,7 +433,9 @@ async function detailView(id) {
         ${kv('Monthly', t.monthly_price != null ? '₹' + t.monthly_price : '—')}${kv('Yearly', t.yearly_price != null ? '₹' + t.yearly_price : '—')}
         ${kv('Free demo', t.demo_questions != null ? t.demo_questions + ' questions' : 'Default (Settings)')}${kv('Grace', t.grace_days != null ? t.grace_days + ' days · ' + (t.grace_questions ?? 0) + ' questions' : 'Default (Settings)')}
         ${kv('Razorpay', t.razorpay_key_id ? 'Connected · ' + esc(t.razorpay_key_id) : 'Not connected')}
-        <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Dhurina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>`);
+        <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Dhurina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>
+    <section class="card" id="fac"><span class="muted">Loading teachers…</span></section>
+    <section class="card" id="lib"><span class="muted">Loading content library…</span></section>`);
 }
 
 async function bindDetail(id) {
@@ -441,7 +443,7 @@ async function bindDetail(id) {
     try { await api('POST', `/teachers/${encodeURIComponent(id)}/checklist`, { item: c.dataset.item, done: c.checked }); toast('Checklist updated'); }
     catch (e) { toast(e.message); c.checked = !c.checked; } });
   $('#build').onclick = async () => { if (!(await ask({ title: 'Build a new app version?', text: 'A new version of this teacher’s app will be built (about 7 minutes). Students get it only after you upload it to the Play Store.', ok: 'Build now' }))) return; try { await api('POST', `/teachers/${encodeURIComponent(id)}/build`); toast('App build started — ready in about 7 minutes'); loadBuilds(id); } catch (e) { toast(e.message); } };
-  loadBuilds(id);
+  loadBuilds(id); loadFaculty(id).then(() => loadLibrary(id));   // the library needs the teacher list
 }
 async function loadBuilds(id) {
   const el = $('#builds'); if (!el) return;
@@ -455,6 +457,171 @@ async function loadBuilds(id) {
         <span class="muted" style="flex:1">${new Date(b.created_at).toLocaleString('en-IN')}</span><a href="${esc(b.url)}" target="_blank" rel="noopener"><b>${label === 'Ready' ? 'Download APK' : 'Details'}</b></a></div>`;
     }).join('') : 'No builds yet. Press “Build new version”.';
   } catch (e) { el.textContent = e.message; }
+}
+
+// ---------- Multi-teacher: AI teachers of an institute + one content library ----------
+const fileB64 = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',', 2)[1] || ''); r.onerror = () => bad(new Error('Could not read ' + file.name)); r.readAsDataURL(file); });
+const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+const LSTAT = { live: ['Live', 'var(--ok)'], pending: ['Pending check', 'var(--warn)'], blocked: ['Blocked (safety)', 'var(--bad)'], checking: ['Safety check again', 'var(--warn)'] };
+const lpill = (s) => { const [t, c] = LSTAT[s] || [s, 'var(--muted)']; return `<span class="pill" style="color:${c};white-space:nowrap">${t}</span>`; };
+const HOW = { upload: 'chosen at upload', name: 'from the file name', ai: 'found by AI', admin: 'set by admin' };
+let FAC = { items: [], subjects: [] }, LIB = { status: '' };
+function dialog(title, inner, ok = 'Save') {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', title);
+    m.innerHTML = `<form class="box" style="max-width:620px;max-height:90vh;overflow:auto"><h3>${esc(title)}</h3>${inner}<span class="err" id="dlgerr" role="alert"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-c="0">Cancel</button>${ok ? `<button type="submit" class="btn primary">${esc(ok)}</button>` : ''}</div></form>`;
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } };
+    const close = (v) => { m.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    m.onclick = (e) => { if (e.target === m || e.target.closest('[data-c="0"]')) close(null); };
+    m.querySelector('form').onsubmit = (e) => { e.preventDefault(); close(m); };
+    document.addEventListener('keydown', key, true); document.body.append(m); (m.querySelector('input,textarea,select') || m.querySelector('[data-c="0"]')).focus();
+  });
+}
+const subjOpts = (sel, blank = 'Choose subject') => `<option value="">${blank}</option>` + FAC.subjects.map((x) => `<option value="${x.key}" ${sel === x.key ? 'selected' : ''}>${esc(x.label)}</option>`).join('');
+const facOpts = (sel, blank = 'Every teacher of the subject') => `<option value="">${blank}</option>` + FAC.items.filter((f) => f.active).map((f) => `<option value="${f.id}" ${+sel === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+const facName = (id) => (FAC.items.find((f) => f.id === id) || {}).name;
+const facAv = (f) => f.avatar_url ? `<img class="av" src="${esc(f.avatar_url)}" alt="">` : `<span class="av" style="display:grid;place-items:center;color:var(--muted)">${icon('users', 18)}</span>`;
+
+async function loadFaculty(tid) {
+  const el = $('#fac'); if (!el) return;
+  try { FAC = await api('GET', `/teachers/${encodeURIComponent(tid)}/faculty`); } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const edit = can('teachers_edit'), common = can('library_common');
+  const rows = FAC.items.map((f) => `<tr><td><span class="who">${facAv(f)}<span style="display:flex;flex-direction:column"><b>${esc(f.name)}</b><span class="muted" style="font-size:12px">${esc(f.subject_labels.join(', '))}</span></span></span></td>
+      <td>${f.active ? '<span class="pill" style="color:var(--ok)">On</span>' : '<span class="pill" style="color:var(--muted)">Off</span>'}</td><td>${f.files}</td>
+      <td>${f.common.map((a) => `<span class="chip">${esc(a.subject_label)}${common ? `<button type="button" data-detach="${f.id}" data-subj="${a.subject}" aria-label="Remove common ${esc(a.subject_label)}">×</button>` : ''}</span>`).join(' ') || '<span class="muted">—</span>'}
+        ${common ? ` <button type="button" class="btn ghost" style="height:32px;padding:0 10px" data-attach="${f.id}">+ Common content</button>` : ''}</td>
+      <td style="text-align:right">${edit ? `<button type="button" class="btn ghost" style="height:36px" data-fedit="${f.id}">Edit</button>` : ''}</td></tr>`).join('');
+  el.innerHTML = `<div class="row"><div><h2>Teachers</h2><span class="sub">The AI teachers inside this app. Students are moved to the right teacher by themselves (or say “Maths wale sir ko bulao”).</span></div>
+      ${edit ? '<button type="button" class="btn primary" id="fadd">' + icon('plus', 18) + 'Add teacher</button>' : ''}</div>
+    <div class="scroll"><table><thead><tr><th>TEACHER</th><th>STATUS</th><th>FILES</th><th>COMMON CONTENT</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const fadd = $('#fadd'); if (fadd) fadd.onclick = () => facultyDialog(tid, null);
+  el.querySelectorAll('[data-fedit]').forEach((b) => b.onclick = () => facultyDialog(tid, FAC.items.find((f) => f.id === +b.dataset.fedit)));
+  el.querySelectorAll('[data-attach]').forEach((b) => b.onclick = async () => {
+    const m = await dialog('Link Common content', `<p>Dhurina’s Common Library content of this subject becomes part of <b>${esc(facName(+b.dataset.attach))}</b>’s knowledge. It is a link: new Common content reaches this teacher at once. Students never see where it came from.</p>
+      <label class="f">Subject<select id="csub" required>${subjOpts('')}</select></label>`, 'Link');
+    if (!m) return;
+    try { await api('POST', `/teachers/${encodeURIComponent(tid)}/faculty/${b.dataset.attach}/common`, { subject: m.querySelector('#csub').value }); toast('Common content linked'); loadFaculty(tid); } catch (e) { toast(e.message); } });
+  el.querySelectorAll('[data-detach]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'Remove Common content?', text: 'This teacher stops using Dhurina’s Common content for this subject. You can link it again any time.', ok: 'Remove', danger: true }))) return;
+    try { await api('DELETE', `/teachers/${encodeURIComponent(tid)}/faculty/${b.dataset.detach}/common/${b.dataset.subj}`); toast('Removed'); loadFaculty(tid); } catch (e) { toast(e.message); } });
+}
+
+async function facultyDialog(tid, f) {
+  const has = (k) => f && f.subjects.includes(k);
+  const m = await dialog(f ? 'Edit teacher' : 'Add teacher', `
+    <label class="f">Name<input type="text" id="fn" value="${esc(f ? f.name : '')}" placeholder="e.g. Gupta Sir" required maxlength="80"></label>
+    <div class="f"><b style="font-size:13px">Subjects</b><div class="sugg">${FAC.subjects.map((x) => `<label class="check" style="width:auto;margin-right:10px"><input type="checkbox" name="fs" value="${x.key}" ${has(x.key) ? 'checked' : ''}>${esc(x.label)}</label>`).join('')}</div></div>
+    <label class="f">Extra words that mean this teacher <span class="h">Optional · comma separated, e.g. RAS, Patwari, Class 10 Maths</span><input type="text" id="fk" value="${esc(f ? f.keywords.join(', ') : '')}"></label>
+    <label class="f">How this teacher teaches <span class="h">Optional · e.g. “Explain with Rajasthan examples, short tricks for exams.”</span><textarea id="fi" maxlength="2000">${esc(f ? f.instructions : '')}</textarea></label>
+    <label class="f">Voice id <span class="h">Optional · used when the voice is switched on</span><input type="text" id="fv" value="${esc(f && f.voice_id ? f.voice_id : '')}"></label>
+    <label class="f">Photo <span class="h">Optional · JPG under 5 MB</span><input type="file" id="fp" accept="image/jpeg,image/png"></label>
+    ${f ? `<label class="check"><input type="checkbox" id="fa" ${f.active ? 'checked' : ''}>Teacher is on (students can reach this teacher)</label>
+      <button type="button" class="btn ghost" id="fdel" data-fid="${f.id}" style="color:var(--bad);align-self:flex-start">Remove this teacher</button>` : ''}`);
+  if (!m) return;
+  const body = { name: m.querySelector('#fn').value, subjects: [...m.querySelectorAll('[name=fs]:checked')].map((c) => c.value),
+    keywords: m.querySelector('#fk').value.split(',').map((x) => x.trim()).filter(Boolean), instructions: m.querySelector('#fi').value, voice_id: m.querySelector('#fv').value };
+  if (f) body.active = m.querySelector('#fa').checked;
+  const ph = m.querySelector('#fp').files[0]; if (ph) body.photo_base64 = await fileB64(ph);
+  try { await api(f ? 'PUT' : 'POST', `/teachers/${encodeURIComponent(tid)}/faculty${f ? '/' + f.id : ''}`, body); toast(f ? 'Teacher saved' : 'Teacher added'); loadFaculty(tid); loadLibrary(tid); }
+  catch (e) { toast(e.message); }
+}
+document.addEventListener('click', async (e) => {   // "Remove this teacher" inside the edit dialog
+  if (e.target.id !== 'fdel') return;
+  const tid = decodeURIComponent((location.hash.match(/^#\/t\/(.+)$/) || [])[1] || ''); const box = e.target.closest('.confirm');
+  const f = FAC.items.find((x) => x.id === +e.target.dataset.fid); if (!f) return;
+  box.remove();
+  if (!(await ask({ title: 'Remove ' + f.name + '?', text: 'Students will no longer reach this teacher. Old answers keep the name. Files stay in the library for the other teachers of the subject.', ok: 'Remove', danger: true }))) return;
+  try { await api('DELETE', `/teachers/${encodeURIComponent(tid)}/faculty/${f.id}`); toast('Teacher removed'); loadFaculty(tid); } catch (err) { toast(err.message); }
+});
+
+function libBase(owner) { return owner === 'common' ? '/common' : `/teachers/${encodeURIComponent(owner)}/library`; }
+async function uploadFiles(owner, files, extra, done) {
+  let ok = 0, fail = [];
+  for (const [i, file] of [...files].entries()) {
+    toast(`Uploading ${i + 1} of ${files.length}: ${file.name}`);
+    try { await api('POST', libBase(owner), { filename: file.webkitRelativePath || file.name, data_base64: await fileB64(file), ...extra }); ok++; }
+    catch (e) { fail.push(file.name + ': ' + e.message); }
+  }
+  toast(`${ok} uploaded${fail.length ? ' · ' + fail.length + ' not uploaded' : ''}`);
+  if (fail.length) await ask({ title: 'Some files were not uploaded', text: fail.map(esc).join('<br>'), ok: 'OK' });
+  done();
+}
+
+async function loadLibrary(owner) {
+  const el = $(owner === 'common' ? '#clib' : '#lib'); if (!el) return;
+  const common = owner === 'common';
+  let d; try { d = await api('GET', libBase(owner) + (LIB.status ? '?status=' + LIB.status : '')); } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const edit = common ? can('library_common') : can('teachers_edit');
+  const tab = (k, label) => `<button type="button" data-ls="${k}" class="${LIB.status === k ? 'on' : ''}">${label}</button>`;
+  const rows = d.items.map((x) => `<tr><td><b>${esc(x.title)}</b><div class="muted" style="font-size:12px">${x.kind.toUpperCase()} · ${kb(x.size)}${x.assigned_by ? ' · ' + (HOW[x.assigned_by] || '') : ''}</div></td>
+      <td>${edit && x.status !== 'blocked' ? `<select data-asub="${x.id}" aria-label="Subject">${subjOpts(x.subject || '', 'Not decided')}</select>` : esc(x.subject_label || '—')}</td>
+      ${common ? '' : `<td>${edit && x.status !== 'blocked' ? `<select data-afac="${x.id}" aria-label="Teacher">${facOpts(x.faculty_id)}</select>` : esc(facName(x.faculty_id) || 'Every teacher of the subject')}</td>`}
+      <td>${lpill(x.status)}${x.safety_note ? `<div class="muted" style="font-size:12px">${esc(x.safety_note)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap"><button type="button" class="btn ghost" style="height:34px;padding:0 10px" data-prev="${x.id}">Preview</button>
+        ${edit ? `${x.status === 'checking' ? `<button type="button" class="btn ghost" style="height:34px;padding:0 10px" data-rechk="${x.id}">Check again</button>` : ''}
+        ${!common ? `<label class="btn ghost" style="height:34px;padding:0 10px">Replace<input type="file" data-repl="${x.id}" accept=".pdf,.docx,.txt,.md" hidden></label>` : ''}
+        ${!common && can('library_common') && x.allow_common ? `<button type="button" class="btn ghost" style="height:34px;padding:0 10px" data-prom="${x.id}">To Common</button>` : ''}
+        <button type="button" class="btn ghost" style="height:34px;padding:0 10px;color:var(--bad)" data-ldel="${x.id}">Delete</button>` : ''}</td></tr>`).join('');
+  el.innerHTML = `<div class="row"><div><h2>${common ? 'Common Library' : 'Content library'}</h2><span class="sub">${common ? 'Dhurina’s shared content by subject. Link it to any institute’s teacher on that institute’s page.' : 'One place for every teacher’s PDFs, Word and text files. Each file goes to the right teacher by itself; unsure files wait in “Pending check”.'}</span></div></div>
+    ${edit ? `<div class="row" style="justify-content:flex-start;gap:10px">
+      ${common ? `<select id="usub" aria-label="Subject for the upload">${subjOpts('', 'Find subject automatically')}</select>` : `<select id="ufac" aria-label="Teacher for the upload">${facOpts('', 'Find teacher automatically')}</select>`}
+      <label class="btn primary">${icon('plus', 18)}Upload files<input type="file" id="ufiles" multiple accept=".pdf,.docx,.txt,.md" hidden></label>
+      <label class="btn ghost">Upload a folder<input type="file" id="udir" webkitdirectory multiple hidden></label>
+      ${common ? '' : '<label class="check"><input type="checkbox" id="uallow">Allow in Dhurina Common Library</label>'}</div>` : ''}
+    <div class="presets">${tab('', 'All · ' + d.total)}${tab('pending', 'Pending check · ' + d.counts.pending)}${tab('live', 'Live · ' + d.counts.live)}${d.counts.blocked ? tab('blocked', 'Blocked · ' + d.counts.blocked) : ''}${d.counts.checking ? tab('checking', 'Safety check again · ' + d.counts.checking) : ''}</div>
+    <div class="scroll">${d.items.length ? `<table><thead><tr><th>FILE</th><th>SUBJECT</th>${common ? '' : '<th>TEACHER</th>'}<th>STATUS</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<p class="muted">${d.total ? 'No files here.' : 'No files yet. Upload the first ones above.'}</p>`}</div>`;
+  const re = () => loadLibrary(owner), refresh = () => { re(); if (!common) loadFaculty(owner); };
+  el.querySelectorAll('[data-ls]').forEach((b) => b.onclick = () => { LIB.status = b.dataset.ls; re(); });
+  const extra = () => common ? { subject: $('#usub').value || null } : { faculty_id: +$('#ufac').value || null, allow_common: $('#uallow').checked };
+  ['#ufiles', '#udir'].forEach((s) => { const i = el.querySelector(s); if (i) i.onchange = () => i.files.length && uploadFiles(owner, [...i.files].filter((f) => /\.(pdf|docx|txt|md)$/i.test(f.name)), extra(), refresh); });
+  el.querySelectorAll('[data-asub],[data-afac]').forEach((s) => s.onchange = async () => {
+    const id = s.dataset.asub || s.dataset.afac; const tr = s.closest('tr');
+    const subject = tr.querySelector('[data-asub]').value || null, fsel = tr.querySelector('[data-afac]');
+    const faculty_id = fsel ? (+fsel.value || null) : null;
+    if (!subject && !faculty_id) return;
+    try { await api('PUT', `${libBase(owner)}/${id}`, s.dataset.afac ? { subject: null, faculty_id } : { subject, faculty_id: null }); toast('Saved'); refresh(); } catch (e) { toast(e.message); re(); } });
+  el.querySelectorAll('[data-prev]').forEach((b) => b.onclick = () => previewFile(owner, b.dataset.prev, edit, refresh));
+  el.querySelectorAll('[data-rechk]').forEach((b) => b.onclick = async () => { try { await api('POST', `${libBase(owner)}/${b.dataset.rechk}/recheck`); refresh(); } catch (e) { toast(e.message); } });
+  el.querySelectorAll('[data-prom]').forEach((b) => b.onclick = async () => { try { await api('POST', `${libBase(owner)}/${b.dataset.prom}/promote`); toast('Added to the Common Library'); } catch (e) { toast(e.message); } });
+  el.querySelectorAll('[data-repl]').forEach((i) => i.onchange = async () => { const f = i.files[0]; if (!f) return;
+    try { await api('POST', `${libBase(owner)}/${i.dataset.repl}/replace`, { filename: f.name, data_base64: await fileB64(f) }); toast('File replaced'); refresh(); } catch (e) { toast(e.message); } });
+  el.querySelectorAll('[data-ldel]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'Delete this file?', text: 'Teachers stop using it at once.', ok: 'Delete', danger: true }))) return;
+    try { await api('DELETE', `${libBase(owner)}/${b.dataset.ldel}`); toast('Deleted'); refresh(); } catch (e) { toast(e.message); } });
+}
+
+async function previewFile(owner, id, edit, refresh) {
+  let p; try { p = await api('GET', `${libBase(owner)}/${id}`); } catch (e) { toast(e.message); return; }
+  const canEdit = edit && owner !== 'common' && !p.more;
+  const m = await dialog(p.title, `<span class="muted">${esc(p.subject_label || 'Subject not decided')} · ${lpill(p.status)}</span>
+    <textarea id="ptext" style="height:46vh" ${canEdit ? '' : 'readonly'}>${esc(p.text)}</textarea>${p.more ? '<span class="muted">Showing the start of the file.</span>' : ''}`, canEdit ? 'Save changes' : '');
+  if (!m || !canEdit) return;
+  const text = m.querySelector('#ptext').value; if (text === p.text) return;
+  try { await api('PUT', `${libBase(owner)}/${id}/text`, { text }); toast('Saved'); refresh(); } catch (e) { toast(e.message); }
+}
+
+async function commonView() {
+  if (!FAC.subjects.length) { const s = await api('GET', '/subjects'); FAC = { items: [], subjects: s.items }; }
+  return shell('Common content', `<div><h1>Common content</h1><span class="sub">Dhurina’s own study material, shared by subject. Link a subject to any institute’s teacher on that institute’s page (“+ Common content”).</span></div>
+    <section class="card" id="clib"><span class="muted">Loading…</span></section>`);
+}
+
+async function teacherLabView() {
+  const d = await api('GET', '/teacher-lab');
+  const L = d.last;
+  const rows = L ? L.results.map((r) => `<tr><td>${r.passed ? '<span class="pill" style="color:var(--ok)">Passed</span>' : '<span class="pill" style="color:var(--bad)">Failed</span>'}</td><td><b>${esc(r.check)}</b></td><td>${esc(r.detail)}</td></tr>`).join('') : '';
+  const hist = d.runs.map((r) => `<tr><td>${when(r.at)}</td><td>${r.mode === 'ai' ? 'With AI' : 'Free'}</td><td>${esc(r.by || '')}</td><td><b>${r.passed}/${r.total}</b></td></tr>`).join('');
+  return shell('Multi-teacher tests', `<div class="row"><div><h1>Multi-teacher tests</h1><span class="sub">The 7 checks from the brief, with 5 sample teachers (History, Hindi, English, Maths, Reasoning) in a separate test copy. No real student or institute is touched.</span></div>
+      ${can('tests_run') ? '<div class="row"><button class="btn ghost" id="labai">Run with AI</button><button class="btn primary" id="labrun">Run checks</button></div>' : ''}</div>
+    <section class="card"><span class="muted">“Run checks” costs nothing (subject found by keywords, as when the AI is off). “Run with AI” uses the real small model for subjects and files (a few paise).</span></section>
+    ${L ? `<section class="card" style="border-color:${L.passed === L.total ? 'var(--ok)' : 'var(--bad)'}"><div class="row"><h2>Latest: ${L.passed}/${L.total} passed</h2><span class="muted">${when(L.at)} · ${L.mode === 'ai' ? 'with AI' : 'free'}</span></div>
+      <div class="scroll"><table><thead><tr><th>RESULT</th><th>CHECK</th><th>DETAILS</th></tr></thead><tbody>${rows}</tbody></table></div></section>` : '<section class="card"><p class="muted">Not run yet.</p></section>'}
+    ${hist ? `<section class="card"><h2>All runs</h2><div class="scroll"><table><thead><tr><th>WHEN</th><th>HOW</th><th>BY</th><th>PASSED</th></tr></thead><tbody>${hist}</tbody></table></div></section>` : ''}`);
+}
+function bindTeacherLab() {
+  const go = async (mode, b) => { b.disabled = true; b.textContent = 'Running…'; try { await api('POST', '/teacher-lab/run' + (mode ? '?mode=' + mode : '')); render(); } catch (e) { toast(e.message); b.disabled = false; b.textContent = mode ? 'Run with AI' : 'Run checks'; } };
+  const r = $('#labrun'), a = $('#labai'); if (r) r.onclick = () => go('', r); if (a) a.onclick = () => go('ai', a);
 }
 
 // ---------- Settings ----------
@@ -1285,13 +1452,15 @@ async function render() {
     else if (h === '#/data') { app.innerHTML = await dataView(); bindData(); }
     else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
-    else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }
+    else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); LIB.status = ''; app.innerHTML = await detailView(id); bindDetail(id); }
     else if (h === '#/settings') { app.innerHTML = await settingsView(); bindSettings(); }
     else if (h === '#/reports') { app.innerHTML = await reportsView(); bindReports(); }
     else if (h === '#/review') { $('#app').innerHTML = await reviewView(); bindReview(); }
     else if (h.startsWith('#/case/')) { const id = h.slice(7); $('#app').innerHTML = await caseView(id); bindCase(id); }
     else if (h === '#/safety-dash') { $('#app').innerHTML = await dashView(); bindDash(); }
     else if (h === '#/tests') { $('#app').innerHTML = await testsView(); bindTests(); }
+    else if (h === '#/teacher-lab') { $('#app').innerHTML = await teacherLabView(); bindTeacherLab(); }
+    else if (h === '#/common') { LIB.status = ''; app.innerHTML = await commonView(); loadLibrary('common'); }
     else if (h === '#/audit') { $('#app').innerHTML = await auditView(); bindAudit(); }
     else if (h === '#/emergency') { $('#app').innerHTML = await emergencyView(); bindEmergency(); }
     else if (h === '#/safety') { app.innerHTML = await safetyView(); bindSafety(); }

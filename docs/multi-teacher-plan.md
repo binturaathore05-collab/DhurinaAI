@@ -76,6 +76,22 @@ Owner's brief: `docs/multi-teacher-owner-brief.md`. This file is the plan Claude
 2. **App:** active-teacher banner and switch, a new APK via `android.yml`.
 3. **Institute panel:** teachers and the content library.
 
+## Status
+- **Step 1 (server + admin panel): built** (17 Nov 2026, branch `multi-teacher-step1`).
+  - Code: `backend/app/services/faculty.py` (teachers, routing, handover line, call phrases),
+    `backend/app/services/library.py` (file store by fingerprint, links, classification, Common Library, per-teacher
+    search), `backend/app/teacher_lab.py` (7 checks), tests in `backend/tests/test_multi_teacher.py`.
+  - Admin panel: institute page → "Teachers" and "Content library"; menu → "Common content" (Super Admin only) and
+    "Multi-teacher tests".
+  - Answers now carry `faculty` (id, name, avatar_url, voice_id, subjects), `switched` and `handover`; `/teacher` lists
+    the faculty. The app (Step 2) uses these.
+  - Subject for switching (owner, 17 Nov 2026, with OpenAI's free safety check): "ok"-type replies never switch →
+    free keyword match → when unsure, the search-keyword call the teacher makes anyway (small model) also names the
+    subject, remembered per question. No extra AI call.
+  - Files: PDF (typed text), Word (.docx), text. Scanned PDFs (photos of pages) wait for Phase C (photo safety + OCR).
+  - The institute panel API exists (`/teacher/faculty`, `/teacher/library`); its screens are Step 3.
+- **Next:** Step 2 (app: active-teacher banner and switch, new APK), then Step 3 (institute panel screens).
+
 ## Owner decisions still to confirm (Claude's suggestions)
 1. One plan covers all teachers of an institute.
 2. Money goes to the institute's Razorpay; Dhurina's share is split as today.
