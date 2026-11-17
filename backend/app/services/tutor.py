@@ -34,6 +34,19 @@ def _padded(text: str) -> str:
     return " " + _WORDS.sub(" ", text.lower()).strip() + " "
 
 
+# B6: "delete my data" said or typed to Sir → the app asks to confirm (same list in the app)
+DELETE_PHRASES = [
+    "delete my data", "delete my account", "remove my data", "erase my data", "mera data delete", "mera account delete",
+    "account delete kar", "data delete kar", "मेरा डेटा डिलीट", "मेरा अकाउंट डिलीट", "अकाउंट डिलीट कर", "डेटा मिटा दो",
+    "ਮੇਰਾ ਡਾਟਾ ਡਿਲੀਟ", "ਮੇਰਾ ਅਕਾਊਂਟ ਡਿਲੀਟ",
+]
+
+
+def is_delete_command(text: str) -> bool:
+    low = _padded(text)
+    return any(f" {p} " in low for p in DELETE_PHRASES)
+
+
 def is_save_command(text: str) -> bool:
     """True when the student asks (by voice or text) for notes of the class. Whole words only."""
     low = _padded(text)

@@ -3,6 +3,7 @@
 Every table that holds student or teacher data carries teacher_id, so one backend serves every
 white-label teacher app while keeping their data apart.
 """
+import os
 import sqlite3
 from contextlib import contextmanager
 import threading
@@ -323,6 +324,29 @@ CREATE TABLE IF NOT EXISTS incident_notes (    -- B4: the timeline of every case
     note TEXT
 );
 
+CREATE TABLE IF NOT EXISTS data_jobs (         -- B6: backups and clean-ups that ran
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,                         -- backup | retention
+    at REAL NOT NULL,
+    details TEXT
+);
+
+CREATE TABLE IF NOT EXISTS data_requests (     -- B6: delete-my-data requests carried out
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    teacher_id TEXT,
+    kind TEXT NOT NULL,
+    requested_by TEXT,                          -- student | admin email
+    reason TEXT,
+    done_at REAL,
+    details TEXT
+);
+
+CREATE TABLE IF NOT EXISTS retention_tombstones (  -- B6: seal of a deleted answer (no text), keeps the A5 chain whole
+    record_hash TEXT PRIMARY KEY,
+    deleted_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
@@ -331,10 +355,68 @@ CREATE INDEX IF NOT EXISTS rate_events_key_at ON rate_events (key, at);
 """
 
 
+class EncryptionError(Exception):
+    pass
+
+
+def _is_plain_sqlite(path: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
+
+
+def _q(key: str) -> str:
+    return key.replace("'", "''")
+
+
+def _encrypt_existing(path: str, key: str) -> None:
+    """B6: a plain database is turned into an encrypted one once, when a key is first set (then the plain file goes)."""
+    import sqlcipher3
+    tmp = path + ".encrypting"
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    c = sqlcipher3.connect(path)
+    c.execute(f"ATTACH DATABASE '{_q(tmp)}' AS enc KEY '{_q(key)}'")
+    c.execute("SELECT sqlcipher_export('enc')")
+    c.execute("DETACH DATABASE enc")
+    c.close()
+    check = sqlcipher3.connect(tmp)
+    check.execute(f"PRAGMA key = '{_q(key)}'")
+    check.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    check.close()
+    os.replace(tmp, path)
+    for extra in ("-wal", "-shm", "-journal"):
+        if os.path.exists(path + extra):
+            os.remove(path + extra)
+
+
+def connect(path: str, key: str | None = None):
+    """Open the database. With a key (DB_ENCRYPTION_KEY) everything on disk — conversations, phone numbers,
+    backups — is encrypted (SQLCipher, AES-256); without one it is a normal SQLite file (local development)."""
+    if not key:
+        conn = sqlite3.connect(path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+    import sqlcipher3
+    if path != ":memory:" and os.path.exists(path) and os.path.getsize(path) > 0 and _is_plain_sqlite(path):
+        _encrypt_existing(path, key)
+    conn = sqlcipher3.connect(path, check_same_thread=False)
+    conn.execute(f"PRAGMA key = '{_q(key)}'")
+    try:
+        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    except Exception as exc:   # wrong key: never start on a database we can't read
+        raise EncryptionError("DB_ENCRYPTION_KEY does not open this database (wrong key?)") from exc
+    conn.row_factory = sqlcipher3.Row
+    return conn
+
+
 class Database:
-    def __init__(self, path: str):
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+    def __init__(self, path: str, key: str | None = None):
+        self.path, self.encrypted = path, bool(key)
+        self._key = key
+        self._conn = connect(path, key)
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._lock = threading.Lock()
         self._conn.executescript(SCHEMA)
@@ -403,6 +485,13 @@ class Database:
             DROP TABLE saved_notes_old;
         """)
         self._conn.execute("PRAGMA foreign_keys = ON")
+
+    def backup_to(self, path: str) -> None:
+        """A consistent copy while the app runs; encrypted with the same key when the database is encrypted."""
+        target = connect(path, self._key)
+        with self._lock:
+            self._conn.backup(target)
+        target.close()
 
     @contextmanager
     def tx(self):

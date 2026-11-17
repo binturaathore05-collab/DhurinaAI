@@ -84,7 +84,8 @@ def check_record(db: Database, secret: str, r) -> dict:
     untouched = hmac.compare_digest(r["record_hash"], _mac(secret, _canonical(r, r["model"], r["policy_version"],
                                                                                 r["prev_hash"])))
     chain_ok = r["prev_hash"] == GENESIS or db.one("SELECT 1 FROM qa_history WHERE record_hash = ?",
-                                                   (r["prev_hash"],)) is not None
+                                                   (r["prev_hash"],)) is not None \
+        or db.one("SELECT 1 FROM retention_tombstones WHERE record_hash = ?", (r["prev_hash"],)) is not None
     return {"sealed": True, "untouched": untouched, "chain_ok": chain_ok}
 
 

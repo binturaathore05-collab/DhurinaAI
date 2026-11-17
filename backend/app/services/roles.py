@@ -5,7 +5,7 @@ role can't use). "School Admin" from the brief is the Teacher in our model (teac
 ROLES = {
     "owner": ("Super Admin", "Everything, including the team and money."),
     "safety": ("Safety Admin", "Student conversations, review cases, blocking, safety settings, Emergency."),
-    "support": ("Support", "Helps students: accounts, class, parent consent. Can't read conversations or block."),
+    "support": ("Support", "Helps students: accounts, class, parent consent, delete-my-data. Can't read conversations or block."),
     "technical": ("Technical", "Teachers, app builds, Emergency, safety tests. No student data."),
     "auditor": ("Auditor", "Read-only: dashboards, audit log, reports, settings. Can't change anything."),
 }
@@ -29,6 +29,8 @@ PERMS = {
     "tests_run": {"owner", "safety", "technical"},
     "audit": {"owner", "safety", "auditor"},
     "team": {"owner"},
+    "data_admin": {"owner"},                                  # B6: backups, clean-up, data-keeping
+    "delete_data": {"owner", "support"},                      # B6: delete a student's data on request
 }
 SAFETY_SECTIONS = {"ai", "safety", "limits", "age_groups", "students"}
 
