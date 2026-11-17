@@ -143,8 +143,10 @@ class Answer {
   final Faculty? faculty;
   final bool switched;
   final String handover;
+  /// Sir's mood for this reply (smile, encouraging, serious, …): sets the voice's tone in audio mode.
+  final String emotion;
   Answer(this.qaId, this.answer, this.followUp, this.origin, this.sources, this.language, this.access,
-      {this.verifyCode = '', this.faculty, this.switched = false, this.handover = ''});
+      {this.verifyCode = '', this.faculty, this.switched = false, this.handover = '', this.emotion = 'smile'});
   factory Answer.fromJson(Map<String, dynamic> j) => Answer(
         (j['qa_id'] as num).toInt(),
         j['answer'] as String? ?? '',
@@ -157,6 +159,7 @@ class Answer {
         faculty: Faculty.fromJson(j['faculty']),
         switched: j['switched'] == true,
         handover: j['handover'] as String? ?? '',
+        emotion: j['emotion'] as String? ?? 'smile',
       );
 }
 

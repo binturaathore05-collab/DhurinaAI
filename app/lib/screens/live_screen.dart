@@ -7,6 +7,7 @@ import '../config.dart';
 import '../main.dart';
 import '../share.dart';
 import '../theme.dart';
+import '../voice.dart';
 import 'library_screen.dart';
 import 'pay_screen.dart';
 import 'setup_screen.dart';
@@ -85,6 +86,13 @@ class _LiveScreenState extends State<LiveScreen> {
   /// line the old teacher says before the new face appears (like a call transfer).
   Faculty? _teacher;
   String? _transfer;
+  /// Audio mode: listening to the student (with the words so far), and Sir speaking (which sentence now).
+  final _voice = Voice.instance;
+  bool _listening = false;
+  String _heard = '';
+  bool _speaking = false;
+  int _spoken = -1;          // index into _parts of the sentence being spoken
+  List<String> _parts = [];  // the answer + Sir's question, sentence by sentence
 
   @override
   void initState() {
@@ -94,6 +102,8 @@ class _LiveScreenState extends State<LiveScreen> {
 
   @override
   void dispose() {
+    _voice.stopSpeaking();
+    _voice.cancelListening();
     _input.dispose();
     _inputFocus.dispose();
     super.dispose();
@@ -114,8 +124,8 @@ class _LiveScreenState extends State<LiveScreen> {
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _openPlans() async {
-    final paid = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => PayScreen(access: _access)));
+    final paid = await _leaveVoice(() => Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => PayScreen(access: _access))));
     if (paid == true) _refreshAccess();
   }
 
@@ -159,10 +169,11 @@ class _LiveScreenState extends State<LiveScreen> {
     );
   }
 
-  Future<void> _send() async {
-    final text = _input.text.trim();
+  Future<void> _send([String? spoken]) async {
+    final text = (spoken ?? _input.text).trim();
     if (text.isEmpty || _thinking) return;
-    _input.clear();
+    if (spoken == null) _input.clear();
+    await _voice.stopSpeaking();
     _inputFocus.unfocus();   // owner: the keyboard goes down as soon as the question is sent (Sir is thinking)
     if (isSaveCommand(text)) {
       await _save();
@@ -184,9 +195,12 @@ class _LiveScreenState extends State<LiveScreen> {
       final a = await AppScope.of(context).api.ask(text);
       if (!mounted) return;
       if (a.switched && a.handover.isNotEmpty) {
-        // call transfer: the old teacher says one short line, then the new face and name come in
+        // call transfer: the old teacher says one short line (in the old teacher's voice), then the new face
+        // and name come in
         setState(() => _transfer = a.handover);
-        await Future.delayed(const Duration(milliseconds: 1800));
+        final shown = Future.delayed(const Duration(milliseconds: 1800));
+        await _voice.speak([a.handover], language: a.language, teacherKey: _teacher?.id ?? 0);
+        await shown;
         if (!mounted) return;
       }
       setState(() {
@@ -196,6 +210,7 @@ class _LiveScreenState extends State<LiveScreen> {
         _transfer = null;
         if (a.faculty != null) _teacher = a.faculty;
       });
+      _speakAnswer(a);
     } on CommandException catch (c) {
       if (mounted) setState(() => _thinking = false);
       if (c.command == 'save') {
@@ -319,7 +334,8 @@ class _LiveScreenState extends State<LiveScreen> {
       if (mounted) setState(() => _thinking = false);
     }
     if (!mounted) return false;
-    final again = await Navigator.of(context).push<Answer>(MaterialPageRoute(builder: (_) => TestScreen(test: test)));
+    final again = await _leaveVoice(
+        () => Navigator.of(context).push<Answer>(MaterialPageRoute(builder: (_) => TestScreen(test: test))));
     _refreshAccess();
     if (again == null || !mounted) return false;
     setState(() {
@@ -329,6 +345,7 @@ class _LiveScreenState extends State<LiveScreen> {
       _access = again.access;
       if (again.faculty != null) _teacher = again.faculty;
     });
+    _speakAnswer(again);
     return true;
   }
 
@@ -351,7 +368,7 @@ class _LiveScreenState extends State<LiveScreen> {
     (access != null && access.state != 'active') ? _openPlans() : _openLibrary();
   }
 
-  void _openLibrary() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryScreen()));
+  void _openLibrary() => _leaveVoice(() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryScreen())));
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +437,11 @@ class _LiveScreenState extends State<LiveScreen> {
                     AnimatedSwitcher(duration: const Duration(milliseconds: 700), child: _face(cfg, scope.api)),
                     if (_transfer != null)
                       Align(alignment: Alignment.bottomCenter, child: _TransferCard(text: _transfer!, accent: cfg.accent)),
+                    if (_listening)
+                      const Align(alignment: Alignment.bottomCenter, child: _Pill(icon: Icons.headphones_rounded, text: 'Sir is listening…')),
+                    if (_speaking && !_listening && _transfer == null)
+                      Align(alignment: Alignment.bottomCenter, child: _Pill(icon: Icons.graphic_eq_rounded,
+                          text: '${_teacherName(cfg)} is speaking', action: 'Stop', onAction: _stopSpeaking)),
                     if (_thinking && _transfer == null)
                       Align(
                         alignment: Alignment.bottomCenter,
@@ -434,7 +456,7 @@ class _LiveScreenState extends State<LiveScreen> {
               flex: 4,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-                child: _last == null ? _welcome(_teacherName(cfg)) : _answerView(_last!),
+                child: _listening ? _hearingView() : _last == null ? _welcome(_teacherName(cfg)) : _answerView(_last!),
               ),
             ),
             if (_typing) _textInput(cfg.accent),
@@ -452,9 +474,7 @@ class _LiveScreenState extends State<LiveScreen> {
                       setState(() => _typing = !_typing);
                       _typing ? _inputFocus.requestFocus() : _inputFocus.unfocus();
                     }),
-                RoundIconButton(icon: Icons.mic_rounded, tooltip: 'Hold to speak', size: 76,
-                    background: cfg.accent, foreground: LT.onAccent,
-                    onPressed: () => _toast('Voice is coming in the next update — tap the keyboard to type for now')),
+                _MicButton(listening: _listening, accent: cfg.accent, onPressed: _mic),
                 RoundIconButton(icon: Icons.call_end_rounded, tooltip: 'End class', background: LT.danger,
                     onPressed: () => _endClass(access)),
               ]),
@@ -486,6 +506,74 @@ class _LiveScreenState extends State<LiveScreen> {
 
   String _teacherName(TeacherConfig cfg) => _teacher?.name ?? cfg.teacherName;
 
+  // ---------- audio mode ----------
+
+  /// Sir reads the answer and then his question, sentence by sentence (the one being spoken is highlighted).
+  Future<void> _speakAnswer(Answer a) async {
+    final answerParts = Voice.sentences(a.answer);
+    final parts = [...answerParts, ...Voice.sentences(a.followUp)];
+    if (parts.isEmpty || !mounted) return;
+    setState(() {
+      _parts = parts;
+      _speaking = true;
+      _spoken = 0;
+    });
+    await _voice.speak(parts, language: a.language, teacherKey: a.faculty?.id ?? _teacher?.id ?? 0, emotion: a.emotion,
+        onSentence: (i) {
+      if (mounted && _parts == parts) setState(() => _spoken = i);
+    });
+    if (mounted && _parts == parts) setState(() => _speaking = false);
+  }
+
+  Future<void> _stopSpeaking() async {
+    await _voice.stopSpeaking();
+    if (mounted) setState(() => _speaking = false);
+  }
+
+  /// The big mic: tap to speak (Sir stops talking at once), tap again to send; silence also sends.
+  Future<void> _mic() async {
+    if (_listening) {
+      await _voice.stopListening();
+      return;
+    }
+    if (_thinking) return;
+    _inputFocus.unfocus();
+    await _stopSpeaking();
+    setState(() {
+      _listening = true;
+      _heard = '';
+    });
+    final ok = await _voice.listen(
+      language: _last?.language ?? 'hi',
+      onWords: (w) {
+        if (mounted) setState(() => _heard = w);
+      },
+      onDone: (w) {
+        if (!mounted) return;
+        setState(() => _listening = false);
+        if (w.isNotEmpty) _send(w);
+      },
+      onError: (e) {
+        if (!mounted) return;
+        setState(() => _listening = false);
+        if (e.contains('no_match') || e.contains('speech_timeout')) {
+          _toast('Sir couldn’t hear you. Tap the mic and speak again.');
+        }
+      },
+    );
+    if (!ok && mounted) {
+      setState(() => _listening = false);
+      _toast('Please allow the microphone for this app (phone Settings → Apps → Permissions), or type your question.');
+    }
+  }
+
+  Future<T?> _leaveVoice<T>(Future<T?> Function() go) async {
+    await _voice.stopSpeaking();
+    if (_listening) await _voice.cancelListening();
+    if (mounted) setState(() => _speaking = _listening = false);
+    return go();
+  }
+
   /// The face on the call: the teacher's photo from the server; the app's own photo for the app's own teacher;
   /// otherwise the first letter of the name (never another teacher's face).
   Widget _face(TeacherConfig cfg, Api api) {
@@ -508,13 +596,37 @@ class _LiveScreenState extends State<LiveScreen> {
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ]);
 
+  /// While Sir speaks, the sentence being spoken is bright and highlighted; the rest is dimmer.
+  Widget _spokenText(String text, int offset, TextStyle style) {
+    if (!_speaking || _spoken < 0) return Text(text, style: style);
+    final parts = Voice.sentences(text);
+    return Text.rich(TextSpan(style: style, children: [
+      for (var i = 0; i < parts.length; i++)
+        TextSpan(
+          text: '${parts[i]} ',
+          style: i + offset == _spoken
+              ? const TextStyle(color: LT.text, backgroundColor: LT.accentSoft)
+              : const TextStyle(color: LT.muted),
+        ),
+    ]));
+  }
+
+  Widget _hearingView() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('YOU ARE SAYING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
+        const SizedBox(height: 8),
+        Text(_heard.isEmpty ? 'Speak now…' : _heard,
+            style: TextStyle(fontSize: 22, height: 1.45, fontWeight: FontWeight.w600, color: _heard.isEmpty ? LT.muted : LT.text)),
+        const SizedBox(height: 10),
+        const Text('Stop speaking — it goes to Sir by itself. Or tap the mic.', style: TextStyle(fontSize: 13, color: LT.muted)),
+      ]);
+
   Widget _answerView(Answer a) {
     final accent = AppScope.of(context).cfg.accent;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (_lastQuestion != null)
         Text('You: $_lastQuestion', style: const TextStyle(fontSize: 13, color: LT.muted)),
       const SizedBox(height: 6),
-      Text(a.answer, style: const TextStyle(fontSize: 16, height: 1.45)),
+      _spokenText(a.answer, 0, const TextStyle(fontSize: 16, height: 1.45)),
       const SizedBox(height: 8),
       if (a.origin != 'redirect') Row(children: [
         Icon(a.origin == 'general_ai' ? Icons.info_outline : Icons.check, size: 15, color: LT.accentText),
@@ -528,7 +640,8 @@ class _LiveScreenState extends State<LiveScreen> {
         const SizedBox(height: 14),
         const Text('SIR IS ASKING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
         const SizedBox(height: 6),
-        Text(a.followUp, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
+        _spokenText(a.followUp, Voice.sentences(a.answer).length,
+            const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ],
       if (a.verifyCode.isNotEmpty) ...[
         const SizedBox(height: 6),
@@ -611,6 +724,89 @@ class _LiveScreenState extends State<LiveScreen> {
           const SizedBox(width: 8),
           RoundIconButton(icon: Icons.send_rounded, tooltip: 'Send', size: 48, background: accent,
               foreground: LT.onAccent, onPressed: _send),
+        ]),
+      );
+}
+
+/// The big mic: still when idle; rings pulse while Sir listens.
+class _MicButton extends StatefulWidget {
+  final bool listening;
+  final Color accent;
+  final VoidCallback onPressed;
+  const _MicButton({required this.listening, required this.accent, required this.onPressed});
+  @override
+  State<_MicButton> createState() => _MicButtonState();
+}
+
+class _MicButtonState extends State<_MicButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+
+  @override
+  void didUpdateWidget(_MicButton old) {
+    super.didUpdateWidget(old);
+    if (widget.listening && !_c.isAnimating) {
+      _c.repeat();
+    } else if (!widget.listening) {
+      _c
+        ..stop()
+        ..reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 84, height: 84,
+        child: Stack(alignment: Alignment.center, children: [
+          if (widget.listening)
+            for (final delay in const [0.0, 0.5])
+              AnimatedBuilder(
+                animation: _c,
+                builder: (_, __) {
+                  final t = (_c.value + delay) % 1.0;
+                  return Transform.scale(scale: 1 + t * 0.8,
+                      child: Container(width: 76, height: 76, decoration: BoxDecoration(shape: BoxShape.circle,
+                          color: widget.accent.withValues(alpha: 0.45 * (1 - t)))));
+                },
+              ),
+          RoundIconButton(icon: widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
+              tooltip: widget.listening ? 'Stop and send' : 'Tap to speak', size: 76,
+              background: widget.accent, foreground: LT.onAccent, onPressed: widget.onPressed),
+        ]),
+      );
+}
+
+/// A small label over the teacher's face ("Sir is listening…", "Gupta Sir is speaking  [Stop]").
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final String? action;
+  final VoidCallback? onAction;
+  const _Pill({required this.icon, required this.text, this.action, this.onAction});
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.all(14),
+        padding: EdgeInsets.fromLTRB(14, 6, action == null ? 14 : 6, 6),
+        decoration: BoxDecoration(color: LT.bg.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 18, color: LT.accentText),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          if (action != null) ...[
+            const SizedBox(width: 10),
+            FilledButton.icon(
+              onPressed: onAction,
+              style: FilledButton.styleFrom(backgroundColor: LT.text, foregroundColor: LT.bg,
+                  minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
+              icon: const Icon(Icons.stop_rounded, size: 16),
+              label: Text(action!, style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
         ]),
       );
 }
