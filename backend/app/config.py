@@ -23,6 +23,8 @@ class Settings:
     llm_api_key: str = field(default_factory=lambda: _env("LLM_API_KEY"))
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL"))
     llm_small_model: str = field(default_factory=lambda: _env("LLM_SMALL_MODEL"))  # optional, for helper jobs
+    # optional: used when the main model is switched off in admin → Emergency (same API, another model)
+    llm_backup_model: str = field(default_factory=lambda: _env("LLM_BACKUP_MODEL"))
 
     # Razorpay defaults. Each teacher's own keys and commission split are stored per teacher (admin panel);
     # these are only used for a teacher who has none set.

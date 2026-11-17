@@ -113,7 +113,7 @@ Student message (text now; voice → text later; photo → text + image check la
 | A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) — **built 17 Nov 2026** (see note below) | Small, removes a false sense of safety |
 | A2 | Input & output moderation with fail-safe (section 6, 16) — **built 17 Nov 2026** (see note below) | Core protection |
 | A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) — **built 17 Nov 2026** (see note below) | Stop misuse |
-| A4 | Kill switches: all AI chat · one teacher · voice · photo (17) | Emergency control |
+| A4 | Kill switches: all AI chat · one teacher · voice · photo (17) — **built 17 Nov 2026** (see note below) | Emergency control |
 | A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) | Prove what the AI really said if a recording goes viral |
 | A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) — **built 17 Nov 2026** (see note below) | Abuse + cost |
 | A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
@@ -176,6 +176,16 @@ decision 6 (provider) is still to be made after the A8 Hindi/Hinglish test set. 
 version. **Admin → Student safety → "Safety check":** counts for the last 24 h and the latest events (what, result,
 category, student, text); a red line warns if the safety model is off. Not yet: per-filter on/off and strict /
 medium / relaxed (Safety Center, section 3), alerts to the safety team (B7), incident review workflow (B4).
+
+**A4 as built:** admin → **Emergency** page with one-click switches, checked on the server for every request (no
+app update needed): AI chat for all teachers · one teacher's AI · each AI model in use (main / backup / small helper)
+· voice and photo (switches ready; those features aren't live yet). While AI is off, students see "Sir is taking a
+short break — your notes and library are still open" on the call screen; notes, library and payments keep working
+and blocked tries use no demo question. A switched-off model hands its work to the next one in line
+(`LLM_BACKUP_MODEL`, optional); with none left, AI chat pauses. Turning off needs "what happened"; turning back on
+needs "what did you check" plus a tick that the problem is fixed. Every change is kept in the page's history (who,
+when, why). "AI image generation" in the brief does not apply: the app doesn't generate images. Not yet: only certain
+roles may use the switches (B5), alert to the team when something is switched off (B7).
 
 ### Phase B — also before launch
 | # | Item |

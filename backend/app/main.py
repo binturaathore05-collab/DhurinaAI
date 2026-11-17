@@ -25,6 +25,7 @@ from .services import admin_reports
 from .services import limits
 from .services import student_safety
 from .services import moderation
+from .services import switches
 from .languages import detect_language
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
@@ -38,12 +39,21 @@ def sms_console(phone: str, message: str) -> None:
 
 db = Database(settings.database_path)
 kb = KnowledgeBase(db)
-raw_llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_model)
-           if settings.llm_api_key else FakeLLM())
+
+
+def _client(model: str, timeout: float = 60):
+    if not settings.llm_api_key:
+        return None
+    return OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, model, timeout) if model else None
+
+
+_fake = None if settings.llm_api_key else FakeLLM()   # local development / tests without an AI key
+_main, _small, _backup = settings.llm_model, settings.llm_small_model, settings.llm_backup_model
+# A4: every job goes to the first model in line that is not switched off in admin → Emergency
+raw_llm = switches.ModelRouter(db, [(_main, _client(_main) or _fake), (_backup, _client(_backup))])
 # optional cheaper model for small helper jobs (search keywords, safety check); answers, notes and tests use the
 # main model. Search keywords are never shown to the student, so they skip the output check.
-side_llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_small_model)
-            if settings.llm_api_key and settings.llm_small_model else raw_llm)
+side_llm = switches.ModelRouter(db, [(_small, _client(_small)), (_main, _client(_main) or _fake), (_backup, _client(_backup))])
 
 # A2: independent safety check on every student message and every AI text before a student sees it
 _provider = settings.moderation_provider
@@ -54,7 +64,7 @@ if _provider == "rules":
 _mod_model = settings.llm_small_model or settings.llm_model
 moderator = moderation.Moderator(
     db, _provider,
-    OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, _mod_model, timeout=12) if settings.llm_api_key else FakeLLM(),
+    switches.ModelRouter(db, [(_small, _client(_small, 12)), (_main, _client(_main, 12) or FakeLLM()), (_backup, _client(_backup, 12))]),
     settings.llm_base_url, settings.llm_api_key,
     model_name="omni-moderation-latest" if _provider == "openai" else (_mod_model if _provider == "llm" else "rules"))
 llm = moderation.ModeratedLLM(raw_llm, moderator)
@@ -62,6 +72,12 @@ tutor = Tutor(db, kb, llm, side_llm)
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
 
 app = FastAPI(title="LiveTeach API", version="0.1.0")
+
+
+@app.exception_handler(switches.AIPaused)
+def _ai_paused(request: Request, exc: switches.AIPaused):
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": t("ai_paused", "en")}, status_code=503)
 
 
 @app.exception_handler(moderation.Unavailable)
@@ -108,7 +124,9 @@ def teacher_info(request: Request, teacher: TeacherProfile = Depends(teacher_fro
                                      "WHERE teacher_id = ? AND active = 1", (teacher.id,))]
     return {"id": row["id"], "name": row["name"], "subject": row["subject"], "avatar_url": row["avatar_url"],
             "brand_color": row["brand_color"], "plans": plans, "demo_questions": _limits(teacher.id)["demo"],
-            "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url))}
+            "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url)),
+            "features": {"ai_chat": not switches.ai_paused_for(db, teacher.id), "voice": not switches.is_off(db, "voice"),
+                         "photo": not switches.is_off(db, "photo")}}
 
 
 # ---------- rate limits (A6) ----------
@@ -134,6 +152,8 @@ def _gate(student_id: int) -> None:
     so logging out, reinstalling or a new class doesn't help). Notes, library and payments keep working."""
     row = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))
     moderation.request_ctx.set({"student_id": student_id, "teacher_id": row["teacher_id"] if row else None})
+    if switches.ai_paused_for(db, row["teacher_id"] if row else None) or not raw_llm.available():   # A4 kill switch
+        raise HTTPException(503, t("ai_paused", "en"))
     blocked = student_safety.can_use_ai(db, student_id)
     if blocked:
         raise HTTPException(403, blocked["account_message"])
@@ -215,7 +235,8 @@ def _access(student_id: int) -> dict:
     tid = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))["teacher_id"]
     lim = _limits(tid)
     return {**accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"]),
-            **student_safety.account(db, student_id)}
+            **student_safety.account(db, student_id),
+            "service_message": t("ai_paused", "en") if switches.ai_paused_for(db, tid) or not raw_llm.available() else None}
 
 
 def _after_answer(student_id: int, teacher_id: str, question: str, result) -> None:
@@ -314,6 +335,9 @@ def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, sess
     except moderation.Unavailable:
         _refund(student_id)
         raise _retry()
+    except switches.AIPaused:   # switched off while this question was on its way
+        _refund(student_id)
+        raise HTTPException(503, t("ai_paused", "en"))
     _after_answer(student_id, teacher.id, question, result)
     return result
 
@@ -868,6 +892,39 @@ class StudentAction(BaseModel):
 @app.get("/admin/api/students", dependencies=[Depends(require_admin)])
 def admin_safety_students(status: str = "", q: str = "", teacher: str = "", offset: int = 0, limit: int = 25):
     return student_safety.list_students(db, status, q, teacher, offset, limit)
+
+
+# ---------- A4: emergency kill switches ----------
+
+def _models_in_use() -> list[dict]:
+    rows = [("Main model (answers, notes, tests)", _main), ("Backup model (used when the main one is off)", _backup),
+            ("Small helper model (keywords, safety check)", _small)]
+    seen, out = set(), []
+    for role, name in rows:
+        if name and name not in seen:
+            seen.add(name)
+            out.append({"role": role, "name": name})
+    return out
+
+
+class SwitchChange(BaseModel):
+    key: str
+    off: bool
+    reason: str
+
+
+@app.get("/admin/api/emergency", dependencies=[Depends(require_admin)])
+def admin_emergency():
+    return {**switches.overview(db, _models_in_use()), "ai_available": raw_llm.available()}
+
+
+@app.post("/admin/api/emergency")
+def admin_emergency_set(body: SwitchChange, user=Depends(require_admin)):
+    try:
+        switches.set_switch(db, body.key, body.off, body.reason, user["email"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return admin_emergency()
 
 
 @app.get("/admin/api/safety-events", dependencies=[Depends(require_admin)])

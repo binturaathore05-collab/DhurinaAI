@@ -103,6 +103,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "सर थोड़ी देर में जवाब देंगे। कृपया फिर से कोशिश करें।",
         "pa": "ਸਰ ਥੋੜ੍ਹੀ ਦੇਰ ਵਿੱਚ ਜਵਾਬ ਦੇਣਗੇ। ਕਿਰਪਾ ਕਰਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
     },
+    "ai_paused": {
+        "en": "Sir is taking a short break. Please come back in a little while — your notes and library are still open.",
+        "hi": "सर थोड़ी देर के ब्रेक पर हैं। कुछ देर बाद फिर आइए — आपके नोट्स और लाइब्रेरी खुले हैं।",
+        "pa": "ਸਰ ਥੋੜ੍ਹੀ ਦੇਰ ਦੀ ਬ੍ਰੇਕ 'ਤੇ ਹਨ। ਕੁਝ ਦੇਰ ਬਾਅਦ ਫਿਰ ਆਓ — ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ।",
+    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},
