@@ -296,3 +296,39 @@ def test_solo_teacher_uses_the_whole_library_and_gets_both_subjects(setup):
                "data_base64": b64("Profit percentage equals profit divided by cost price times hundred.")})
     assert library.search(main.db, f, ["profit percentage cost price"])[0]   # the only teacher: every file
     assert library.faculty_stats(main.db, "raj")[f.id] == 1
+
+
+def test_hindi_text_is_tidied_and_unclear_files_wait(setup):
+    admin, student, main = setup
+    assert library.clean_text("यह **जॉन** ने िकया था।\n## शीर्षक") == "यह जॉन ने किया था।\nशीर्षक"
+    assert library.clean_text("कवि ने लिखा") == "कवि ने लिखा"            # a correct ि is left alone
+    broken = "इतिहास: " + "हल्दीघाटी का युद्ध �� ≡≡ " * 30
+    r = admin.post("/admin/api/teachers/inst/library", json={"filename": "History/broken.txt",
+                   "data_base64": b64(broken)}).json()
+    assert r["status"] == "unclear" and r["unclear_percent"] > 2
+    f = fac.list_faculty(main.db, "inst")[0]
+    assert not library.search(main.db, f, ["हल्दीघाटी युद्ध"])[0]       # teachers don't use it yet
+    ok = admin.post(f"/admin/api/teachers/inst/library/{r['id']}/accept").json()
+    assert ok["status"] == "live" and ok["accepted"]
+    assert library.search(main.db, f, ["हल्दीघाटी युद्ध"])[0]
+
+
+def test_preview_shows_the_whole_file_in_parts(setup):
+    admin, student, main = setup
+    big = "Akbar Mughal history notes. " * 5000      # 140,000 letters
+    r = admin.post("/admin/api/teachers/inst/library", json={"filename": "History/big.txt", "data_base64": b64(big)}).json()
+    p1 = admin.get(f"/admin/api/teachers/inst/library/{r['id']}").json()
+    assert p1["more"] and p1["total_chars"] == len(big.strip()) and p1["next_offset"] == len(p1["text"])
+    p2 = admin.get(f"/admin/api/teachers/inst/library/{r['id']}?offset={p1['next_offset']}").json()
+    p3 = admin.get(f"/admin/api/teachers/inst/library/{r['id']}?offset={p2['next_offset']}").json()
+    assert p1["text"] + p2["text"] + p3["text"] == big.strip() and p3["next_offset"] is None
+
+
+def test_pdf_pages_are_counted_and_best_reader_wins():
+    e = library.read_pdf(_tiny_pdf("Percentage and profit, maths notes for class ten students."))
+    assert e.pages == 1 and e.pages_read == 1 and e.unclear == 0 and "Percentage" in e.text
+
+
+@pytest.mark.skipif(__import__("shutil").which("pdftotext") is None, reason="pdftotext (poppler) not installed")
+def test_poppler_is_used_when_there():
+    assert library._pages_poppler(_tiny_pdf("Trigonometry notes")) is not None

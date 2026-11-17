@@ -1692,8 +1692,13 @@ async def admin_library_upload(tid: str, request: Request, user=Depends(need("te
 
 
 @app.get("/admin/api/teachers/{tid}/library/{lid}", dependencies=[Depends(need("teachers_view"))])
-def admin_library_preview(tid: str, lid: int):
-    return _lib(lambda: library.preview(db, tid, lid))
+def admin_library_preview(tid: str, lid: int, offset: int = 0):
+    return _lib(lambda: library.preview(db, tid, lid, offset))
+
+
+@app.post("/admin/api/teachers/{tid}/library/{lid}/accept", dependencies=[Depends(need("teachers_edit"))])
+def admin_library_accept(tid: str, lid: int):
+    return _lib(lambda: library.accept(db, tid, lid))
 
 
 @app.put("/admin/api/teachers/{tid}/library/{lid}", dependencies=[Depends(need("teachers_edit"))])
@@ -1744,8 +1749,19 @@ async def admin_common_upload(request: Request, user=Depends(need("library_commo
 
 
 @app.get("/admin/api/common/{lid}", dependencies=[Depends(need("library_common"))])
-def admin_common_preview(lid: int):
-    return _lib(lambda: library.preview(db, library.COMMON, lid))
+def admin_common_preview(lid: int, offset: int = 0):
+    return _lib(lambda: library.preview(db, library.COMMON, lid, offset))
+
+
+@app.put("/admin/api/common/{lid}/text", dependencies=[Depends(need("library_common"))])
+async def admin_common_edit(lid: int, request: Request):
+    d = await request.json()
+    return _lib(lambda: library.edit_text(db, library.COMMON, lid, str(d.get("text", "")), **_kw()))
+
+
+@app.post("/admin/api/common/{lid}/accept", dependencies=[Depends(need("library_common"))])
+def admin_common_accept(lid: int):
+    return _lib(lambda: library.accept(db, library.COMMON, lid))
 
 
 @app.put("/admin/api/common/{lid}", dependencies=[Depends(need("library_common"))])
