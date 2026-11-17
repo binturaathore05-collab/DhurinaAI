@@ -13,7 +13,7 @@ MINUTE, HOUR, DAY = 60, 3600, 86400
 # Defaults (admin Settings → Limits can change each one; every value must be at least 1)
 DEFAULT_LIMITS = {
     "questions_per_minute": 8,      # a real student rarely asks more than this in a minute
-    "questions_per_day": 250,       # paid plans are "unlimited", but this caps runaway AI cost per student
+    "questions_per_day": 500,       # paid plans are "unlimited", but this caps runaway AI cost per student
     "otp_per_phone_10min": 3,
     "otp_per_phone_day": 10,
     "otp_gap_seconds": 30,          # same as the app's "Resend in 0:30" timer

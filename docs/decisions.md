@@ -87,6 +87,6 @@ section 24 of the owner's brief are the launch checklist. No real student uses t
 
 ## Rate limits — A6 (17 Nov 2026)
 Built with sensible defaults (Claude's choice, owner can change them any time in admin Settings → Limits):
-8 questions a minute and 250 a day per student, including paid students (cost guard; MCQ answers never count);
+8 questions a minute and 500 a day per student, including paid students (cost guard; MCQ answers never count);
 OTP: 30 s gap, 3 per number per 10 min, 10 per number per day, 10 per device per day, 30 per internet address per
-hour; 10 wrong codes lock a number for the day. **Owner to confirm** the 250-a-day cap for paid students.
+hour; 10 wrong codes lock a number for the day. Owner confirmed (17 Nov 2026): **500 questions a day** per student, paid students included.

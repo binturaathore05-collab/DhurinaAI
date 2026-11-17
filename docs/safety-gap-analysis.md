@@ -129,7 +129,7 @@ that only touch a blocked word (e.g. the Constitution under "politics") are allo
 **owner to confirm**. Limit: this still relies on the AI's own judgement; A2 adds an independent check.
 
 **A6 as built:** all limits are checked on the server and can be changed by the admin in Settings → "Limits"
-(apply at once). Defaults: **8 questions a minute and 250 a day per student** — paid students too, so one
+(apply at once). Defaults: **8 questions a minute and 500 a day per student** — paid students too, so one
 account cannot run up AI cost. Counted: questions to Sir, class notes, new tests, written/oral test answers and
 "teach again"; MCQ answers are checked without AI and are never limited. A blocked question does not use up a demo
 or plan question and is not stored. **OTP:** 30 s between two codes for the same number, 3 per number in 10 min,
