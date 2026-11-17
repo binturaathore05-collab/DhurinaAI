@@ -90,7 +90,12 @@ Owner's brief: `docs/multi-teacher-owner-brief.md`. This file is the plan Claude
     subject, remembered per question. No extra AI call.
   - Files: PDF (typed text), Word (.docx), text. Scanned PDFs (photos of pages) wait for Phase C (photo safety + OCR).
   - The institute panel API exists (`/teacher/faculty`, `/teacher/library`); its screens are Step 3.
-- **Next:** Step 2 (app: active-teacher banner and switch, new APK), then Step 3 (institute panel screens).
+- **Step 2 (app): built** (17 Nov 2026, branch `step2-app-multi-teacher`). The top name, the face and "<name> is
+  thinking…" follow the answering teacher; a switch shows the handover line over the old face, then the new face and
+  name fade in. Face = photo from the server, the app's own photo for its own teacher, else the first letter of the
+  name. The app opens on the teacher the student was last with (`/me/access` → `active_faculty`). Tests carry their
+  teacher. New teachers need no new APK.
+- **Next:** the owner tests the whole app end to end; fixes first; then Step 3 (institute panel screens).
 
 ## Owner decisions still to confirm (Claude's suggestions)
 1. One plan covers all teachers of an institute.
