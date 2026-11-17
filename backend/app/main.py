@@ -1559,7 +1559,34 @@ def admin_safety_student(sid: int, user=Depends(need("students"))):
     d["can"] = {"block": roles.has(user["role"], "block"), "consent": roles.has(user["role"], "consent"),
                 "evidence": roles.has(user["role"], "evidence"), "delete": roles.has(user["role"], "delete_data")}
     d["parent_notices"] = parent_notify.history(db, sid)   # B9: SMS sent to the parent (or why not)
+    d["plan"] = accounts.plan_summary(db, sid)
+    d["can"]["free_plan"] = roles.has(user["role"], "free_plan")
     return d
+
+
+class FreePlan(BaseModel):
+    days: int
+    reason: str
+
+
+@app.post("/admin/api/students/{sid}/free-plan")
+def admin_free_plan(sid: int, body: FreePlan, user=Depends(need("free_plan"))):
+    """Super Admin: a plan without payment for a tester (or a scholarship). Written to the audit log with the reason."""
+    if not db.one("SELECT 1 FROM students WHERE id = ?", (sid,)):
+        raise HTTPException(404, "Student not found")
+    if len(body.reason.strip()) < 3:
+        raise HTTPException(400, "Write why (e.g. testing)")
+    try:
+        end = accounts.grant_free_plan(db, sid, body.days)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True, "until": end, **accounts.plan_summary(db, sid)}
+
+
+@app.post("/admin/api/students/{sid}/free-plan/end")
+def admin_free_plan_end(sid: int, user=Depends(need("free_plan"))):
+    accounts.end_free_plan(db, sid)
+    return {"ok": True, **accounts.plan_summary(db, sid)}
 
 
 class ConsentRevoke(BaseModel):

@@ -246,7 +246,8 @@ def _money(db: Database, tid: str | None, since: float | None, default_percent: 
 def _counts(db: Database, tid: str, now: float) -> dict:
     students = db.one("SELECT COUNT(*) AS n FROM students WHERE teacher_id = ?", (tid,))["n"]
     active = db.one("SELECT COUNT(DISTINCT s.student_id) AS n FROM subscriptions s JOIN students st ON st.id = s.student_id "
-                    "WHERE st.teacher_id = ? AND s.starts_at <= ? AND s.ends_at > ?", (tid, now, now))["n"]
+                    "WHERE st.teacher_id = ? AND s.starts_at <= ? AND s.ends_at > ? AND s.plan_id != 'free'",
+                    (tid, now, now))["n"]
     return {"students": students, "active_plans": active}
 
 
@@ -271,7 +272,8 @@ def overview(db: Database, default_percent: float) -> dict:
         "teachers": db.one("SELECT COUNT(*) AS n FROM teachers")["n"],
         "live": db.one("SELECT COUNT(*) AS n FROM teachers WHERE status = 'live'")["n"],
         "students": db.one("SELECT COUNT(*) AS n FROM students")["n"],
-        "active_plans": db.one("SELECT COUNT(DISTINCT student_id) AS n FROM subscriptions WHERE starts_at <= ? AND ends_at > ?",
+        "active_plans": db.one("SELECT COUNT(DISTINCT student_id) AS n FROM subscriptions WHERE starts_at <= ? AND ends_at > ? "
+                               "AND plan_id != 'free'",
                                (now, now))["n"],
         "this_month": _money(db, None, _month_start(now), default_percent),
     }

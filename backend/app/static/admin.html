@@ -923,6 +923,9 @@ async function studentView(id) {
     <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
       ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
       ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
+    ${x.plan ? `<section class="card"><div class="row"><div><h2>Plan</h2><span class="sub">${x.plan.active ? `Active until ${when(x.plan.ends_at)}${x.plan.free_until ? ' · free plan (no payment) until ' + when(x.plan.free_until) : ''}` : 'No active plan (free demo questions only)'}</span></div>
+      ${x.can && x.can.free_plan ? `<span class="row" style="gap:8px">${x.plan.free_until ? '<button type="button" class="btn ghost" id="fpend" style="color:var(--bad)">End free plan</button>' : ''}<button type="button" class="btn primary" id="fpgive">Give free plan</button></span>` : ''}</div>
+      <span class="muted" style="font-size:12px">For testers and scholarships: the student gets a full plan without paying. It never counts as money in reports. Every change is in the audit log.</span></section>` : ''}
     <section class="card"><div class="row"><h2>Class &amp; parent consent</h2><span>${x.consent_status === 'given' && (!x.can || x.can.consent) ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}${x.can && x.can.delete && !String(x.phone).startsWith('deleted:') ? ' <button type="button" class="btn ghost" id="deldata" style="color:var(--bad)">Delete this student’s data</button>' : ''}</span></div>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
         ${kv('Class', x.class_level ? (x.class_level === 'college' ? 'College / exam preparation' : 'Class ' + esc(x.class_level)) : 'Not given yet')}${kv('18 or older', x.is_adult == null ? '—' : (x.is_adult ? 'Yes' : 'No'))}
@@ -936,6 +939,18 @@ async function studentView(id) {
 }
 async function bindStudent(id) {
   const x = await api('GET', '/students/' + encodeURIComponent(id));
+  const reload = async () => { $('#app').innerHTML = await studentView(id); bindStudent(id); };
+  if ($('#fpgive')) $('#fpgive').onclick = async () => {
+    const m = await dialog('Give a free plan', `<p>The student gets a full plan <b>without paying</b> (e.g. for testing). It starts now, or after a plan they already have.</p>
+      <label class="f">Days<input type="number" id="fpdays" min="1" max="366" value="30" required></label>
+      <label class="f">Why<input type="text" id="fpwhy" value="Testing" required maxlength="200"></label>`, 'Give free plan');
+    if (!m) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/free-plan`, { days: +m.querySelector('#fpdays').value, reason: m.querySelector('#fpwhy').value }); toast('Free plan given'); reload(); } catch (e) { toast(e.message); }
+  };
+  if ($('#fpend')) $('#fpend').onclick = async () => {
+    if (!(await ask({ title: 'End the free plan?', text: 'The student goes back to the free demo (or to their paid plan, if they have one).', ok: 'End free plan', danger: true }))) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/free-plan/end`); toast('Free plan ended'); reload(); } catch (e) { toast(e.message); }
+  };
   if ($('#deldata')) $('#deldata').onclick = async () => {
     const reason = await textDialog('Delete this student’s data?', 'Who asked and how (e.g. mother called on 98…)', 'Delete data', { danger: true, hint: 'Questions, answers, notes, tests, name and class are deleted and the account is closed. Payments, consents and safety records stay. This can’t be undone.' });
     if (!reason) return;
