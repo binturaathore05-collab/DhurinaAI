@@ -332,3 +332,14 @@ def test_pdf_pages_are_counted_and_best_reader_wins():
 @pytest.mark.skipif(__import__("shutil").which("pdftotext") is None, reason="pdftotext (poppler) not installed")
 def test_poppler_is_used_when_there():
     assert library._pages_poppler(_tiny_pdf("Trigonometry notes")) is not None
+
+
+def test_answers_have_no_markdown_and_any_subject_is_study(setup):
+    admin, student, main = setup
+    main.llm.replies = [{"query": "Haldighati battle"},
+                        {"answer": "1. **स्थान**: हल्दीघाटी\n## सेना", "follow_up": "**क्यों?**", "found_in_notes": False,
+                         "scope": "study", "board": ["**1576**"]}]
+    r = student.post("/class/ask", json={"question": "Haldighati ka yudh kab hua tha?"}).json()
+    assert "**" not in r["answer"] and "#" not in r["answer"] and r["follow_up"] == "क्यों?" and r["board"] == ["1576"]
+    system = [c[0] for c in main.raw_llm.calls if "CLASS RULES" in c[0]][-1]
+    assert "bhart ka ajad hua tha" in system and "If you are not sure, choose study" in system and "no markdown" in system

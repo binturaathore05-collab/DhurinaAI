@@ -379,8 +379,12 @@ class _LiveScreenState extends State<LiveScreen> {
                           }
                         : null,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(cfg.teacherName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                      Text('${cfg.subject} · $_elapsed', style: const TextStyle(fontSize: 12, color: LT.muted)),
+                      // one line: a long name gets a little smaller instead of breaking mid-word ("Subhas / h Sir")
+                      FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                          child: Text(cfg.teacherName, maxLines: 1, softWrap: false,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                      Text('${cfg.subject} · $_elapsed', maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: LT.muted)),
                     ]),
                   ),
                 ),
