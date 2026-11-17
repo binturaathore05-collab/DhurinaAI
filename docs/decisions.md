@@ -90,3 +90,10 @@ Built with sensible defaults (Claude's choice, owner can change them any time in
 8 questions a minute and 500 a day per student, including paid students (cost guard; MCQ answers never count);
 OTP: 30 s gap, 3 per number per 10 min, 10 per number per day, 10 per device per day, 30 per internet address per
 hour; 10 wrong codes lock a number for the day. Owner confirmed (17 Nov 2026): **500 questions a day** per student, paid students included.
+
+## Student safety ladder — A3 (17 Nov 2026)
+Built with Claude's defaults (owner can change them in admin Settings → "Student safety"): off-topic chat never
+counts; blocked topic = small problem, clearly harmful request = serious; 3 small in 7 days → warning, 6 → 24 h
+suspension; 1 serious → 24 h suspension, 2 serious in 30 days → stopped until an admin reviews. Notes and library
+stay open while suspended. Blocked-student message names "your parent or Dhurina support" (open question 7).
+Only Dhurina admins see flags and the student's words for now (open question 5: teacher access).

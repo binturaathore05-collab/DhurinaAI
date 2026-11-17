@@ -23,6 +23,7 @@ from .services import teacher_data
 from .services import classroom, quiz, share
 from .services import admin_reports
 from .services import limits
+from .services import student_safety
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
@@ -63,6 +64,8 @@ def current_student(authorization: str = Header(...)):
     row = db.one("SELECT * FROM students WHERE id = ?", (student_id,))
     if row is None:
         raise HTTPException(401, "Unknown student")
+    if row["status"] == "disabled":   # A3: a disabled account can do nothing, even with an old login
+        raise HTTPException(403, student_safety.account(db, student_id)["account_message"])
     return {"id": student_id, "teacher_id": teacher_id}
 
 
@@ -103,8 +106,17 @@ def _too_many(exc: limits.Limited) -> HTTPException:
     return HTTPException(429, str(exc), headers={"Retry-After": str(exc.retry_after)})
 
 
+def _gate(student_id: int) -> None:
+    """A3: a suspended / under-review / disabled student can't use Sir's AI (checked on the server every time,
+    so logging out, reinstalling or a new class doesn't help). Notes, library and payments keep working."""
+    blocked = student_safety.can_use_ai(db, student_id)
+    if blocked:
+        raise HTTPException(403, blocked["account_message"])
+
+
 def _limit_questions(student_id: int) -> None:
     """Every action that makes Sir's AI work counts: questions, class notes, new tests, written/oral answers."""
+    _gate(student_id)
     try:
         limits.check_and_record(db, limits.question_rules(student_id, _limit_settings()))
     except limits.Limited as exc:
@@ -157,6 +169,8 @@ def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_h
     except (accounts.AuthError, ValueError) as exc:
         raise HTTPException(400, str(exc))
     student_id = accounts.get_or_create_student(db, teacher.id, phone)
+    if student_safety.status(db, student_id) == "disabled":
+        raise HTTPException(403, student_safety.account(db, student_id)["account_message"])
     token = accounts.issue_token(student_id, teacher.id, settings.jwt_secret, settings.jwt_days)
     return {"token": token, **_access(student_id)}
 
@@ -175,7 +189,18 @@ def _limits(teacher_id: str) -> dict:
 def _access(student_id: int) -> dict:
     tid = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))["teacher_id"]
     lim = _limits(tid)
-    return accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"])
+    return {**accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"]),
+            **student_safety.account(db, student_id)}
+
+
+def _after_answer(student_id: int, teacher_id: str, question: str, result) -> None:
+    """A3: a blocked topic is a minor violation, a clearly harmful request a serious one (off-topic chat is neither)."""
+    if result.scope not in ("blocked", "unsafe"):
+        return
+    row = db.one("SELECT blocked_topic FROM qa_history WHERE id = ?", (result.qa_id,))
+    sev = "minor" if result.scope == "blocked" else "serious"
+    student_safety.record_violation(db, student_id, teacher_id, sev, (row["blocked_topic"] if row else "") or result.scope,
+                                    question, result.qa_id, student_safety.safety_settings(admin.get_settings(db)))
 
 
 class StudentName(BaseModel):
@@ -227,6 +252,7 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
             db, student["id"], classroom.latest_session_with_content(db, student["id"], session_id))}
     _consume(student["id"], teacher)
     result = tutor.answer(student["id"], teacher, body.question, session_id)
+    _after_answer(student["id"], teacher.id, body.question, result)
     return {"type": "answer", **result.__dict__, **_access(student["id"])}
 
 
@@ -306,6 +332,7 @@ def get_test(test_id: int, student=Depends(current_student)):
 @app.post("/tests/{test_id}/answer")
 def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student),
                 teacher: TeacherProfile = Depends(teacher_from_header)):
+    _gate(student["id"])
     row = db.one("SELECT mode FROM tests WHERE id = ? AND student_id = ?", (test_id, student["id"]))
     if row is not None and row["mode"] != "mcq":   # MCQ is checked without AI, so it is not limited
         _limit_questions(student["id"])
@@ -334,6 +361,7 @@ def test_reteach(test_id: int, body: Reteach, student=Depends(current_student),
     _consume(student["id"], teacher)
     session_id = classroom.current_session(db, student["id"], teacher.id)
     result = tutor.answer(student["id"], teacher, request_text, session_id)
+    _after_answer(student["id"], teacher.id, request_text, result)
     return {"type": "answer", "question": request_text, **result.__dict__, **_access(student["id"])}
 
 
@@ -396,6 +424,8 @@ def _pay_settings():
 
 @app.post("/pay/checkout")
 def checkout(body: Checkout, student=Depends(current_student)):
+    if student_safety.status(db, student["id"]) == "review":   # no new payments while the team reviews the account
+        raise HTTPException(403, student_safety.account(db, student["id"])["account_message"])
     try:
         return payments.start_checkout(db, student["id"], body.plan_id, _pay_settings())
     except KeyError:
@@ -737,6 +767,38 @@ async def admin_put_settings(request: Request):
     try:
         return admin.save_settings(db, await request.json())
     except admin.AdminError as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ---------- A3: student safety (block / unblock) ----------
+
+class StudentAction(BaseModel):
+    action: str                 # warn | suspend | review | disable | unblock
+    reason: str
+    remarks: str = ""
+    hours: int | None = None    # for suspend
+
+
+@app.get("/admin/api/students", dependencies=[Depends(require_admin)])
+def admin_safety_students(status: str = "", q: str = "", teacher: str = "", offset: int = 0, limit: int = 25):
+    return student_safety.list_students(db, status, q, teacher, offset, limit)
+
+
+@app.get("/admin/api/students/{sid}", dependencies=[Depends(require_admin)])
+def admin_safety_student(sid: int):
+    try:
+        return student_safety.detail(db, sid)
+    except KeyError:
+        raise HTTPException(404, "Student not found")
+
+
+@app.post("/admin/api/students/{sid}/status")
+def admin_safety_action(sid: int, body: StudentAction, user=Depends(require_admin)):
+    try:
+        return student_safety.admin_action(db, sid, body.action, body.reason, body.remarks, user["email"], body.hours)
+    except KeyError:
+        raise HTTPException(404, "Student not found")
+    except student_safety.SafetyError as exc:
         raise HTTPException(400, str(exc))
 
 

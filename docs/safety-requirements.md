@@ -23,7 +23,7 @@ section 24 of the owner's brief are the launch checklist. No real student uses t
 
 ---
 
-## S1 · Block or remove a teacher, block a student — P1 · status: **noted, not started**
+## S1 · Block or remove a teacher, block a student — P1 · status: **student part built (A3, 17 Nov 2026)**; teacher part not started
 Asked on 17 Nov 2026: "किसी टीचर को हटाना, डिलीट करना या ब्लॉक करना, या किसी स्टूडेंट को ब्लॉक करना — स्ट्रक्चर तैयार करना, अभी मत करो।"
 
 Plan to propose (to be confirmed by the owner before building):

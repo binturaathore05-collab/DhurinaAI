@@ -41,7 +41,15 @@ class Access {
   final bool renewSoon;
   final DateTime? planEndedAt;
   final int graceLeft;
-  Access(this.state, this.demoLeft, {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0});
+  /// Safety status from the server (A3): active | warning | suspended | review | disabled, with a ready message.
+  final String accountStatus;
+  final String? accountMessage;
+  Access(this.state, this.demoLeft,
+      {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0,
+      this.accountStatus = 'active', this.accountMessage});
+
+  /// Sir's AI is paused for this student (notes and library still work).
+  bool get aiPaused => accountStatus == 'suspended' || accountStatus == 'review' || accountStatus == 'disabled';
 
   bool get subscribed => state == 'active';
   bool get hadPlan => state == 'grace' || state == 'expired' || state == 'active';
@@ -55,6 +63,8 @@ class Access {
       renewSoon: j['renew_soon'] == true,
       planEndedAt: ended == null ? null : DateTime.fromMillisecondsSinceEpoch((ended * 1000).toInt()),
       graceLeft: (j['grace_questions_left'] as num? ?? 0).toInt(),
+      accountStatus: j['account_status'] as String? ?? 'active',
+      accountMessage: j['account_message'] as String?,
     );
   }
 }
