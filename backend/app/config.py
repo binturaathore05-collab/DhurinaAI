@@ -47,6 +47,10 @@ class Settings:
     # A2 safety check: auto (= llm when an AI key is set, else rules only) | llm | openai | rules
     moderation_provider: str = field(default_factory=lambda: _env("MODERATION_PROVIDER", "auto"))
 
+    # A5: seals answer records and the admin audit log. Set once, keep secret, never change (old seals would no
+    # longer verify). Empty = derived from JWT_SECRET.
+    audit_secret: str = field(default_factory=lambda: _env("AUDIT_SECRET"))
+
     notes_dir: str = field(default_factory=lambda: _env("NOTES_DIR", "notes_pdfs"))
 
 

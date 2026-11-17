@@ -234,6 +234,26 @@ CREATE TABLE IF NOT EXISTS kill_switch_log (   -- A4: every switch off / on, who
     at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS policy_snapshots (   -- A5: every set of safety rules that was ever in force
+    version TEXT PRIMARY KEY,
+    rules TEXT NOT NULL,
+    first_seen REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_audit (        -- A5: who changed what in the admin / teacher panels (chained)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    who TEXT,
+    role TEXT,                                  -- admin | teacher
+    method TEXT,
+    path TEXT,
+    status INTEGER,
+    ip TEXT,
+    details TEXT,                               -- request with secrets removed
+    prev_hash TEXT,
+    hash TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL
@@ -269,6 +289,8 @@ class Database:
         ("saved_notes", "qa_upto", "INTEGER"),
         ("students", "status", "TEXT NOT NULL DEFAULT 'active'"), ("students", "status_until", "REAL"),
         ("students", "status_reason", "TEXT"),
+        ("qa_history", "model", "TEXT"), ("qa_history", "policy_version", "TEXT"), ("qa_history", "prev_hash", "TEXT"),
+        ("qa_history", "record_hash", "TEXT"), ("qa_history", "verify_code", "TEXT"), ("qa_history", "sealed_at", "REAL"),
         ("verified_answers", "active", "INTEGER NOT NULL DEFAULT 1"), ("verified_answers", "updated_at", "TEXT"),
     ]
 
@@ -279,6 +301,7 @@ class Database:
             if have and col not in have:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
         self._upgrade_saved_notes()
+        self._conn.execute("CREATE INDEX IF NOT EXISTS qa_history_verify_code ON qa_history (verify_code)")
         self._conn.commit()
 
     def _upgrade_saved_notes(self) -> None:

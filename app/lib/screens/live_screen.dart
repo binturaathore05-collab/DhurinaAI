@@ -485,6 +485,10 @@ class _LiveScreenState extends State<LiveScreen> {
         const SizedBox(height: 6),
         Text(a.followUp, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ],
+      if (a.verifyCode.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        Text('Ref ${a.verifyCode}', style: const TextStyle(fontSize: 11, color: LT.muted, letterSpacing: 0.5)),
+      ],
       const SizedBox(height: 12),
       if (a.origin != 'redirect') _saved ? _savedBanner(accent) : _savePopup(accent),
     ]);
