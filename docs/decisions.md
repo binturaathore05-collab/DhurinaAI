@@ -148,3 +148,9 @@ weapons, drugs, self-harm, rule-breaking) can never be turned off or lowered; tu
 students' messages, never Sir's answers. Parent SMS on block: on by default. Parent SMS for an upset student: a person
 decides in the case by default (sometimes the trouble is at home), admin can make it automatic. Parent SMS in Hindi by
 default. Backups are restore-tested automatically every week.
+
+## Multi-teacher institutes (owner, 17 Nov 2026)
+One app can hold many AI teachers (an institute); Sir switches teacher by the question's subject; all content in one
+library, classified by AI. Owner added: a Dhurina Common Library that Super Admin can attach to a teacher with little
+content, and files identical across institutes are stored and processed only once. Plan and open questions:
+`docs/multi-teacher-plan.md`.
