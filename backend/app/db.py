@@ -378,6 +378,16 @@ CREATE TABLE IF NOT EXISTS policy_versions (   -- B8: every version of the safet
     verified_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS parent_notices (    -- B9: SMS to a parent (block / care); never the child's words
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    student_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,                         -- block | care
+    phone TEXT,
+    status TEXT NOT NULL,                       -- sent | failed | no_phone | adult | off | repeat
+    by_who TEXT NOT NULL                        -- system | admin email
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL

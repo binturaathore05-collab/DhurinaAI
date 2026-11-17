@@ -141,3 +141,10 @@ Safety Admins see student conversations or block students. New members get a one
 Owner didn't pick a period; Claude used its suggestion: conversations 12 months, safety records 36 months, then
 deleted by themselves (admin Settings → Data keeping). Students can delete their account and data themselves (app or
 by telling Sir). Database and backups encrypted.
+
+## Safety Center, filters, parent SMS, restore — B9 (17 Nov 2026)
+Owner asked to close the gaps found against the brief. Claude's choices: five child-protection filters (sexual,
+weapons, drugs, self-harm, rule-breaking) can never be turned off or lowered; turning another filter off only affects
+students' messages, never Sir's answers. Parent SMS on block: on by default. Parent SMS for an upset student: a person
+decides in the case by default (sometimes the trouble is at home), admin can make it automatic. Parent SMS in Hindi by
+default. Backups are restore-tested automatically every week.

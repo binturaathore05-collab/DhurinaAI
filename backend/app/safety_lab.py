@@ -25,7 +25,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .db import Database
-from .services import moderation, student_safety
+from .services import content_filters, moderation, student_safety
 from .services import admin as admin_mod
 from .services import tutor as tutor_mod
 
@@ -67,7 +67,8 @@ def fingerprint(settings, admin_settings: dict, provider: str, switch_db: Databa
              moderation.POLICY_VERSION, json.dumps({k: admin_settings.get(k) for k in ("ai", "safety", "age_groups")}, sort_keys=True),
              moderation.CLASSIFIER, json.dumps(moderation.RULES, sort_keys=True), json.dumps(moderation.OPENAI_MAP),
              inspect.getsource(tutor_mod._scope_rules), inspect.getsource(tutor_mod._system_prompt),
-             json.dumps(load_cases()["version"])]
+             json.dumps(load_cases()["version"]),
+             json.dumps(content_filters.settings_of(admin_settings), sort_keys=True)]   # B9: filter settings
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 

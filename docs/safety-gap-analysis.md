@@ -317,7 +317,7 @@ policy**: version in use, compare any two versions (rule by rule; topics shown a
 never rewritten — and the safety tests run again; a warning if that version was never verified). A version is
 **verified** when a live safety-test run passes while it is in use. Rollbacks are in the audit log.
 
-**Phase B complete (17 Nov 2026).** Open owner items: AI key on the server (live safety tests, decision 6), SMTP for
+**Phase B complete (17 Nov 2026, with B9).** Open owner items: a real SMS provider (parent SMS and login codes), AI key on the server (live safety tests, decision 6), SMTP for
 alert emails, a paid server with a lasting disk + second copy of backups, lawyer's DPDP check (consent text, keeping
 periods, what stays after deletion), WhatsApp alerts (last).
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
@@ -326,6 +326,21 @@ periods, what stays after deletion), WhatsApp alerts (last).
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21)  — **built 17 Nov 2026** (see note below) |
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) — **built 17 Nov 2026**, email yes, WhatsApp needs a provider (see note below) |
 | B8 | Safety policy versions with compare and rollback (18) — **built 17 Nov 2026** (see note below) |
+| B9 | Gaps found when checking Phase B against the brief: Safety Center hub (2), content filter controls + editable messages (3), parent SMS (9), backup restore procedure + test (21) — **built 17 Nov 2026** (see note below) |
+
+**B9 as built.** *Safety Center* (admin → AI Teacher Safety Center): the menu now has its own "AI Teacher Safety
+Center" section, and its overview page shows all 12 modules of brief §2 with a live status and a link each (module 9,
+voice/photo/file, is "partly": spoken questions are text-checked; photo/file upload is Phase C). *Content filters*
+(admin → Content filters): 10 filters; per filter on/off, strictness (as per age group / strict / medium / relaxed),
+"counts as" (as the checker decides / small / serious) and human review (opens a case). Child-protection floor:
+sexual, weapons, drugs, self-harm and rule-breaking are always on, serious and reviewed. "Off" only stops checking
+students' messages; Sir's answers are always checked for everything. The 8 messages students see when blocked / warned
+/ suspended / upset can be changed per language (blank = built-in; the helpline 14416 and `{wait}` must stay). Filter
+and message changes are policy versions (B8) and re-run the safety tests. *Parent SMS*: when a student is suspended,
+stopped for review or disabled (on by default); for an upset student a person presses "Inform parent by SMS" in the
+case (default) or it can be automatic; never the child's words, never for 18+, once a day per kind, every attempt shown
+on the student page. *Restore*: `docs/backup-restore.md`; admin → Data & backups → "Test newest backup"; runs by itself
+weekly and raises an alert if a backup fails.
 
 ### Phase C — before launch for any voice / photo / video feature that ships
 - Voice: speech-to-text, then the same input check; output check before speaking; AI disclosure spoken at call start.

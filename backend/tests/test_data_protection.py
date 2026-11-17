@@ -104,7 +104,8 @@ def test_admin_deletes_on_parent_request_with_roles(client):
 def test_daily_jobs_and_settings(client):
     from app.services import admin, data_protection
     done = data_protection.daily(client.main.db, lambda: admin.get_settings(client.main.db), str(client.tmp / "b2"))
-    assert done == ["backup", "retention"]
+    assert done == ["backup", "retention", "restore_test"]               # B9: weekly restore test of the newest backup
+    assert data_protection.last_job(client.main.db, "restore_test")["ok"] is True
     assert data_protection.daily(client.main.db, lambda: admin.get_settings(client.main.db), str(client.tmp / "b2")) == []
     with pytest.raises(admin.AdminError):
         admin.save_settings(client.main.db, {"data": {"conversation_months": 24, "safety_months": 12}})

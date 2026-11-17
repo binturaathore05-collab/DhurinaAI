@@ -185,10 +185,19 @@ class Moderator:
             return "", "-"
         return f"Age group: {policy['label']}. {age_policy.CHECK[policy['strictness']]}", policy["strictness"]
 
+    def _settings(self) -> dict:
+        from . import admin as admin_mod
+        return admin_mod.get_settings(self.db)
+
     def _model(self, text: str, stage: str) -> Verdict:
         if self.provider == "rules":
             return Verdict()
+        from . import content_filters
         age, level = self._age_line()
+        extra = content_filters.checker_lines(self._settings())   # B9: per-filter strictness
+        if extra:
+            age = f"{age}\n{extra}".strip()
+            level = f"{level}|{hashlib.sha256(extra.encode()).hexdigest()[:8]}"
         key = hashlib.sha256(f"{POLICY_VERSION}|{self.provider}|{stage}|{level}|{_norm(text)}".encode()).hexdigest()
         row = self.db.one("SELECT category, severity FROM moderation_cache WHERE key = ?", (key,))
         if row:
@@ -206,7 +215,11 @@ class Moderator:
         if not (text or "").strip():
             return Verdict()
         v = rule_check(text)
-        return v if not v.safe else self._model(text, stage)
+        v = v if not v.safe else self._model(text, stage)
+        if v.safe:
+            return v
+        from . import content_filters   # B9: the admin's filter settings (on/off, severity)
+        return content_filters.apply(v, stage, self._settings())
 
     def check_input(self, text: str) -> Verdict:
         try:

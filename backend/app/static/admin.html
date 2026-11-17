@@ -25,6 +25,10 @@
   nav a.item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 15px; }
   nav a.item.on { background: var(--surf); color: var(--text); }
   nav .spacer { flex: 1; }
+  nav .navh { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 14px 14px 2px; }
+  .hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+  .hub .card { gap: 8px; } .hub .num { color: var(--muted); font-size: 12px; font-weight: 700; }
+  .fl td select { min-width: 0; } .fl td { vertical-align: middle; }
   main { flex: 999 1 560px; min-width: 0; padding: 30px 36px 48px; display: flex; flex-direction: column; gap: 22px; }
   h1 { margin: 0; font-size: 26px; font-weight: 800; } h2 { margin: 0; font-size: 17px; }
   .sub { color: var(--muted); font-size: 14px; }
@@ -131,6 +135,7 @@
     nav::-webkit-scrollbar { display: none; }
     nav .brand, nav .me { padding: 0 6px 0 0; flex: none; } nav .brand > span:last-child, nav .me > span:last-child { display: none; }
     nav .item { flex: none; white-space: nowrap; padding: 8px 10px; } nav .spacer { display: none; } nav .badge { margin-left: 4px; }
+    nav .navh { display: none; }
   }
 </style>
 </head>
@@ -151,6 +156,8 @@ const ICON = {
   audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  hub: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  filter: '<path d="M3 4h18l-7 9v6l-4 2v-8z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
@@ -248,7 +255,9 @@ function shell(active, inner) {
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
     ${can('dashboard') ? `<a class="item ${active === 'Alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${ALERTS.open ? ` <span class="pill" style="margin-left:auto;color:${ALERTS.critical ? 'var(--bad)' : 'var(--warn)'}">${ALERTS.open}</span>` : ''}</a>` : ''}
-    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
+    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}
+    <span class="navh">AI Teacher Safety Center</span>${item('#/center', 'hub', 'Safety Center', 'dashboard')}${item('#/filters', 'filter', 'Content filters', 'settings_view')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}
+    <span class="navh">Admin</span>${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -570,7 +579,7 @@ async function settingsView() {
       <label class="f">New password<input id="pw1" type="password" autocomplete="new-password"><span class="h">At least 8 characters, letters and numbers</span></label></div>
       <div class="row"><span id="pwmsg" class="muted"></span><button class="btn ghost" id="pwbtn" type="button">Change password</button></div>
       <div><b style="font-size:13px">Recent logins</b>${logins || '<p class="muted">No logins yet.</p>'}</div>`)}
-    ${card('Coming next', 'Planned for the next steps', `<span class="muted">SMS / WhatsApp provider · Team members &amp; roles</span>`)}`);
+    ${card('Coming next', 'Planned for the next steps', `<span class="muted">Real SMS provider (MSG91 / Twilio) · WhatsApp alerts · Parent dashboard</span>`)}`);
 }
 function bindSettings() {
   $('#pwbtn').onclick = async () => {
@@ -705,6 +714,8 @@ async function studentView(id) {
         ${kv('Parent consent', esc(x.consent_status))}</div>
       ${x.consents.length ? `<div class="scroll"><table><thead><tr><th>PARENT NUMBER</th><th>GIVEN</th><th>FROM</th><th>WITHDRAWN</th></tr></thead><tbody>${x.consents.map((c) => `<tr><td>${esc(c.parent_phone)}</td><td>${when(c.given_at)}</td><td class="muted">${esc(c.ip || '')}</td>
         <td>${c.revoked_at ? when(c.revoked_at) + ' · ' + esc(c.revoked_by) + '<div class="muted" style="font-size:12px">' + esc(c.revoke_reason || '') + '</div>' : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>
+    ${(x.parent_notices || []).length ? `<section class="card"><h2>SMS to parent</h2><span class="sub">Sent when the student is blocked (if on) or when a person decides in a care case. Never with what the student wrote.</span><div class="scroll"><table><thead><tr><th>WHEN</th><th>ABOUT</th><th>TO</th><th>RESULT</th><th>BY</th></tr></thead><tbody>${x.parent_notices.map((n) => `<tr><td>${when(n.at)}</td><td>${n.kind === 'care' ? 'Seemed upset (helpline)' : 'Class paused'}</td><td>${esc(n.phone || '—')}</td>
+      <td>${{ sent: '<b style="color:var(--ok)">Sent</b>', failed: '<b style="color:var(--bad)">Could not send</b>', repeat: 'Not sent — already sent today', no_phone: 'Not sent — no parent number', adult: 'Not sent — 18 or older' }[n.status] || esc(n.status)}</td><td>${esc(n.by_who)}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
     <section class="card"><div class="row"><h2>Problems found</h2><span class="muted" style="font-size:12px">What the student wrote · admins only</span></div><div class="scroll">${viol ? `<table><thead><tr><th>WHEN</th><th>TYPE</th><th>ABOUT</th><th>STUDENT WROTE</th></tr></thead><tbody>${viol}</tbody></table>` : '<p class="muted">No problems recorded.</p>'}</div></section>
     <section class="card"><h2>Block / unblock history</h2><div class="scroll">${hist ? `<table><thead><tr><th>WHEN</th><th>CHANGE</th><th>BY</th><th>REASON · REMARKS</th></tr></thead><tbody>${hist}</tbody></table>` : '<p class="muted">No changes yet.</p>'}</div></section>`);
 }
@@ -946,7 +957,7 @@ async function caseView(id) {
         <span><span class="muted">Reviewer</span> <b>${esc(x.assigned_to || '—')}</b></span></div>
       ${closed ? `<div class="split"><b>Closed: ${esc(x.resolutions[x.resolution] || x.resolution)}</b><div style="white-space:pre-wrap">${esc(x.resolution_note || '')}</div><span class="muted" style="font-size:12px">${esc(x.resolved_by)} · ${when(x.resolved_at)}</span></div>` : ''}</section>
     <section class="card"><h2>Actions</h2><div class="row" style="justify-content:flex-start;flex-wrap:wrap;gap:10px">
-      ${closed ? btn('reopen', 'Reopen case') : `${x.status !== 'escalated' ? btn('escalate', 'Escalate to safety team') : ''}${btn('note', 'Add a note')}${x.student_id ? btn('stop_class', 'Stop the class now') : ''}
+      ${closed ? btn('reopen', 'Reopen case') : `${x.status !== 'escalated' ? btn('escalate', 'Escalate to safety team') : ''}${btn('note', 'Add a note')}${x.student_id ? btn('stop_class', 'Stop the class now') : ''}${x.student_id ? btn('notify_parent', 'Inform parent by SMS') : ''}
       ${x.student_id ? `<a class="btn ghost" href="#/s/${x.student_id}">Warn / suspend / block student</a>` : ''}${x.teacher_id ? btn('pause_teacher', 'Pause this teacher’s AI', 'ghost', 'style="color:var(--bad)"') : ''}${btn('resolve', 'Close case', 'primary')}`}</div></section>
     <section class="card"><div class="row"><h2>Conversation</h2><span class="muted" style="font-size:12px">Exactly as sent · admins of the safety team only</span></div>${conv || '<p class="muted">No conversation on record.</p>'}</section>
     <section class="card"><h2>Timeline</h2><div class="scroll"><table><thead><tr><th>WHEN</th><th>WHO</th><th>WHAT</th></tr></thead><tbody>${tl}</tbody></table></div></section>`);
@@ -998,7 +1009,8 @@ function bindCase(id) {
     else {
       const D = { note: ['Add a note', 'Note', 'Add note', {}], escalate: ['Escalate to the safety team?', 'Why (optional)', 'Escalate', { required: false }],
         reopen: ['Reopen this case?', 'Why', 'Reopen', {}], stop_class: ['Stop the student’s class now?', 'Note (optional)', 'Stop class', { required: false, hint: 'The current class ends. To keep the student out, suspend them on their page.' }],
-        pause_teacher: ['Pause this teacher’s AI for every student?', 'Why', 'Pause AI', { danger: true, hint: 'All students of this teacher see “Sir is taking a short break”. Turn it back on in Emergency.' }] }[a];
+        pause_teacher: ['Pause this teacher’s AI for every student?', 'Why', 'Pause AI', { danger: true, hint: 'All students of this teacher see “Sir is taking a short break”. Turn it back on in Emergency.' }],
+        notify_parent: ['Send an SMS to the parent?', 'Why (kept in the case, not sent)', 'Send SMS', { required: false, hint: CASE.kind === 'care' ? 'The parent is told gently that their child seemed upset today, with the Tele-MANAS helpline 14416. Never what the child wrote. Not sent if the student is 18+ or has no parent number.' : 'The parent is told that the class was paused for safety reasons. Never what the child wrote.' }] }[a];
       const n = await textDialog(D[0], D[1], D[2], D[3]); if (n === null) return; body.note = n;
     }
     try { await api('POST', `/incidents/${encodeURIComponent(id)}/act`, body); toast('Saved'); $('#app').innerHTML = await caseView(id); bindCase(id); } catch (e) { toast(e.message); }
@@ -1081,6 +1093,8 @@ async function dataView() {
     <section class="card"><div class="row"><div><h2>Daily backups</h2><span class="sub">Taken every day by itself · newest ${d.settings.backup_keep} kept · folder ${esc(d.backup_dir)}</span></div><button class="btn primary" id="bk">Back up now</button></div>
       <div class="scroll">${rows ? `<table><thead><tr><th>FILE</th><th>WHEN</th><th>SIZE</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">No backup yet.</p>'}</div>
       <span class="muted" style="font-size:12px">On a free demo server these files vanish on restart. A real server needs a lasting disk; copying backups to a second place is the next step.</span></section>
+    <section class="card"><div class="row"><div><h2>Restore test</h2><span class="sub">Opens a copy of a backup exactly as a restore would and checks it: the key opens it, nothing is damaged, the main tables and the audit seals are all there. Runs by itself every week; nothing live is changed. How to really restore: docs/backup-restore.md.</span></div><button class="btn ghost" id="rt" ${d.backups.length ? '' : 'disabled'}>Test newest backup</button></div>
+      ${d.last_restore_test ? `<span><b style="color:${d.last_restore_test.ok ? 'var(--ok)' : 'var(--bad)'}">${d.last_restore_test.ok ? 'Passed' : 'FAILED'}</b> · ${when(d.last_restore_test.at)} · ${esc(d.last_restore_test.file)}${d.last_restore_test.ok ? ' · ' + Object.entries(d.last_restore_test.rows || {}).map(([k, v]) => `${v} ${k.replace('_', ' ')}`).join(' · ') : ''}</span>${(d.last_restore_test.problems || []).map((p) => `<span class="err">${esc(p)}</span>`).join('')}` : '<p class="muted">Not tested yet.</p>'}</section>
     <section class="card"><div class="row"><div><h2>Old data clean-up</h2><span class="sub">Conversations after ${d.settings.conversation_months} months · safety records after ${d.settings.safety_months} months · change in Settings → Data keeping</span></div><button class="btn ghost" id="cu">Run clean-up now</button></div>
       ${lc ? `<span>Last run ${when(lc.at)}: ${['answers', 'tests', 'class_sessions', 'safety_events', 'flagged_messages', 'closed_cases'].map((k) => `${lc[k] || 0} ${k.replace('_', ' ')}`).join(' · ')} deleted.</span>` : '<p class="muted">Not run yet.</p>'}</section>
     <section class="card"><h2>Delete-my-data requests</h2><span class="sub">From students in the app (or by telling Sir) and from admins on a parent’s request.</span>
@@ -1089,8 +1103,87 @@ async function dataView() {
 function bindData() {
   const again = async () => { $('#app').innerHTML = await dataView(); bindData(); };
   $('#bk').onclick = async () => { try { await api('POST', '/data/backup'); toast('Backup made'); again(); } catch (e) { toast(e.message); } };
+  $('#rt').onclick = async () => { toast('Testing the backup…'); try { const r = await api('POST', '/data/restore-test', {}); toast(r.result.ok ? 'Restore test passed' : 'Restore test FAILED'); again(); } catch (e) { toast(e.message); } };
   $('#cu').onclick = async () => { if (!(await ask({ title: 'Run the clean-up now?', text: 'Data older than the keeping periods is deleted now. It also runs by itself every day.', ok: 'Run clean-up', danger: true }))) return;
     try { await api('POST', '/data/cleanup'); toast('Clean-up done'); again(); } catch (e) { toast(e.message); } };
+}
+
+// ---------- B9: AI Teacher Safety Center (the 12 modules of the brief in one place) ----------
+const AGE_SHORT = { primary: 'Class 1–5', junior: 'Class 6–8', middle: 'Class 9–10', senior: 'Class 11–12', adult: '18+' };
+const LVL = { strict: 'Strict', medium: 'Medium', relaxed: 'Relaxed', age: 'As per age group' };
+async function centerView() {
+  const d = await api('GET', '/safety-center');
+  const tag = (kind, text) => `<span class="pill" style="color:${{ ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', info: 'var(--muted)' }[kind]}">${text}</span>`;
+  const mod = (n, title, state, lines, href, cap, linkText = 'Open') => `<section class="card"><div class="row"><span class="num">${n}</span>${state}</div><h2>${title}</h2>
+    ${lines.map((l) => `<span class="muted" style="font-size:13px">${l}</span>`).join('')}${href && can(cap) ? `<a href="${href}" style="font-weight:700;margin-top:auto">${linkText} →</a>` : ''}</section>`;
+  const m = d.moderation, st = d.students, pr = d.privacy, rt = pr.restore_test;
+  const prov = { rules: 'Phrase rules only (no AI key on the server yet)', llm: 'AI safety checker + phrase rules', openai: 'OpenAI moderation + phrase rules' }[m.provider] || m.provider;
+  const off = d.emergency.off;
+  return shell('Safety Center', `<div class="row"><div><h1>AI Teacher Safety Center</h1><span class="sub">Every safety control in one place. Live status, last 24 hours where it says so.</span></div>${d.alerts_open && can('dashboard') ? `<a class="btn ghost" href="#/alerts">${icon('bell', 18)}${d.alerts_open} open alert${d.alerts_open > 1 ? 's' : ''}</a>` : ''}</div>
+    <div class="hub">
+    ${mod(1, 'Content safety', tag(d.filters.on === d.filters.total ? 'ok' : 'warn', `${d.filters.on}/${d.filters.total} filters on`), [`${d.filters.locked} child-protection filters are always on.`, d.filters.custom_messages ? `${d.filters.custom_messages} student message(s) changed by you.` : 'Student messages: built-in texts.'], '#/filters', 'settings_view')}
+    ${mod(2, 'Age-based rules', tag('ok', 'On'), [Object.entries(d.age_groups).filter(([g]) => g !== 'primary').map(([g, l]) => `${AGE_SHORT[g]}: ${LVL[l]}`).join(' · '), 'From the class and “18 or older?” given at signup.'], '#/settings', 'settings_view', 'Change in Settings')}
+    ${mod(3, 'Education only', tag('ok', 'Always on'), ['Sir answers only studies; other chat gets a polite “let’s study”.', `${d.education_only.blocked_topics} extra topic(s) blocked for everyone.`], '#/settings', 'settings_view', 'Change in Settings')}
+    ${mod(4, 'Input & output checks', tag(m.provider === 'rules' ? 'bad' : m.failed_24h ? 'warn' : 'ok', m.provider === 'rules' ? 'Needs AI key' : m.failed_24h ? `${m.failed_24h} failed` : 'Working'), [prov + '.', `Every question and every answer is checked. ${m.stopped_24h} stopped in 24 h.`, 'If the check can’t run, nothing unchecked goes out.'], '#/safety-dash', 'dashboard')}
+    ${mod(5, 'Warnings & blocking', tag(st.auto_block ? 'ok' : 'warn', st.auto_block ? 'Auto-block on' : 'Auto-block off'), [`Now: ${st.warning} warned · ${st.suspended} suspended · ${st.review} waiting for a decision.`], '#/safety', 'students')}
+    ${mod(6, 'Safety dashboard', tag('info', 'Numbers & charts'), ['Questions, blocks, stopped answers, cases — by day and by teacher.'], '#/safety-dash', 'dashboard')}
+    ${mod(7, 'Human review center', tag(d.review.high ? 'bad' : d.review.open ? 'warn' : 'ok', d.review.open ? `${d.review.open} open` : 'Nothing open'), [d.review.high ? `${d.review.high} high-priority case(s) — please look now.` : 'Upset students, harmful requests and stopped answers open cases by themselves.'], '#/review', 'evidence')}
+    ${mod(8, 'AI identity protection', tag('ok', 'On'), [`${d.identity.sealed_answers} answers sealed with a reference code (LT-…).`, 'Check a screenshot or recording in Audit.'], '#/audit', 'audit')}
+    ${mod(9, 'Voice, photo & file safety', tag('warn', 'Partly'), ['Voice: spoken questions become text on the phone and get the same checks.', 'Photo / file upload: not in the app yet (Phase C).'], '', '')}
+    ${mod(10, 'Parent & student privacy', tag(pr.encrypted && (!rt || rt.ok) ? 'ok' : 'bad', pr.encrypted ? 'Encrypted' : 'Not encrypted'), [`${pr.consents} parent consent(s) by OTP.`, `Parent SMS: block ${pr.parent_block_sms ? 'on' : 'off'} · upset student ${{ off: 'off', manual: 'a person decides', auto: 'automatic' }[pr.parent_care_sms]}.`, rt ? `Backup restore test ${rt.ok ? 'passed' : 'FAILED'} ${when(rt.at)}.` : 'Backup restore not tested yet.'], can('data_admin') ? '#/data' : '#/filters', can('data_admin') ? 'data_admin' : 'settings_view')}
+    ${mod(11, 'Safety testing lab', tag(d.tests.state === 'ready' ? 'ok' : d.tests.state === 'running' ? 'warn' : 'bad', { ready: 'Ready', running: 'Running', blocked: 'Launch blocked' }[d.tests.state]), [d.tests.why, d.tests.last ? `Last run ${when(d.tests.last.at)}: ${d.tests.last.total - d.tests.last.failed}/${d.tests.last.total} passed.` : ''], '#/tests', 'tests_view')}
+    ${mod(12, 'Emergency switch', tag(off.length ? 'bad' : 'ok', off.length ? `${off.length} switched off` : 'All on'), [off.length ? off.map((o) => esc(o.key)).join(', ') : 'Stop all AI, one teacher’s AI, one model or one feature in one click.'], '#/emergency', 'emergency_view')}
+    </div>`);
+}
+
+// ---------- B9: Content filters, messages students see, parent SMS ----------
+async function filtersView() {
+  const d = await api('GET', '/filters');
+  const edit = can('settings_safety');
+  const dis = (x) => (x || !edit) ? 'disabled' : '';
+  const sel = (name, val, opts, locked) => `<select data-f="${name}" ${dis(locked)} aria-label="${name}">${opts.map(([v, l]) => `<option value="${v}" ${String(val) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const rows = d.catalog.map((c) => { const f = d.filters[c.id], L = c.locked; return `<tr data-cat="${c.id}"><td><b>${esc(c.label)}</b>${L ? '<div class="muted" style="font-size:12px">Child protection · always on, serious, reviewed</div>' : ''}</td>
+    <td>${sel('on', f.on, [[true, 'On'], [false, 'Off']], L)}</td>
+    <td>${sel('level', f.level, [['age', 'As per age group'], ['strict', 'Strict'], ['medium', 'Medium'], ['relaxed', 'Relaxed']], c.id === 'self_harm')}</td>
+    <td>${sel('severity', f.severity, [['auto', 'As the checker decides'], ['minor', 'Small problem'], ['serious', 'Serious']], L)}</td>
+    <td>${sel('review', f.review, [[true, 'Open a case'], [false, 'No']], L)}</td></tr>`; }).join('');
+  const LN = { en: 'English', hi: 'Hindi', 'hi-Latn': 'Hinglish', pa: 'Punjabi' };
+  const msgs = Object.entries(d.messages).map(([k, m]) => `<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px"><b>${esc(m.name)}</b>${m.must.length ? `<span class="h muted" style="font-size:12px">Must keep: ${m.must.map((x) => `<code>${esc(x)}</code>`).join(', ')}</span>` : ''}
+    <div class="grid2">${['hi', 'en', 'hi-Latn', 'pa'].map((l) => `<label class="f">${LN[l]}<textarea data-m="${k}" data-l="${l}" rows="3" ${dis(false)} placeholder="${esc(m.default[l] || m.default.en)}">${esc(m.custom[l] || '')}</textarea></label>`).join('')}</div></div>`).join('');
+  const p = d.parents;
+  return shell('Content filters', `<div class="row"><div><h1>Content filters</h1><span class="sub">What Sir blocks, what the student is told, and when a parent gets an SMS. Changes apply at once and become a new version in Safety policy.</span></div>${edit ? '<button class="btn primary" id="fsave">Save changes</button>' : '<span class="pill">View only</span>'}</div>
+    <span id="ferr" class="err"></span>
+    <section class="card"><div><h2>Filters</h2><span class="sub">Real study questions (biology, reproduction, health, history, science) are never blocked — in every setting. <b>Off</b> only stops checking students’ messages for that kind; Sir’s own answers are always checked for everything.</span></div>
+      <div class="scroll"><table class="fl"><thead><tr><th>FILTER</th><th>ON</th><th>STRICTNESS</th><th>COUNTS AS</th><th>HUMAN REVIEW</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <span class="muted" style="font-size:12px">Counts as: how a hit moves the student on the warnings ladder (Settings → Student safety). Strictness “as per age group” uses Settings → Age groups.</span></section>
+    <section class="card"><div><h2>Messages students see</h2><span class="sub">Leave a box empty to use the built-in text (shown in grey). Hindi and English are used most.</span></div>${msgs}</section>
+    <section class="card"><div><h2>SMS to parents</h2><span class="sub">To the parent who gave consent by OTP. Never contains what the child wrote. Not sent for students 18 or older, and at most once a day per kind.</span></div>
+      ${d.sms_ready ? '' : '<span class="err">The server has no SMS provider yet: messages are only written to the server log (like login codes on the demo).</span>'}
+      <div class="grid2"><label class="f">When a student is suspended, stopped for review or disabled<select data-p="notify_block" ${dis(false)}><option value="true" ${p.notify_block ? 'selected' : ''}>Send SMS (recommended)</option><option value="false" ${p.notify_block ? '' : 'selected'}>Don’t send</option></select></label>
+      <label class="f">When a student seems upset (care case)<select data-p="notify_care" ${dis(false)}>${[['manual', 'A person decides in the case (recommended)'], ['auto', 'Send automatically'], ['off', 'Never']].map(([v, l]) => `<option value="${v}" ${p.notify_care === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="h">Sometimes the trouble is at home, so by default someone looks first and presses “Inform parent by SMS” in the case.</span></label>
+      <label class="f">SMS language<select data-p="language" ${dis(false)}><option value="hi" ${p.language === 'hi' ? 'selected' : ''}>Hindi</option><option value="en" ${p.language === 'en' ? 'selected' : ''}>English</option></select></label></div></section>`);
+}
+function bindFilters() {
+  if (!$('#fsave')) return;
+  const read = () => {
+    const filters = {}, messages = {}, parents = {};
+    document.querySelectorAll('tr[data-cat]').forEach((tr) => { const o = {}; tr.querySelectorAll('[data-f]').forEach((el) => { o[el.dataset.f] = ['on', 'review'].includes(el.dataset.f) ? el.value === 'true' : el.value; }); filters[tr.dataset.cat] = o; });
+    document.querySelectorAll('[data-m]').forEach((el) => { (messages[el.dataset.m] = messages[el.dataset.m] || {})[el.dataset.l] = el.value.trim(); });
+    document.querySelectorAll('[data-p]').forEach((el) => { parents[el.dataset.p] = el.dataset.p === 'notify_block' ? el.value === 'true' : el.value; });
+    return { filters, messages, parents };
+  };
+  let saved = JSON.stringify(read());
+  GUARD = () => (document.body.contains($('#fsave')) && JSON.stringify(read()) !== saved) ? 'Your filter changes are not saved yet.' : null;
+  $('#fsave').onclick = async () => {
+    const now = read();
+    if (JSON.stringify(now) === saved) return toast('Nothing changed');
+    const offs = Object.entries(now.filters).filter(([, f]) => !f.on).map(([c]) => c);
+    const note = await textDialog('Why are the safety rules changing?', 'Reason (kept in the policy history)', 'Save new version',
+      { required: false, danger: offs.length > 0, hint: (offs.length ? `${offs.length} filter(s) will be OFF for students’ messages. ` : '') + 'This saves a new version of the safety policy and runs the safety tests again.' });
+    if (note === null) return;
+    try { await api('PUT', '/settings', { ...now, _note: note }); saved = JSON.stringify(read()); $('#ferr').textContent = ''; toast('Saved — new safety policy version'); }
+    catch (e) { $('#ferr').textContent = e.message; }
+  };
 }
 
 // ---------- Safety policy versions (B8) ----------
@@ -1186,6 +1279,8 @@ async function render() {
     if (can('dashboard')) { try { const a = await api('GET', '/alerts'); ALERTS = { open: a.open, critical: a.critical }; } catch {} }
     if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
     else if (h === '#/policy') { app.innerHTML = await policyView(); bindPolicy(); }
+    else if (h === '#/center') { app.innerHTML = await centerView(); }
+    else if (h === '#/filters') { app.innerHTML = await filtersView(); bindFilters(); }
     else if (h === '#/alerts') { app.innerHTML = await alertsView(); bindAlerts(); }
     else if (h === '#/data') { app.innerHTML = await dataView(); bindData(); }
     else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }

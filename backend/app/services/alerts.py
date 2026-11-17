@@ -12,6 +12,7 @@ Alerts (level):
   pending         a high-priority case has waited longer than N hours           high
   spike           many more blocked questions / stopped AI answers than usual   high
   tests_failed    the safety tests failed                                  high
+  backup_bad      the weekly restore test of the newest backup failed (B9)  high
 The same alert is not repeated within an hour (dedup key).
 """
 import json

@@ -2,7 +2,8 @@
 versions can be compared, and an earlier version — ideally one the safety tests verified — can be brought back.
 
 The safety policy = these admin settings: topics Sir must not answer and trusted sites (ai), the warnings ladder
-(safety), rate limits (limits), age-group rules (age_groups) and the lowest class (students).
+(safety), rate limits (limits), age-group rules (age_groups) and the lowest class (students); since B9 also the
+content filters, the messages students see and parent SMS settings (filters, messages, parents) once changed.
 A version is "verified" when a live safety-test run (A8) passed while it was the current version.
 Rolling back writes the old rules as a new version ("Rolled back to v3"), so the history is never rewritten.
 """
@@ -25,11 +26,39 @@ LABELS = {
     "limits.otp_per_ip_hour": "Codes per internet address per hour",
     "limits.otp_wrong_per_phone_day": "Wrong codes before a number is locked", "students.min_class": "Lowest class allowed",
 }
+MESSAGE_NAMES = {
+    "safety_refusal": "Harmful request refused", "redirect_study": "Blocked topic / off-topic", "safety_replaced": "AI answer stopped",
+    "safety_warning": "Warning", "safety_suspended": "Suspended", "safety_review": "Stopped for review",
+    "safety_disabled": "Account disabled", "care_message": "Upset student (helpline)",
+}
 GROUP_NAMES = {"primary": "Class 1–5", "junior": "Class 6–8", "middle": "Class 9–10", "senior": "Class 11–12", "adult": "18+"}
 
 
+# B9 sections: only part of a version once changed from the defaults (older versions keep their fingerprint)
+OPTIONAL_SECTIONS = ("filters", "messages", "parents")
+
+
+def _defaults() -> dict:
+    from .admin import DEFAULT_SETTINGS
+    return DEFAULT_SETTINGS
+
+
 def snapshot(settings: dict) -> dict:
-    return {s: settings.get(s) for s in POLICY_SECTIONS}
+    snap = {s: settings.get(s) for s in POLICY_SECTIONS}
+    d = _defaults()
+    for s in OPTIONAL_SECTIONS:
+        if settings.get(s) is not None and settings.get(s) != d[s]:
+            snap[s] = settings.get(s)
+    return snap
+
+
+def rules_to_restore(snap: dict) -> dict:
+    """An old version's rules as settings to save: B9 sections it doesn't have go back to their defaults."""
+    import copy
+    out = copy.deepcopy(snap)
+    for s in OPTIONAL_SECTIONS:
+        out.setdefault(s, copy.deepcopy(_defaults()[s]))
+    return out
 
 
 def fingerprint(snap: dict) -> str:
@@ -51,6 +80,15 @@ def label(key: str) -> str:
     if key in LABELS:
         return LABELS[key]
     parts = key.split(".")
+    if parts[0] == "filters" and len(parts) == 3:
+        from .content_filters import FILTERS
+        what = {"on": "on/off", "level": "strictness", "severity": "counts as", "review": "human review"}.get(parts[2], parts[2])
+        return f"Filter “{FILTERS.get(parts[1], parts[1])}”: {what}"
+    if parts[0] == "messages" and len(parts) == 3:
+        return f"Message “{MESSAGE_NAMES.get(parts[1], parts[1])}” ({parts[2]})"
+    if parts[0] == "parents" and len(parts) == 2:
+        return {"notify_block": "SMS to parent when a student is blocked", "notify_care": "SMS to parent when a student seems upset",
+                "language": "Parent SMS language"}.get(parts[1], key)
     if parts[0] == "age_groups" and len(parts) == 3:
         what = {"strictness": "strictness", "blocked_topics": "extra topics Sir must not answer"}.get(parts[2], parts[2])
         return f"{GROUP_NAMES.get(parts[1], parts[1])}: {what}"
