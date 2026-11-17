@@ -190,7 +190,11 @@ class Tutor:
         from .consent import class_for_prompt   # B1: explain at the student's class level
         if cls and cls["class_level"]:
             rules += "\n" + class_for_prompt(cls["class_level"])
-        system = _system_prompt(teacher, lang.english_name, rules, _scope_rules(teacher, self.blocked_topics()))
+        from . import age_policy   # B2: rules for this student's age group
+        policy = age_policy.for_student(self.db, student_id, admin_mod.get_settings(self.db))
+        if policy:
+            rules += "\n" + age_policy.TEACH[policy["strictness"]]
+        system = _system_prompt(teacher, lang.english_name, rules, _scope_rules(teacher, self.blocked_topics() + (policy["blocked_topics"] if policy else [])))
         recent = list(reversed(self.db.all("SELECT question, answer, follow_up FROM qa_history WHERE student_id = ? "
                                            "ORDER BY id DESC LIMIT 3", (student_id,))))
         context = _history_block(recent)

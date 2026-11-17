@@ -64,7 +64,7 @@ def fingerprint(settings, admin_settings: dict, provider: str, switch_db: Databa
     off = sorted(r["key"] for r in switch_db.all("SELECT key FROM kill_switches WHERE off = 1 AND key LIKE 'model:%'")) \
         if switch_db else []
     parts = [provider, settings.llm_model, settings.llm_small_model, settings.llm_backup_model, ",".join(off),
-             moderation.POLICY_VERSION, json.dumps({k: admin_settings.get(k) for k in ("ai", "safety")}, sort_keys=True),
+             moderation.POLICY_VERSION, json.dumps({k: admin_settings.get(k) for k in ("ai", "safety", "age_groups")}, sort_keys=True),
              moderation.CLASSIFIER, json.dumps(moderation.RULES, sort_keys=True), json.dumps(moderation.OPENAI_MAP),
              inspect.getsource(tutor_mod._scope_rules), inspect.getsource(tutor_mod._system_prompt),
              json.dumps(load_cases()["version"])]

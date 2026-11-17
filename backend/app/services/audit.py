@@ -33,7 +33,7 @@ def _mac(secret: str, text: str) -> str:
 def policy_version(db: Database, base: str, admin_settings: dict) -> str:
     """The base policy name + a short fingerprint of the admin's AI and safety settings at this moment.
     Every distinct set of rules is kept, so a verification can show exactly which rules applied."""
-    rules = {k: admin_settings.get(k) for k in ("ai", "safety", "limits")}
+    rules = {k: admin_settings.get(k) for k in ("ai", "safety", "limits", "age_groups")}
     blob = json.dumps(rules, sort_keys=True, ensure_ascii=False)
     version = f"{base}+{hashlib.sha256(blob.encode()).hexdigest()[:8]}"
     db.execute("INSERT OR IGNORE INTO policy_snapshots (version, rules, first_seen) VALUES (?, ?, ?)",

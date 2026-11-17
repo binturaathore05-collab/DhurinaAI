@@ -302,6 +302,8 @@ abstract class Api {
   bool get isDemo;
   Future<List<Plan>> plans();
   Future<void> sendOtp(String phone);
+  /// Wakes the server up while the student types the number (a sleeping server takes up to a minute).
+  Future<void> warmUp();
   Future<Access> verifyOtp(String phone, String code);
   Future<bool> hasSession();
   Future<Access> access();
@@ -406,6 +408,13 @@ class HttpApi implements Api {
 
   @override
   Future<Access> access() async => Access.fromJson(await _call('GET', '/me/access') as Map<String, dynamic>);
+
+  @override
+  Future<void> warmUp() async {
+    try {
+      await http.get(Uri.parse('$base/health')).timeout(const Duration(seconds: 90));
+    } catch (_) {} // only a wake-up call; errors don't matter
+  }
 
   @override
   Future<Access> setProfile(String classLevel, bool isAdult) async => Access.fromJson(
@@ -593,6 +602,9 @@ class DemoApi implements Api {
 
   @override
   Future<void> sendParentOtp(String phone) async => Future.delayed(const Duration(milliseconds: 400));
+
+  @override
+  Future<void> warmUp() async {}
 
   @override
   Future<Access> verifyParentOtp(String phone, String code) async {

@@ -531,6 +531,11 @@ async function settingsView() {
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
       ${f('limits', 'otp_wrong_per_phone_day', 'Wrong codes before a number is locked for the day', s.limits.otp_wrong_per_phone_day, 'number')}</div>`)}
     ${card('Students', 'Who can sign up', `<div class="grid2">${f('students', 'min_class', 'Lowest class allowed', s.students.min_class, 'number', 'Owner’s choice: class 6. Students under 18 always need a parent’s OK by OTP.')}</div>`)}
+    ${card('Age groups', 'Rules by age, from the class and “18 or older?” given at signup. Used by Sir’s answers and the safety check. A real syllabus question is answered in every group.', `<div style="display:flex;flex-direction:column;gap:14px">${[
+        ['primary', 'Class 1–5', 'about 6–10 years (only if the lowest class is below 6)'], ['junior', 'Class 6–8', 'about 11–13 years'], ['middle', 'Class 9–10', 'about 14–15 years'],
+        ['senior', 'Class 11–12, under 18', 'about 16–17 years'], ['adult', '18 or older', 'college / competitive exams']].map(([g, name, sub]) => `<div class="grid2" style="align-items:start;border-top:1px solid var(--border);padding-top:12px">
+        <label class="f"><span><b>${name}</b> <span class="muted" style="font-weight:400">· ${sub}</span></span><select data-sec="age_groups" name="${g}.strictness">${['strict', 'medium', 'relaxed'].map((l) => `<option value="${l}" ${s.age_groups[g].strictness === l ? 'selected' : ''}>${{ strict: 'Strict — child-safe, simple', medium: 'Medium — normal school level', relaxed: 'Relaxed — adult learners' }[l]}</option>`).join('')}</select></label>
+        <label class="f">Extra topics Sir must not answer<textarea data-sec="age_groups" name="${g}.blocked_topics" rows="2">${esc(s.age_groups[g].blocked_topics.join('\n'))}</textarea><span class="h">One per line · added to the topics above for everyone</span></label></div>`).join('')}</div>`)}
     ${card('Student safety (warnings &amp; auto-block)', 'Off-topic chat never counts. A blocked topic is a small problem; a clearly harmful request (sexual, weapons, crime, breaking the rules, threats) is serious.', `<div class="grid2">
       <label class="f">Auto-block<select data-sec="safety" name="auto_block"><option value="true" ${s.safety.auto_block ? 'selected' : ''}>On (recommended)</option><option value="false" ${s.safety.auto_block ? '' : 'selected'}>Off — only record problems</option></select><span class="h">On: the system warns and suspends by itself. Off: admins decide.</span></label>
       ${f('safety', 'suspend_hours', 'Suspension length (hours)', s.safety.suspend_hours, 'number', 'Notes and library stay open while suspended')}
@@ -567,7 +572,9 @@ function bindSettings() {
       let v = el.value;
       if (el.tagName === 'TEXTAREA') v = v.split('\n').map((x) => x.trim()).filter(Boolean);
       else if (el.type === 'number') v = Number(v);
-      out[el.dataset.sec][el.name] = v;
+      const [k, sub] = el.name.split('.');   // "junior.strictness" → age_groups.junior.strictness
+      if (sub) { out[el.dataset.sec][k] = out[el.dataset.sec][k] || {}; out[el.dataset.sec][k][sub] = v; }
+      else out[el.dataset.sec][el.name] = v;
     });
     try { await api('PUT', '/settings', out); saved = read(); toast('Settings saved'); $('#serr').textContent = ''; } catch (e) { $('#serr').textContent = e.message; }
   };
