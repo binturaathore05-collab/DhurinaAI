@@ -1,5 +1,18 @@
 # Product decisions (from planning with Dhurina Ventures)
 
+## Rules for everything we build (owner, 17 Nov 2026)
+1. **Simple first.** Easy for students, teachers and admin: one clear main action per screen, no settings a
+   student has to understand, nothing that needs a manual. A new feature that makes a screen harder must be cut down.
+2. **Security tight.** Every check happens on the server, never only in the app; no secrets in the app; plan S3
+   in `safety-requirements.md` is done before launch.
+3. **Low AI cost, never at the cost of features.** It must feel like a real video call with a real teacher, so
+   Sir's own replies (even "hi") always come from the AI. Savings only where the student can't notice: commands
+   ("save", "test") need no AI; unchanged notes reuse the PDF; search keywords are remembered; MCQ is checked
+   without AI; an optional cheaper model (`LLM_SMALL_MODEL`) for helper jobs only; limits per student (A6).
+4. **Everything can be done on the call.** Whatever a button does, the student can also just say to Sir in any
+   language: "Sir, notes de do", "Sir, MCQ test lo", "viva le lo", … (voice arrives with Phase 5; the same
+   sentences already work typed). Buttons stay as a shortcut, not the only way.
+
 - **Brand:** LiveTeach. Each teacher gets a white-label app published on the teacher's own Play Console.
 - **Final UI:** "Video Call" design, 6 screens: Login → OTP → Live Class → My Library → Pay Now → Payment Successful.
 - **Languages:** app screens stay in English, with no language picker. The teacher automatically answers in
@@ -35,6 +48,25 @@ explain, talking with students, avatar settings) is configured per teacher.
 - **Teacher never sees Dhurina's share** (17 Nov 2026): in the teacher dashboard and teacher reports only the
   total paid, the teacher's own % and the teacher's own earnings appear — no Dhurina % or amount anywhere.
   The admin panel keeps the full split. Reports show "Period: <from> to <to>" in Indian time.
+
+## Class notes, test series, sharing (owner, 17 Nov 2026)
+- **Notes = the whole class, topic-wise.** A class runs from the first question until "End class" (or 30 minutes
+  with no question). "Save" or "Sir, save this" makes ONE PDF for the whole class: greetings, thanks, small talk and
+  off-topic replies are left out; the AI arranges the rest under one heading per topic, using only what Sir said.
+  The student can untick topics ("Choose topics"). Saving again in the same class updates that PDF, not a new one.
+  If the AI is down, the PDF is still made from Sir's answers as they were.
+- **Test series.** Sir gives a test on what he taught: at "End class" ("Quick test before you go?") or any time
+  the student asks ("Sir, test lo" in any language, or the test button). The student picks **MCQ** (4 options,
+  checked instantly), **Written** (short answers, AI checks the key points, half marks possible) or **Oral / viva**
+  (Sir asks one by one; typed for now, spoken with the voice update). Questions come only from that class. After
+  each answer: right / wrong, why, and the right answer. At the end: **below 50% → "Shall I teach it again?"
+  Yes / No** (Yes = Sir re-teaches the weak topics right away); **80%+ → shabash**; in between → "good, revise
+  these". Defaults (10 questions, 50%, 80%) live in Admin Settings → `tests`. A test counts as one question of
+  the plan / demo. Correct answers never reach the app before the student answers.
+- **Share.** A share button in the class (share the app), on every saved note (sends the PDF) and on the test
+  result (score). Every share carries one link: `<PUBLIC_BASE_URL>/t/<teacher id>` — a small page with the
+  teacher's photo and a "Get the app on Google Play" button. Admin enters the teacher's Play Store link (only real
+  play.google.com links or a package id are accepted); until then the page says "coming soon".
 
 ## Ask before risky actions (everywhere: app, teacher panel, admin panel)
 Nothing that is hard to undo happens on one tap. A popup asks first; **Cancel** is the default

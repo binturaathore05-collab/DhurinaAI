@@ -110,7 +110,7 @@ Student message (text now; voice → text later; photo → text + image check la
 ### Phase A — before launch (build first)
 | # | Item | Why first |
 |---|---|---|
-| A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) | Small, removes a false sense of safety |
+| A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) — **built 17 Nov 2026** (see note below) | Small, removes a false sense of safety |
 | A2 | Input & output moderation with fail-safe (section 6, 16) | Core protection |
 | A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) | Stop misuse |
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) | Emergency control |
@@ -118,6 +118,15 @@ Student message (text now; voice → text later; photo → text + image check la
 | A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) | Abuse + cost |
 | A7 | "AI Teacher" badge on the call screen and in notes PDFs (12) | Honest disclosure |
 | A8 | Safety test set (~150 cases in Hindi, Hinglish, English, Punjabi), run automatically on every code / prompt / model change; launch blocked if it fails (15) | Proof it works |
+
+**A1 as built:** every AI reply now carries a `scope` (study / off_topic / blocked). The admin's blocked
+topics and the education-only rule are in the AI's instructions on every question (admin changes apply at once,
+no restart). If the scope is not "study", the model's text is thrown away and never stored; the student gets a
+fixed, polite "let's study" message in their language (English / Hindi / Hinglish / Punjabi, else English). The
+redirect is logged in `qa_history` (`origin = redirect`, `scope`, `blocked_topic`), is not sent to teacher review,
+and cannot be saved as notes. An unknown scope value counts as off-topic (fail closed). Neutral syllabus facts
+that only touch a blocked word (e.g. the Constitution under "politics") are allowed with facts only, no opinions —
+**owner to confirm**. Limit: this still relies on the AI's own judgement; A2 adds an independent check.
 
 ### Phase B — also before launch
 | # | Item |

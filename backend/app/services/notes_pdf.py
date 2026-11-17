@@ -42,6 +42,40 @@ def build_note_html(teacher_name: str, question: str, answer: str, sources: list
 </body></html>"""
 
 
+def build_class_notes_html(teacher_name: str, title: str, sections: list[dict], language: str, date_text: str) -> str:
+    """Whole-class notes: one heading per topic with short points."""
+    lang = get_language(language)
+    font = SCRIPT_FONTS.get(lang.script, "Noto Sans")
+    esc = html.escape
+    body = []
+    for s in sections:
+        body.append(f"<h2>{esc(s['heading'])}</h2><ul>" + "".join(f"<li>{esc(p)}</li>" for p in s["points"]) + "</ul>")
+        if s.get("summary"):
+            body.append(f"<p class=\"sum\">{esc(s['summary'])}</p>")
+    return f"""<!doctype html>
+<html lang="{esc(lang.code)}" dir="{'rtl' if lang.rtl else 'ltr'}">
+<head><meta charset="utf-8"><title>{esc(title)}</title>
+<style>
+  @page {{ size: A4; margin: 22mm 18mm; }}
+  body {{ font-family: '{font}', 'Noto Sans', sans-serif; color: #111827; font-size: 13pt; line-height: 1.6; }}
+  .brand {{ color: #0F766E; font-weight: 700; font-size: 11pt; letter-spacing: .04em; }}
+  h1 {{ font-size: 21pt; margin: 6px 0 4px; line-height: 1.3; }}
+  .date {{ color: #6B7280; font-size: 10.5pt; margin-bottom: 10px; }}
+  h2 {{ font-size: 15pt; margin: 20px 0 6px; color: #0F766E; border-bottom: 1px solid #E5E7EB; padding-bottom: 3px; }}
+  ul {{ margin: 0 0 6px; padding-inline-start: 22px; }}
+  li {{ margin: 3px 0; }}
+  .sum {{ background: #F0FDFA; border-radius: 6px; padding: 6px 10px; font-size: 12pt; }}
+  footer {{ margin-top: 28px; border-top: 1px solid #E5E7EB; padding-top: 8px; font-size: 9.5pt; color: #6B7280; }}
+</style></head>
+<body>
+  <div class="brand">{esc(teacher_name)} · {esc(t('notes_title', lang.code))}</div>
+  <h1>{esc(title)}</h1>
+  <div class="date">{esc(date_text)}</div>
+  {''.join(body)}
+  <footer>{esc(t('notes_footer', lang.code, teacher=teacher_name))} · {esc(date_text)}</footer>
+</body></html>"""
+
+
 def render_pdf(html_text: str, out_path: str, chromium_path: str | None = None) -> str:
     from playwright.sync_api import sync_playwright  # imported lazily: only the notes worker needs it
 
@@ -58,11 +92,12 @@ def render_pdf(html_text: str, out_path: str, chromium_path: str | None = None) 
 def save_note(db: Database, student_id: int, qa_id: int, teacher_name: str, notes_dir: str,
               renderer=None) -> dict:
     """Save one answer from the student's history as a PDF in their library. Saving twice is harmless."""
-    existing = db.one("SELECT * FROM saved_notes WHERE student_id = ? AND qa_id = ?", (student_id, qa_id))
+    existing = db.one("SELECT * FROM saved_notes WHERE student_id = ? AND qa_id = ? AND kind = 'answer'",
+                      (student_id, qa_id))
     if existing:
         return dict(existing)
     qa = db.one("SELECT * FROM qa_history WHERE id = ? AND student_id = ?", (qa_id, student_id))
-    if qa is None:
+    if qa is None or qa["origin"] == "redirect":   # a "let's study" redirect is not a note
         raise KeyError(qa_id)
     html_text = build_note_html(teacher_name, qa["question"], qa["answer"], json.loads(qa["sources"] or "[]"),
                                 qa["language"], qa["created_at"][:10])
@@ -83,9 +118,14 @@ def list_notes(db: Database, student_id: int, offset: int = 0, limit: int = 20, 
     limit = max(1, min(limit, 100))
     where, args = "student_id = ? AND title LIKE ?", (student_id, _like(q))
     total = db.one(f"SELECT COUNT(*) AS n FROM saved_notes WHERE {where}", args)["n"]
-    rows = db.all(f"SELECT id, qa_id, title, created_at FROM saved_notes WHERE {where} "
-                  "ORDER BY id DESC LIMIT ? OFFSET ?", (*args, limit, max(offset, 0)))
-    return {"items": [dict(r) for r in rows], "total": total}
+    rows = db.all(f"SELECT id, qa_id, title, created_at, kind, topics FROM saved_notes WHERE {where} "
+                  "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", (*args, limit, max(offset, 0)))
+    items = []
+    for r in rows:
+        item = dict(r)
+        item["topics"] = json.loads(item["topics"] or "[]")
+        items.append(item)
+    return {"items": items, "total": total}
 
 
 def list_history(db: Database, student_id: int, offset: int = 0, limit: int = 30, q: str | None = None) -> dict:
@@ -94,8 +134,10 @@ def list_history(db: Database, student_id: int, offset: int = 0, limit: int = 30
     where = "q.student_id = ? AND (q.question LIKE ? OR q.answer LIKE ?)"
     args = (student_id, _like(q), _like(q))
     total = db.one(f"SELECT COUNT(*) AS n FROM qa_history q WHERE {where}", args)["n"]
-    rows = db.all(f"SELECT q.*, (n.id IS NOT NULL) AS pdf_saved FROM qa_history q "
-                  f"LEFT JOIN saved_notes n ON n.qa_id = q.id AND n.student_id = q.student_id "
+    # saved on its own, or inside the notes of its class (class notes leave out redirects and small talk)
+    rows = db.all(f"SELECT q.*, EXISTS (SELECT 1 FROM saved_notes n WHERE n.student_id = q.student_id AND "
+                  f"((n.kind = 'answer' AND n.qa_id = q.id) OR (n.kind = 'class' AND n.session_id = q.session_id "
+                  f"AND q.origin != 'redirect' AND COALESCE(q.notes_worthy, 1) = 1))) AS pdf_saved FROM qa_history q "
                   f"WHERE {where} ORDER BY q.id DESC LIMIT ? OFFSET ?", (*args, limit, max(offset, 0)))
     items = []
     for r in rows:

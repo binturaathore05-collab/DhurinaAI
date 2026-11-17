@@ -12,6 +12,8 @@ class TeacherConfig {
   final String subject;
   final String avatar;
   final Color accent;
+  /// The link that goes with everything a student shares (teacher page → Play Store). Empty = ask the server.
+  final String shareUrl;
 
   const TeacherConfig({
     required this.teacherId,
@@ -20,6 +22,7 @@ class TeacherConfig {
     required this.subject,
     required this.avatar,
     required this.accent,
+    this.shareUrl = '',
   });
 
   static Future<TeacherConfig> load() async {
@@ -32,6 +35,7 @@ class TeacherConfig {
       subject: (j['subject'] ?? '') as String,
       avatar: j['avatar'] as String,
       accent: _hex(j['accent'] as String? ?? '#2DD4BF'),
+      shareUrl: (j['shareUrl'] ?? '') as String,
     );
   }
 

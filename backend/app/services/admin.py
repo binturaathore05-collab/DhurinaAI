@@ -22,6 +22,8 @@ DEFAULT_SETTINGS = {
     "ai": {"trusted_sites": ["pib.gov.in", "india.gov.in", "ncert.nic.in"],
            "blocked_topics": ["politics", "adult content"]},
     "legal": {"privacy_url": "", "terms_url": ""},
+    # Test series: questions per test; below reteach_below % Sir offers to teach again; from praise_from % shabash
+    "tests": {"questions": 10, "reteach_below": 50, "praise_from": 80},
 }
 
 _ID = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
@@ -57,6 +59,14 @@ def save_settings(db: Database, data: dict) -> dict:
 
 
 # ---------- teachers ----------
+
+def _play_store(value) -> str:
+    from .share import clean_play_store_url
+    try:
+        return clean_play_store_url(value)
+    except ValueError as exc:
+        raise AdminError(str(exc))
+
 
 def _rupees_to_paise(v) -> int:
     try:
@@ -108,6 +118,7 @@ def save_teacher(db: Database, data: dict, creating: bool) -> dict:
         "razorpay_webhook_secret": keep("razorpay_webhook_secret", data.get("razorpay_webhook_secret")),
         "teacher_phone": data.get("teacher_phone") or "",
         "teacher_email": data.get("teacher_email") or "",
+        "play_store_url": _play_store(data.get("play_store_url")),
     }
     for k in ("demo_questions", "grace_days", "grace_questions"):
         if values[k] in ("", None):
@@ -241,6 +252,7 @@ def teacher_detail(db: Database, tid: str, default_percent: float = 20) -> dict:
         "razorpay_key_id": t["razorpay_key_id"], "razorpay_key_secret": mask(t["razorpay_key_secret"]),
         "razorpay_webhook_secret": mask(t["razorpay_webhook_secret"]),
         "teacher_phone": t["teacher_phone"], "teacher_email": t["teacher_email"],
+        "play_store_url": t["play_store_url"] or "",
         "checklist": [{"key": k, "label": label, "done": bool(state.get(k))} for k, label in CHECKLIST],
         **_counts(db, tid, now),
         "this_month": _money(db, tid, _month_start(now), pct_eff),

@@ -43,6 +43,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "{teacher} की क्लास से सेव किया गया · LiveTeach",
         "pa": "{teacher} ਦੀ ਕਲਾਸ ਤੋਂ ਸੇਵ ਕੀਤਾ ਗਿਆ · LiveTeach",
     },
+    "redirect_study": {
+        "en": "Let's keep our class about studies. Ask me anything from your syllabus — I'm here to help!",
+        "hi": "चलो, अपनी क्लास पढ़ाई पर ही रखते हैं। अपने सिलेबस से कुछ भी पूछो — मैं मदद के लिए हूँ!",
+        "hi-Latn": "Chalo, apni class padhai par hi rakhte hain. Apne syllabus se kuch bhi poochho — main madad ke liye hoon!",
+        "pa": "ਚਲੋ, ਆਪਣੀ ਕਲਾਸ ਪੜ੍ਹਾਈ 'ਤੇ ਹੀ ਰੱਖਦੇ ਹਾਂ। ਆਪਣੇ ਸਿਲੇਬਸ ਤੋਂ ਕੁਝ ਵੀ ਪੁੱਛੋ — ਮੈਂ ਮਦਦ ਲਈ ਹਾਂ!",
+    },
+    "test_praise": {
+        "en": "Shabash! {score} correct ({pct}%). Excellent work — keep it up!",
+        "hi": "शाबाश! {score} सही ({pct}%)। बहुत बढ़िया — ऐसे ही मेहनत करते रहो!",
+        "hi-Latn": "Shabash! {score} sahi ({pct}%). Bahut badhiya — aise hi mehnat karte raho!",
+        "pa": "ਸ਼ਾਬਾਸ਼! {score} ਸਹੀ ({pct}%)। ਬਹੁਤ ਵਧੀਆ — ਇਸੇ ਤਰ੍ਹਾਂ ਮਿਹਨਤ ਕਰਦੇ ਰਹੋ!",
+    },
+    "test_good": {
+        "en": "Good, {score} correct ({pct}%). Revise these once more: {topics}. We'll continue from here tomorrow.",
+        "hi": "अच्छा, {score} सही ({pct}%)। इन्हें एक बार और दोहरा लेना: {topics}। कल यहीं से आगे बढ़ेंगे।",
+        "hi-Latn": "Achha, {score} sahi ({pct}%). Inhe ek baar aur dohra lena: {topics}. Kal yahin se aage badhenge.",
+        "pa": "ਵਧੀਆ, {score} ਸਹੀ ({pct}%)। ਇਹਨਾਂ ਨੂੰ ਇੱਕ ਵਾਰ ਹੋਰ ਦੁਹਰਾ ਲੈਣਾ: {topics}। ਕੱਲ੍ਹ ਇੱਥੋਂ ਹੀ ਅੱਗੇ ਵਧਾਂਗੇ।",
+    },
+    "test_reteach_offer": {
+        "en": "{score} correct ({pct}%). Most answers were wrong — no problem. Shall I teach {topics} again now?",
+        "hi": "{score} सही ({pct}%)। ज़्यादातर जवाब गलत रहे — कोई बात नहीं। क्या मैं {topics} आज दोबारा पढ़ाऊँ?",
+        "hi-Latn": "{score} sahi ({pct}%). Zyadatar jawab galat rahe — koi baat nahi. Kya main {topics} aaj dobara padhaun?",
+        "pa": "{score} ਸਹੀ ({pct}%)। ਜ਼ਿਆਦਾਤਰ ਜਵਾਬ ਗ਼ਲਤ ਰਹੇ — ਕੋਈ ਗੱਲ ਨਹੀਂ। ਕੀ ਮੈਂ {topics} ਅੱਜ ਦੁਬਾਰਾ ਪੜ੍ਹਾਵਾਂ?",
+    },
+    "reteach_request": {
+        "en": "Sir, please teach me again, simply and step by step: {topics}",
+        "hi": "सर, कृपया ये दोबारा आसान तरीके से, एक-एक स्टेप में समझाइए: {topics}",
+        "hi-Latn": "Sir, please ye dobara aasan tareeke se, ek-ek step mein samjhaiye: {topics}",
+        "pa": "ਸਰ, ਕਿਰਪਾ ਕਰਕੇ ਇਹ ਦੁਬਾਰਾ ਸੌਖੇ ਤਰੀਕੇ ਨਾਲ, ਇੱਕ-ਇੱਕ ਕਦਮ ਸਮਝਾਓ: {topics}",
+    },
     "source_teacher_notes": {"en": "Sir’s notes", "hi": "सर के नोट्स", "pa": "ਸਰ ਦੇ ਨੋਟਸ"},
     "source_general_ai": {
         "en": "General AI · awaiting teacher review",

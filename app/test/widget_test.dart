@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liveteach/api.dart';
 import 'package:liveteach/config.dart';
 import 'package:liveteach/main.dart';
+import 'package:liveteach/screens/live_screen.dart';
 import 'package:liveteach/theme.dart';
 
 void main() {
@@ -65,5 +66,64 @@ void main() {
     await tester.tap(find.text('End class'));
     await tester.pumpAndSettle();
     expect(results, [false, true]);
+  });
+
+  test('demo api: whole-class notes update in place, topics can be chosen', () async {
+    final api = DemoApi(cfg);
+    await api.verifyOtp('9876543210', '123456');
+    await expectLater(api.saveClassNotes(), throwsA(isA<ApiException>())); // nothing studied yet
+    await api.ask('Haldighati');
+    await api.ask('Chetak');
+    final n1 = await api.saveClassNotes();
+    expect(n1.kind, 'class');
+    expect(n1.topics, ['Haldighati', 'Chetak']);
+    final n2 = await api.saveClassNotes(topics: ['Chetak']);
+    expect(n2.topics, ['Chetak']);
+    expect((await api.library()).notes.where((n) => n.kind == 'class').length, 1);
+    expect((await api.currentClass()).topics.length, 2);
+  });
+
+  test('demo api: MCQ test, score, and Sir offers to teach again on a low score', () async {
+    final api = DemoApi(cfg);
+    await api.verifyOtp('9876543210', '123456');
+    await expectLater(api.startTest('mcq'), throwsA(isA<ApiException>()));
+    await api.ask('Haldighati');
+    final ended = await api.endClass();
+    expect(ended.canTest, true);
+    var t = await api.startTest('mcq'); // uses the class that just ended
+    expect(t.question!.options.length, 4);
+    while (!t.done) {
+      final c = await api.answerTest(t.id, 9); // never a real option → all wrong
+      t = c.test;
+    }
+    expect(t.result!.outcome, 'reteach_offer');
+    expect(await api.reteach(t.id, false), isNull);
+  });
+
+  test('demo api: written test checks answers and praises a full score', () async {
+    final api = DemoApi(cfg);
+    await api.verifyOtp('9876543210', '123456');
+    await api.ask('Photosynthesis');
+    var t = await api.startTest('written');
+    expect(t.question!.options, isEmpty);
+    while (!t.done) {
+      t = (await api.answerTest(t.id, 'Plants make food from sunlight water and carbon dioxide in leaves')).test;
+    }
+    expect(t.result!.outcome, 'praise');
+    expect(t.result!.message, startsWith('Shabash'));
+  });
+
+  test('class commands are recognised in many languages', () {
+    expect(isTestCommand('Sir test lo'), true);
+    expect(isTestCommand('सर टेस्ट लो'), true);
+    expect(isTestCommand('What is a test tube?'), false);
+    expect(isTestCommand('what does test mean?'), false);
+    expect(isTestCommand('Sir, mera test le lo!'), true);
+    expect(isSaveCommand('Sir, save this'), true);
+    expect(isSaveCommand('सर मुझे इसके नोट्स प्रोवाइड कर दो'), true);
+    expect(isSaveCommand('Sir notes de do'), true);
+    expect(testModeIn('Sir MCQ test lo'), 'mcq');
+    expect(testModeIn('सर मौखिक टेस्ट लो'), 'oral');
+    expect(testModeIn('Sir test lo'), isNull);
   });
 }

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +14,12 @@ class ApiException implements Exception {
   bool get demoOver => status == 402;
   @override
   String toString() => message;
+}
+
+/// The server recognised a class command ("Sir, save this" / "Sir, test lo") instead of a question.
+class CommandException implements Exception {
+  final String command; // save | test
+  CommandException(this.command);
 }
 
 class Plan {
@@ -55,7 +63,7 @@ class Answer {
   final int qaId;
   final String answer;
   final String followUp;
-  final String origin; // verified | teacher_notes | general_ai
+  final String origin; // verified | teacher_notes | general_ai | redirect (off-topic / blocked)
   final List<String> sources;
   final String language;
   final Access access;
@@ -73,12 +81,115 @@ class Answer {
 
 class SavedNote {
   final int id;
-  final int qaId;
+  final int? qaId; // kind == 'answer': the one answer saved
   final String title;
   final String createdAt;
-  SavedNote(this.id, this.qaId, this.title, this.createdAt);
-  factory SavedNote.fromJson(Map<String, dynamic> j) =>
-      SavedNote((j['id'] as num).toInt(), (j['qa_id'] as num).toInt(), j['title'] as String, j['created_at']?.toString() ?? '');
+  final String kind; // answer | class (notes of a whole class, topic-wise)
+  final List<String> topics;
+  SavedNote(this.id, this.qaId, this.title, this.createdAt, {this.kind = 'answer', this.topics = const []});
+  factory SavedNote.fromJson(Map<String, dynamic> j) => SavedNote(
+        (j['id'] as num).toInt(),
+        (j['qa_id'] as num?)?.toInt(),
+        j['title'] as String,
+        j['created_at']?.toString() ?? '',
+        kind: j['kind'] as String? ?? 'answer',
+        topics: ((j['topics'] as List?) ?? []).map((t) => t.toString()).toList(),
+      );
+}
+
+/// One topic taught in a class (greetings and small talk are left out by the server).
+class ClassTopic {
+  final String topic;
+  final int questions;
+  ClassTopic(this.topic, this.questions);
+}
+
+/// The class in progress (or just ended): its topics, its notes, and whether Sir can give a test.
+class ClassSummary {
+  final int? sessionId;
+  final List<ClassTopic> topics;
+  final int? notesId;
+  final bool canTest;
+  ClassSummary(this.sessionId, this.topics, this.notesId, this.canTest);
+  factory ClassSummary.fromJson(Map<String, dynamic> j) => ClassSummary(
+        (j['session_id'] as num?)?.toInt(),
+        ((j['topics'] as List?) ?? [])
+            .map((t) => ClassTopic((t as Map)['topic'].toString(), ((t['questions'] as num?) ?? 0).toInt()))
+            .toList(),
+        (j['notes_id'] as num?)?.toInt(),
+        j['can_test'] == true,
+      );
+}
+
+/// Test series. mode: mcq | written | oral.
+const testModes = {'mcq': 'MCQ', 'written': 'Written', 'oral': 'Oral (viva)'};
+
+class TestQuestion {
+  final String q;
+  final List<String> options; // empty for written / oral
+  TestQuestion(this.q, this.options);
+}
+
+class TestResult {
+  final String outcome; // praise | good | reteach_offer
+  final double score;
+  final int total;
+  final int percent;
+  final List<String> weakTopics;
+  final String message;
+  TestResult(this.outcome, this.score, this.total, this.percent, this.weakTopics, this.message);
+  factory TestResult.fromJson(Map<String, dynamic> j) => TestResult(
+        j['outcome'] as String? ?? 'good',
+        ((j['score'] as num?) ?? 0).toDouble(),
+        ((j['total'] as num?) ?? 0).toInt(),
+        ((j['percent'] as num?) ?? 0).toInt(),
+        ((j['weak_topics'] as List?) ?? []).map((t) => t.toString()).toList(),
+        j['message'] as String? ?? '',
+      );
+  String get scoreText => '${score == score.roundToDouble() ? score.toInt() : score}/$total';
+}
+
+class TestState {
+  final int id;
+  final String mode;
+  final int total;
+  final int index;
+  final bool done;
+  final List<String> topics;
+  final TestQuestion? question;
+  final TestResult? result;
+  TestState(this.id, this.mode, this.total, this.index, this.done, this.topics, this.question, this.result);
+  factory TestState.fromJson(Map<String, dynamic> j) {
+    final q = j['question'] as Map<String, dynamic>?;
+    final r = j['result'] as Map<String, dynamic>?;
+    return TestState(
+      (j['id'] as num).toInt(),
+      j['mode'] as String,
+      (j['total'] as num).toInt(),
+      (j['index'] as num).toInt(),
+      j['status'] == 'done',
+      ((j['topics'] as List?) ?? []).map((t) => t.toString()).toList(),
+      q == null ? null : TestQuestion(q['q'] as String, ((q['options'] as List?) ?? []).map((o) => o.toString()).toList()),
+      r == null ? null : TestResult.fromJson(r),
+    );
+  }
+}
+
+/// Sir's check of one answer, and the test after it (next question, or the result).
+class AnswerCheck {
+  final bool correct;
+  final double score;
+  final String feedback;
+  final String correctAnswer;
+  final TestState test;
+  AnswerCheck(this.correct, this.score, this.feedback, this.correctAnswer, this.test);
+  factory AnswerCheck.fromJson(Map<String, dynamic> j) => AnswerCheck(
+        j['correct'] == true,
+        ((j['score'] as num?) ?? 0).toDouble(),
+        j['feedback'] as String? ?? '',
+        j['correct_answer']?.toString() ?? '',
+        TestState.fromJson(j['test'] as Map<String, dynamic>),
+      );
 }
 
 class HistoryItem {
@@ -145,7 +256,18 @@ abstract class Api {
   Future<bool> hasSession();
   Future<Access> access();
   Future<Answer> ask(String question);
-  Future<SavedNote> saveNote(int qaId);
+  Future<SavedNote> saveNote(int qaId); // older single-answer notes (kept for compatibility)
+  /// Notes of the whole class so far, one PDF per class. [topics] null = all topics of the class.
+  Future<SavedNote> saveClassNotes({List<String>? topics});
+  Future<ClassSummary> currentClass();
+  Future<ClassSummary> endClass();
+  Future<TestState> startTest(String mode, {List<String>? topics, int? sessionId});
+  /// MCQ: the option index; written / oral: the student's answer text.
+  Future<AnswerCheck> answerTest(int testId, Object answer);
+  /// "Shall I teach it again?" — yes returns Sir's new explanation, no returns null.
+  Future<Answer?> reteach(int testId, bool yes);
+  Future<String> shareUrl();
+  Future<Uint8List> notePdf(int noteId);
   Future<Library> library({String query = '', int historyOffset = 0});
   Future<NotesPage> notes({int offset = 0, int limit = 20, String query = ''});
   Future<Checkout> checkout(String planId);
@@ -214,12 +336,60 @@ class HttpApi implements Api {
   Future<Access> access() async => Access.fromJson(await _call('GET', '/me/access') as Map<String, dynamic>);
 
   @override
-  Future<Answer> ask(String question) async =>
-      Answer.fromJson(await _call('POST', '/class/ask', {'question': question}) as Map<String, dynamic>);
+  Future<Answer> ask(String question) async {
+    final j = await _call('POST', '/class/ask', {'question': question}) as Map<String, dynamic>;
+    // the app handles "save this" / "test lo" itself; if the server still sees one, ask the screen to do it
+    if (j['type'] == 'note_saved') throw CommandException('save');
+    if (j['type'] == 'test_offer') throw CommandException('test');
+    return Answer.fromJson(j);
+  }
 
   @override
   Future<SavedNote> saveNote(int qaId) async =>
       SavedNote.fromJson(await _call('POST', '/notes/$qaId') as Map<String, dynamic>);
+
+  @override
+  Future<SavedNote> saveClassNotes({List<String>? topics}) async =>
+      SavedNote.fromJson(await _call('POST', '/class/notes', {'topics': topics}) as Map<String, dynamic>);
+
+  @override
+  Future<ClassSummary> currentClass() async =>
+      ClassSummary.fromJson(await _call('GET', '/class/current') as Map<String, dynamic>);
+
+  @override
+  Future<ClassSummary> endClass() async =>
+      ClassSummary.fromJson(await _call('POST', '/class/end') as Map<String, dynamic>);
+
+  @override
+  Future<TestState> startTest(String mode, {List<String>? topics, int? sessionId}) async => TestState.fromJson(
+      await _call('POST', '/tests', {'mode': mode, 'topics': topics, 'session_id': sessionId}) as Map<String, dynamic>);
+
+  @override
+  Future<AnswerCheck> answerTest(int testId, Object answer) async =>
+      AnswerCheck.fromJson(await _call('POST', '/tests/$testId/answer', {'answer': answer}) as Map<String, dynamic>);
+
+  @override
+  Future<Answer?> reteach(int testId, bool yes) async {
+    final j = await _call('POST', '/tests/$testId/reteach', {'yes': yes}) as Map<String, dynamic>;
+    return j['type'] == 'answer' ? Answer.fromJson(j) : null;
+  }
+
+  String? _shareUrl;
+
+  @override
+  Future<String> shareUrl() async {
+    _shareUrl ??= ((await _call('GET', '/teacher') as Map<String, dynamic>)['share_url'] as String?) ?? '';
+    return _shareUrl!;
+  }
+
+  @override
+  Future<Uint8List> notePdf(int noteId) async {
+    final token = await _loadToken();
+    final res = await http.get(Uri.parse('$base/notes/$noteId/pdf'),
+        headers: {'X-Teacher-Id': teacherId, if (token != null) 'Authorization': 'Bearer $token'});
+    if (res.statusCode >= 400) throw ApiException(res.statusCode, 'Could not download the PDF');
+    return res.bodyBytes;
+  }
 
   @override
   Future<Library> library({String query = '', int historyOffset = 0}) async {
@@ -275,6 +445,10 @@ class DemoApi implements Api {
   int _nextId = 1;
   final List<HistoryItem> _history = [];
   final List<SavedNote> _notes = [];
+  final List<String> _classTopics = []; // what the current demo class has covered
+  List<String> _lastClassTopics = [];
+  int _classNo = 1;
+  final Map<int, _DemoTest> _tests = {};
 
   @override
   bool get isDemo => true;
@@ -348,6 +522,8 @@ class DemoApi implements Api {
     final follow = punjabi ? 'ਕੀ ਤੁਸੀਂ ਸਮਝ ਗਏ?' : hindi ? 'क्या आप समझ गए?' : 'Did that make sense? Tell me in one line.';
     final id = _nextId++;
     _history.insert(0, HistoryItem(id, question, answer, DateTime.now().toString(), false, false));
+    final topic = question.length > 50 ? '${question.substring(0, 50)}…' : question;
+    if (!_classTopics.contains(topic)) _classTopics.add(topic);
     return Answer(id, answer, follow, 'teacher_notes', ["Sir’s notes"], hindi ? 'hi' : punjabi ? 'pa' : 'en', _access);
   }
 
@@ -361,6 +537,67 @@ class DemoApi implements Api {
     _notes.insert(0, note);
     return note;
   }
+
+  List<String> get _topicsForTest => _classTopics.isNotEmpty ? _classTopics : _lastClassTopics;
+
+  ClassSummary _summary(List<String> topics) =>
+      ClassSummary(topics.isEmpty ? null : _classNo, topics.map((t) => ClassTopic(t, 1)).toList(),
+          _notes.where((n) => n.kind == 'class' && n.qaId == -_classNo).map((n) => n.id).firstOrNull, topics.isNotEmpty);
+
+  @override
+  Future<SavedNote> saveClassNotes({List<String>? topics}) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final all = _topicsForTest;
+    if (all.isEmpty) throw ApiException(400, 'Nothing to save yet — ask Sir something about your studies first.');
+    final chosen = topics == null ? all : all.where(topics.contains).toList();
+    // one note per class: saving again updates it (qaId = -class number marks the demo class)
+    _notes.removeWhere((n) => n.kind == 'class' && n.qaId == -_classNo);
+    final note = SavedNote(_notes.length + 1, -_classNo, 'Class notes · ${chosen.first}', DateTime.now().toString(),
+        kind: 'class', topics: chosen);
+    _notes.insert(0, note);
+    return note;
+  }
+
+  @override
+  Future<ClassSummary> currentClass() async => _summary(_classTopics);
+
+  @override
+  Future<ClassSummary> endClass() async {
+    final s = _summary(_classTopics);
+    if (_classTopics.isNotEmpty) _lastClassTopics = List.of(_classTopics);
+    _classTopics.clear();
+    _classNo++;
+    return s;
+  }
+
+  @override
+  Future<TestState> startTest(String mode, {List<String>? topics, int? sessionId}) async {
+    await Future.delayed(const Duration(milliseconds: 700));
+    final from = topics ?? _topicsForTest;
+    if (from.isEmpty) throw ApiException(400, 'Study a topic with Sir first — then he can test you on it.');
+    final t = _DemoTest(_tests.length + 1, mode, from);
+    _tests[t.id] = t;
+    return t.state();
+  }
+
+  @override
+  Future<AnswerCheck> answerTest(int testId, Object answer) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    return _tests[testId]!.answer(answer, cfg.teacherName);
+  }
+
+  @override
+  Future<Answer?> reteach(int testId, bool yes) async {
+    if (!yes) return null;
+    return ask('Sir, please teach me again: ${_tests[testId]!.topics.take(3).join(', ')}');
+  }
+
+  @override
+  Future<String> shareUrl() async => cfg.shareUrl;
+
+  @override
+  Future<Uint8List> notePdf(int noteId) async =>
+      throw ApiException(0, 'PDFs can be shared once the app is connected to the server.');
 
   bool _match(String text, String q) => q.isEmpty || text.toLowerCase().contains(q.toLowerCase());
 
@@ -391,5 +628,60 @@ class DemoApi implements Api {
   @override
   Future<void> logout() async {
     _loggedIn = false;
+  }
+}
+
+/// Demo-mode test: 5 sample questions so the screens can be tried without a server.
+class _DemoTest {
+  final int id;
+  final String mode;
+  final List<String> topics;
+  int index = 0;
+  double score = 0;
+  final List<String> weak = [];
+  TestResult? result;
+  late final List<int> _right = List.generate(total, (i) => Random(id * 31 + i).nextInt(4));
+  _DemoTest(this.id, this.mode, this.topics);
+
+  int get total => 5;
+  String _topic(int i) => topics[i % topics.length];
+
+  TestQuestion _q(int i) => mode == 'mcq'
+      ? TestQuestion('Demo question ${i + 1} on “${_topic(i)}”: which option is correct?',
+          List.generate(4, (k) => k == _right[i] ? 'The correct answer' : 'Wrong answer ${k + 1}'))
+      : TestQuestion('Demo question ${i + 1}: explain “${_topic(i)}” in two or three lines.', const []);
+
+  TestState state() => TestState(id, mode, total, index, result != null, topics, result == null ? _q(index) : null, result);
+
+  AnswerCheck answer(Object a, String teacher) {
+    final i = index;
+    double s;
+    String correctAnswer;
+    if (mode == 'mcq') {
+      s = a == _right[i] ? 1.0 : 0.0;
+      correctAnswer = 'The correct answer';
+    } else {
+      final words = a.toString().trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+      s = words >= 8 ? 1.0 : words >= 3 ? 0.5 : 0.0;
+      correctAnswer = 'Sir’s model answer appears here once the server is connected.';
+    }
+    score += s;
+    if (s < 1 && !weak.contains(_topic(i))) weak.add(_topic(i));
+    if (index + 1 >= total) {
+      final pct = (score / total * 100).round();
+      final outcome = pct < 50 ? 'reteach_offer' : pct >= 80 ? 'praise' : 'good';
+      final st = '${score == score.roundToDouble() ? score.toInt() : score}/$total';
+      final names = (weak.isEmpty ? topics : weak).take(4).join(', ');
+      final msg = outcome == 'praise'
+          ? 'Shabash! $st correct ($pct%). Excellent work — keep it up!'
+          : outcome == 'good'
+              ? 'Good, $st correct ($pct%). Revise these once more: $names. We\'ll continue from here tomorrow.'
+              : '$st correct ($pct%). Most answers were wrong — no problem. Shall I teach $names again now?';
+      result = TestResult(outcome, score, total, pct, List.of(weak), msg);
+    } else {
+      index++;
+    }
+    final feedback = mode == 'mcq' ? '' : (s == 1 ? 'Well explained!' : s > 0 ? 'Partly right — add a little more.' : 'Not quite.');
+    return AnswerCheck(s == 1, s, feedback, correctAnswer, state());
   }
 }
