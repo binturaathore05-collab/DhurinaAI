@@ -259,15 +259,26 @@ def test_teacher_lab_runs_the_seven_checks(setup):
     assert admin.post("/admin/api/teacher-lab/run?mode=ai").status_code == 400   # no AI key here
 
 
+def _tiny_pdf(text: str) -> bytes:
+    """A one-page PDF with typed text, made by hand (no PDF library needed in the tests)."""
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % x for x in offsets)
+    return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+
+
 def test_pdf_and_word_files_are_read(tmp_path):
     import io
     import zipfile
-    from reportlab.pdfgen import canvas
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf)
-    c.drawString(72, 720, "Trigonometry: sin squared plus cos squared equals one. Maths formula sheet.")
-    c.save()
-    assert "Trigonometry" in library.extract_text("pdf", buf.getvalue())
+    assert "Trigonometry" in library.extract_text("pdf", _tiny_pdf("Trigonometry: sin squared plus cos squared is one."))
     w = io.BytesIO()
     with zipfile.ZipFile(w, "w") as z:
         z.writestr("word/document.xml", "<w:document><w:body><w:p><w:r><w:t>Sandhi ke bhed</w:t></w:r></w:p></w:body></w:document>")
