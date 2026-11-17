@@ -285,3 +285,14 @@ def test_pdf_and_word_files_are_read(tmp_path):
     assert "Sandhi ke bhed" in library.extract_text("docx", w.getvalue())
     with pytest.raises(library.LibraryError):
         library.kind_of("photo.jpg")
+
+
+def test_solo_teacher_uses_the_whole_library_and_gets_both_subjects(setup):
+    admin, student, main = setup
+    main.db.execute("INSERT INTO teachers (id, name, subject) VALUES ('raj', 'Raj Sir', 'Rajasthan History')")
+    f = fac.list_faculty(main.db, "raj")[0]
+    assert set(f.subjects) == {"history", "rajasthan"}
+    admin.post("/admin/api/teachers/raj/library", json={"filename": "Maths/pct.txt",
+               "data_base64": b64("Profit percentage equals profit divided by cost price times hundred.")})
+    assert library.search(main.db, f, ["profit percentage cost price"])[0]   # the only teacher: every file
+    assert library.faculty_stats(main.db, "raj")[f.id] == 1

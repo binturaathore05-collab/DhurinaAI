@@ -337,8 +337,16 @@ def common_subjects(db: Database) -> list[dict]:
 
 # ---------- search for one teacher ----------
 
+def _only_teacher(db: Database, f: fac.Faculty) -> bool:
+    """A solo teacher (an institute with one active teacher) uses the whole library, whatever the subject."""
+    return len(fac.list_faculty(db, f.institute_id)) == 1
+
+
 def _own_rows(db: Database, f: fac.Faculty) -> list:
     """This teacher's content: files fixed to them, files of their subjects with no fixed teacher, and general."""
+    if _only_teacher(db, f):
+        return db.all("SELECT c.id, c.text, l.title FROM content_chunks c JOIN content_links l ON l.file_id = c.file_id "
+                      "WHERE l.owner = ? AND l.status = 'live'", (f.institute_id,))
     subs = list(f.subjects) + [fac.GENERAL]
     marks = ",".join("?" * len(subs))
     return db.all(
@@ -374,7 +382,12 @@ def search(db: Database, f: fac.Faculty, queries: list[str], k: int = 4) -> tupl
 def faculty_stats(db: Database, institute: str) -> dict[int, int]:
     """Number of live files each teacher answers from (own library only)."""
     out = {}
+    solo = len(fac.list_faculty(db, institute)) == 1
     for f in fac.list_faculty(db, institute, active_only=False):
+        if solo and f.active:
+            out[f.id] = db.one("SELECT COUNT(*) AS n FROM content_links WHERE owner = ? AND status = 'live'",
+                               (institute,))["n"]
+            continue
         subs = list(f.subjects) + [fac.GENERAL]
         marks = ",".join("?" * len(subs))
         out[f.id] = db.one(f"SELECT COUNT(*) AS n FROM content_links WHERE owner = ? AND status = 'live' AND "
