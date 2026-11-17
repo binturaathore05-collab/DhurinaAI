@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -73,8 +72,6 @@ class LiveScreen extends StatefulWidget {
 class _LiveScreenState extends State<LiveScreen> {
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
-  final _started = DateTime.now();
-  Timer? _clock;
   Access? _access;
   Answer? _last;
   String? _lastQuestion;
@@ -87,13 +84,11 @@ class _LiveScreenState extends State<LiveScreen> {
   @override
   void initState() {
     super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAccess());
   }
 
   @override
   void dispose() {
-    _clock?.cancel();
     _input.dispose();
     _inputFocus.dispose();
     super.dispose();
@@ -106,11 +101,6 @@ class _LiveScreenState extends State<LiveScreen> {
       if (a.setupNeeded) return goTo(context, a); // B1: class / parent's OK still missing
       setState(() => _access = a);
     } catch (_) {}
-  }
-
-  String get _elapsed {
-    final d = DateTime.now().difference(_started);
-    return '${d.inMinutes.toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
   }
 
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -165,6 +155,7 @@ class _LiveScreenState extends State<LiveScreen> {
     final text = _input.text.trim();
     if (text.isEmpty || _thinking) return;
     _input.clear();
+    _inputFocus.unfocus();   // owner: the keyboard goes down as soon as the question is sent (Sir is thinking)
     if (isSaveCommand(text)) {
       await _save();
       return;
@@ -378,10 +369,11 @@ class _LiveScreenState extends State<LiveScreen> {
                             _toast('Demo preview: plan state → ${a.state}${a.renewSoon ? ' (renew soon)' : ''}');
                           }
                         : null,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(cfg.teacherName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                      Text('${cfg.subject} · $_elapsed', style: const TextStyle(fontSize: 12, color: LT.muted)),
-                    ]),
+                    // only the teacher's name (owner): one line; a long name gets a little smaller instead of
+                    // breaking mid-word ("Subhas / h Sir"). No subject or class timer under it.
+                    child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                        child: Text(cfg.teacherName, maxLines: 1, softWrap: false,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                   ),
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
@@ -431,8 +423,10 @@ class _LiveScreenState extends State<LiveScreen> {
                 RoundIconButton(icon: Icons.keyboard_alt_outlined, tooltip: 'Type a question',
                     background: _typing ? LT.accentSoft : null,
                     onPressed: () {
+                      // box open but keyboard down → open the keyboard again; else open / close the typing box
+                      if (_typing && !_inputFocus.hasFocus) return _inputFocus.requestFocus();
                       setState(() => _typing = !_typing);
-                      if (_typing) _inputFocus.requestFocus();
+                      _typing ? _inputFocus.requestFocus() : _inputFocus.unfocus();
                     }),
                 RoundIconButton(icon: Icons.mic_rounded, tooltip: 'Hold to speak', size: 76,
                     background: cfg.accent, foreground: LT.onAccent,
@@ -569,6 +563,7 @@ class _LiveScreenState extends State<LiveScreen> {
               focusNode: _inputFocus,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
+              onTapOutside: (_) => _inputFocus.unfocus(),   // tap anywhere else: keyboard goes down
               decoration: const InputDecoration(hintText: 'Ask Sir anything…', isDense: true),
             ),
           ),

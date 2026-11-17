@@ -30,6 +30,12 @@ SAVE_PHRASES = [
 _WORDS = re.compile(r"[^\w\u0900-\u0A7F]+")
 
 
+def plain(text: str) -> str:
+    """Markdown the model sometimes writes anyway (**bold**, __x__, # headings, `code`) → plain text."""
+    text = re.sub(r"\*\*|__|`", "", text or "")
+    return re.sub(r"(?m)^\s*#{1,6}\s+", "", text).strip()
+
+
 def _padded(text: str) -> str:
     return " " + _WORDS.sub(" ", text.lower()).strip() + " "
 
@@ -98,6 +104,9 @@ def _scope_rules(teacher: TeacherProfile, blocked_topics: list[str]) -> str:
         f"- This is a study class{subject}. Help ONLY with studies: school / college / competitive-exam subjects, "
         "doubts, homework, revision, exam tips, study habits. A greeting, thanks, or a short friendly line about "
         "the class is fine: answer it briefly and steer back to studies.",
+        "- Any school subject or exam topic is study, even when it is not your own subject and even when the student "
+        "spells it badly or writes Hinglish (e.g. \"bhart ka ajad hua tha\" = when did India become free → study, "
+        "answer it). If you are not sure, choose study.",
         "- Anything else (films, games, gossip, relationships, personal advice, jokes, shopping, coding help for "
         "non-study projects, …) is off_topic: do not answer it.",
     ]
@@ -129,6 +138,8 @@ Never invent facts; if you are not sure, say so honestly.
 {scope_rules}
 
 {rules}
+
+Write plain text only: no markdown (no **, no #, no tables). Numbered points like "1." are fine.
 
 Return JSON only:
 {{"scope": "study" | "off_topic" | "blocked" | "unsafe", "blocked_topic": str or null,
@@ -289,7 +300,10 @@ class Tutor:
             needs_review = False  # a reply to Sir's own question, not a new fact to review
         emotion = reply.get("emotion") if reply.get("emotion") in style_mod.EMOTIONS else (
             "encouraging" if check == "wrong" else "smile")
-        board = [str(b)[:80] for b in (reply.get("board") or []) if str(b).strip()][:5]
+        for k in ("answer", "follow_up"):   # the app shows plain text: markdown marks would show as "**"
+            if isinstance(reply.get(k), str):
+                reply[k] = plain(reply[k])
+        board = [plain(str(b))[:80] for b in (reply.get("board") or []) if str(b).strip()][:5]
         emphasis = [str(w)[:40] for w in (reply.get("emphasis") or []) if str(w).strip()][:4]
         topic = str(reply.get("topic") or "").strip()[:80]
         worthy = reply.get("notes_worthy")
