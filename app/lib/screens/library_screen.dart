@@ -6,6 +6,7 @@ import '../api.dart';
 import '../main.dart';
 import '../share.dart';
 import '../theme.dart';
+import 'pdf_screen.dart';
 
 String dayLabel(String createdAt) {
   final d = DateTime.tryParse(createdAt);
@@ -272,10 +273,16 @@ class NoteTile extends StatelessWidget {
   const NoteTile({super.key, required this.note});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Material(
+        color: LT.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          // tap the card → the PDF opens inside the app
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PdfScreen(note: note))),
+          child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: LT.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: LT.border, width: 1.5),
         ),
@@ -309,6 +316,8 @@ class NoteTile extends StatelessWidget {
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, color: LT.muted)),
         ]),
+          ),
+        ),
       );
 }
 
