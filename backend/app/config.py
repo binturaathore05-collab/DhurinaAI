@@ -22,6 +22,7 @@ class Settings:
     llm_base_url: str = field(default_factory=lambda: _env("LLM_BASE_URL", "https://api.openai.com/v1"))
     llm_api_key: str = field(default_factory=lambda: _env("LLM_API_KEY"))
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL"))
+    llm_small_model: str = field(default_factory=lambda: _env("LLM_SMALL_MODEL"))  # optional, for helper jobs
 
     # Razorpay defaults. Each teacher's own keys and commission split are stored per teacher (admin panel);
     # these are only used for a teacher who has none set.
@@ -33,6 +34,9 @@ class Settings:
 
     # SMS provider for OTP (plug in MSG91 / Twilio / etc. in services/sms.py)
     sms_provider: str = field(default_factory=lambda: _env("SMS_PROVIDER", "console"))
+
+    # Public address used in share links: <PUBLIC_BASE_URL>/t/<teacher id> (e.g. https://liveteach.in)
+    public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL"))
 
     notes_dir: str = field(default_factory=lambda: _env("NOTES_DIR", "notes_pdfs"))
 

@@ -20,6 +20,7 @@ from .i18n import t
 from .services import accounts, admin, admin_auth, builds, notes_pdf, payments
 from .services import style as style_mod
 from .services import teacher_data
+from .services import classroom, quiz, share
 from .services import admin_reports
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
@@ -35,7 +36,10 @@ db = Database(settings.database_path)
 kb = KnowledgeBase(db)
 llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_model)
        if settings.llm_api_key else FakeLLM())
-tutor = Tutor(db, kb, llm)
+# optional cheaper model for small helper jobs (search keywords); answers, notes and tests use the main model
+side_llm = (OpenAICompatibleLLM(settings.llm_base_url, settings.llm_api_key, settings.llm_small_model)
+            if settings.llm_api_key and settings.llm_small_model else llm)
+tutor = Tutor(db, kb, llm, side_llm)
 otp = accounts.OtpService(db, settings.jwt_secret, sms_console)
 
 app = FastAPI(title="LiveTeach API", version="0.1.0")
@@ -71,12 +75,13 @@ def teacher_admin(x_teacher_id: str = Header(...), x_teacher_key: str = Header(.
 # ---------- app config & languages ----------
 
 @app.get("/teacher")
-def teacher_info(teacher: TeacherProfile = Depends(teacher_from_header)):
+def teacher_info(request: Request, teacher: TeacherProfile = Depends(teacher_from_header)):
     row = db.one("SELECT * FROM teachers WHERE id = ?", (teacher.id,))
     plans = [dict(p) for p in db.all("SELECT id, name, amount_paise, duration_days FROM plans "
                                      "WHERE teacher_id = ? AND active = 1", (teacher.id,))]
     return {"id": row["id"], "name": row["name"], "subject": row["subject"], "avatar_url": row["avatar_url"],
-            "brand_color": row["brand_color"], "plans": plans, "demo_questions": _limits(teacher.id)["demo"]}
+            "brand_color": row["brand_color"], "plans": plans, "demo_questions": _limits(teacher.id)["demo"],
+            "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url))}
 
 
 # ---------- login ----------
@@ -151,17 +156,131 @@ class Ask(BaseModel):
     last_qa_id: int | None = None  # the answer on screen, used when the student says "save this"
 
 
+def _consume(student_id: int, teacher: TeacherProfile) -> None:
+    lim = _limits(teacher.id)
+    if not accounts.consume_question(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"]):
+        ended = _access(student_id)["state"] == "expired"
+        raise HTTPException(402, t("plan_ended" if ended else "demo_over", "en", teacher=teacher.name))
+
+
+def _class_notes(student_id: int, teacher: TeacherProfile, session_id: int | None, topics: list[str] | None):
+    try:
+        return classroom.save_class_notes(db, llm, student_id, teacher.name, settings.notes_dir, session_id, topics)
+    except classroom.ClassError as exc:
+        raise HTTPException(400, str(exc))
+
+
 @app.post("/class/ask")
 def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
-    if body.last_qa_id and is_save_command(body.question):
-        note = notes_pdf.save_note(db, student["id"], body.last_qa_id, teacher.name, settings.notes_dir)
-        return {"type": "note_saved", "note": note}
-    lim = _limits(teacher.id)
-    if not accounts.consume_question(db, student["id"], lim["demo"], lim["grace_days"], lim["grace_questions"]):
-        ended = _access(student["id"])["state"] == "expired"
-        raise HTTPException(402, t("plan_ended" if ended else "demo_over", "en", teacher=teacher.name))
-    result = tutor.answer(student["id"], teacher, body.question)
+    session_id = classroom.current_session(db, student["id"], teacher.id)
+    if is_save_command(body.question):   # "Sir, save this" = notes of the whole class so far
+        return {"type": "note_saved", "note": _class_notes(student["id"], teacher, session_id, None)}
+    if quiz.is_test_command(body.question):   # "Sir, test lo" → the app asks MCQ / written / oral
+        return {"type": "test_offer", "mode": quiz.mode_in(body.question), **classroom.class_summary(
+            db, student["id"], classroom.latest_session_with_content(db, student["id"], session_id))}
+    _consume(student["id"], teacher)
+    result = tutor.answer(student["id"], teacher, body.question, session_id)
     return {"type": "answer", **result.__dict__, **_access(student["id"])}
+
+
+@app.get("/class/current")
+def class_current(student=Depends(current_student)):
+    """Topics of the class in progress (for 'choose topics' and the end-of-class test offer)."""
+    return classroom.class_summary(db, student["id"], classroom.open_session(db, student["id"]))
+
+
+@app.post("/class/end")
+def class_end(student=Depends(current_student)):
+    sid = classroom.end_session(db, student["id"])
+    return classroom.class_summary(db, student["id"], sid)
+
+
+class ClassNotes(BaseModel):
+    topics: list[str] | None = None     # None = every topic of the class
+    session_id: int | None = None       # None = the class in progress (or the last one)
+
+
+@app.post("/class/notes")
+def class_notes(body: ClassNotes, student=Depends(current_student),
+                teacher: TeacherProfile = Depends(teacher_from_header)):
+    sid = body.session_id or classroom.open_session(db, student["id"])
+    if body.session_id and not db.one("SELECT 1 FROM class_sessions WHERE id = ? AND student_id = ?",
+                                      (body.session_id, student["id"])):
+        raise HTTPException(404, "Class not found")
+    return _class_notes(student["id"], teacher, sid, body.topics)
+
+
+# ---------- test series ----------
+
+class NewTest(BaseModel):
+    mode: str                            # mcq | written | oral
+    topics: list[str] | None = None
+    session_id: int | None = None
+
+
+class TestAnswer(BaseModel):
+    answer: int | str | None = None      # MCQ: option index (or "B"); written / oral: the student's answer
+
+
+class Reteach(BaseModel):
+    yes: bool
+
+
+@app.post("/tests")
+def new_test(body: NewTest, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
+    sid = body.session_id or classroom.open_session(db, student["id"])
+    if body.session_id and not db.one("SELECT 1 FROM class_sessions WHERE id = ? AND student_id = ?",
+                                      (body.session_id, student["id"])):
+        raise HTTPException(404, "Class not found")
+    if body.mode not in quiz.MODES:
+        raise HTTPException(400, "Choose MCQ, written or oral")
+    _consume(student["id"], teacher)   # a test counts as one question of the plan / demo
+    try:
+        return quiz.create_test(db, llm, student["id"], teacher.id, teacher.name, body.mode, sid, body.topics)
+    except quiz.TestError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/tests")
+def my_tests(student=Depends(current_student)):
+    return {"items": quiz.history(db, student["id"])}
+
+
+@app.get("/tests/{test_id}")
+def get_test(test_id: int, student=Depends(current_student)):
+    try:
+        return quiz.public_view(quiz._load(db, student["id"], test_id))
+    except KeyError:
+        raise HTTPException(404, "Test not found")
+
+
+@app.post("/tests/{test_id}/answer")
+def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student),
+                teacher: TeacherProfile = Depends(teacher_from_header)):
+    try:
+        return quiz.answer_question(db, llm, student["id"], test_id, body.answer, teacher.name)
+    except KeyError:
+        raise HTTPException(404, "Test not found")
+    except quiz.TestError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/tests/{test_id}/reteach")
+def test_reteach(test_id: int, body: Reteach, student=Depends(current_student),
+                 teacher: TeacherProfile = Depends(teacher_from_header)):
+    """'Shall I teach it again?' — yes: Sir teaches the weak topics again right away (counts as one question)."""
+    try:
+        request_text = quiz.reteach(db, student["id"], test_id, body.yes)
+    except KeyError:
+        raise HTTPException(404, "Test not found")
+    except quiz.TestError as exc:
+        raise HTTPException(400, str(exc))
+    if request_text is None:
+        return {"type": "none"}
+    _consume(student["id"], teacher)
+    session_id = classroom.current_session(db, student["id"], teacher.id)
+    result = tutor.answer(student["id"], teacher, request_text, session_id)
+    return {"type": "answer", "question": request_text, **result.__dict__, **_access(student["id"])}
 
 
 @app.post("/notes/{qa_id}")
@@ -170,6 +289,15 @@ def save_note(qa_id: int, student=Depends(current_student), teacher: TeacherProf
         return notes_pdf.save_note(db, student["id"], qa_id, teacher.name, settings.notes_dir)
     except KeyError:
         raise HTTPException(404, "Answer not found")
+
+
+@app.get("/t/{teacher_id}", response_class=HTMLResponse)
+def share_page(teacher_id: str):
+    """The link that goes with everything a student shares: teacher's name and photo + 'Get the app'."""
+    row = db.one("SELECT * FROM teachers WHERE id = ?", (teacher_id,))
+    if row is None:
+        raise HTTPException(404, "Not found")
+    return HTMLResponse(share.share_page_html(dict(row)), headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.get("/library")

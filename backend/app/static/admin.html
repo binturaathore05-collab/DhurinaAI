@@ -305,7 +305,8 @@ async function formView(id) {
           <div class="grid2">${f('razorpay_key_id', 'Razorpay Key ID', t.razorpay_key_id, 'text', '', 'placeholder="rzp_live_…"')}
             ${f('razorpay_key_secret', 'Razorpay Key Secret', '', 'password', t.razorpay_key_secret ? 'Saved ' + esc(t.razorpay_key_secret) + ' · leave blank to keep' : 'Stored encrypted · never shown again', 'autocomplete="new-password"')}
             ${f('razorpay_webhook_secret', 'Razorpay Webhook Secret', '', 'password', t.razorpay_webhook_secret ? 'Saved ' + esc(t.razorpay_webhook_secret) + ' · leave blank to keep' : 'Webhook URL: /pay/webhook/&lt;teacher id&gt;', 'autocomplete="new-password"')}</div>`)}
-        ${sec(4, 'Teacher login', 'For the teacher dashboard (upload notes, review answers, earnings)', `<div class="grid2">${f('teacher_phone', 'Teacher mobile', t.teacher_phone, 'tel', '', 'placeholder="+91 …"')}${f('teacher_email', 'Teacher email', t.teacher_email, 'email', '', 'placeholder="name@example.com"')}</div>`)}
+        ${sec(4, 'Teacher login', 'For the teacher dashboard (upload notes, review answers, earnings)', `<div class="grid2">${f('teacher_phone', 'Teacher mobile', t.teacher_phone, 'tel', '', 'placeholder="+91 …"')}${f('teacher_email', 'Teacher email', t.teacher_email, 'email', '', 'placeholder="name@example.com"')}</div>
+          ${f('play_store_url', 'Play Store link (for sharing)', t.play_store_url, 'url', 'Students share the app with a link that opens a page with this teacher’s photo and a “Get the app” button. Fill this after the app is live; until then the page says “coming soon”.', 'placeholder="https://play.google.com/store/apps/details?id=…"')}`)}
       </div>
       <aside style="flex:1 1 300px;max-width:340px;display:flex;flex-direction:column;gap:12px">
         <b class="muted" style="font-size:12px;letter-spacing:.08em">LIVE APP PREVIEW</b>
@@ -518,7 +519,7 @@ async function settingsView() {
       ${f('defaults', 'demo_questions', 'Free demo questions', s.defaults.demo_questions, 'number')}${f('defaults', 'grace_days', 'Grace days', s.defaults.grace_days, 'number')}
       ${f('defaults', 'grace_questions', 'Grace questions', s.defaults.grace_questions, 'number')}${f('defaults', 'renew_reminder_days', 'Renew reminder (days before)', s.defaults.renew_reminder_days, 'number')}</div>`)}
     ${card('AI answers', 'Used by every teacher’s AI', `<div class="grid2"><label class="f">Trusted websites for internet answers<textarea data-sec="ai" name="trusted_sites">${esc(s.ai.trusted_sites.join('\n'))}</textarea><span class="h">One per line</span></label>
-      <label class="f">Topics the AI must not answer<textarea data-sec="ai" name="blocked_topics">${esc(s.ai.blocked_topics.join('\n'))}</textarea><span class="h">One per line</span></label></div>`)}
+      <label class="f">Topics the AI must not answer<textarea data-sec="ai" name="blocked_topics">${esc(s.ai.blocked_topics.join('\n'))}</textarea><span class="h">One per line. Checked on every answer: the student gets a polite “let’s study” reply instead.</span></label></div>`)}
     ${card('Legal', 'Shown in every app; required by Play Store', `<div class="grid2">${f('legal', 'privacy_url', 'Privacy Policy URL', s.legal.privacy_url)}${f('legal', 'terms_url', 'Terms URL', s.legal.terms_url)}</div>`)}
     ${card('Your account', esc(me.email) + ' · ' + esc(me.role), `<div class="grid2"><label class="f">Current password<input id="pw0" type="password" autocomplete="current-password"></label>
       <label class="f">New password<input id="pw1" type="password" autocomplete="new-password"><span class="h">At least 8 characters, letters and numbers</span></label></div>

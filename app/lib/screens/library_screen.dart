@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../main.dart';
+import '../share.dart';
 import '../theme.dart';
 
 String dayLabel(String createdAt) {
@@ -279,18 +280,34 @@ class NoteTile extends StatelessWidget {
           border: Border.all(color: LT.border, width: 1.5),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(color: const Color(0xFF3B1D1D), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFFFCA5A5), size: 18),
-          ),
+          Row(children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: const Color(0xFF3B1D1D), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFFFCA5A5), size: 18),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Share',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.share_outlined, size: 18, color: LT.muted),
+              onPressed: () => shareNote(context, note),
+            ),
+          ]),
           const SizedBox(height: 8),
           Expanded(
             child: Text(note.title, maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, height: 1.3)),
           ),
-          Text(dayLabel(note.createdAt).toLowerCase(), style: const TextStyle(fontSize: 11, color: LT.muted)),
+          Text(
+              note.kind == 'class'
+                  ? 'class · ${note.topics.length} ${note.topics.length == 1 ? 'topic' : 'topics'} · ${dayLabel(note.createdAt).toLowerCase()}'
+                  : dayLabel(note.createdAt).toLowerCase(),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: LT.muted)),
         ]),
       );
 }

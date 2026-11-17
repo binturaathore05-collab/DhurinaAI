@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS qa_history (
     question TEXT NOT NULL,
     answer TEXT NOT NULL,
     follow_up TEXT,
-    origin TEXT NOT NULL,          -- verified | teacher_notes | general_ai
+    origin TEXT NOT NULL,          -- verified | teacher_notes | general_ai | redirect
     sources TEXT,                  -- JSON list
     language TEXT NOT NULL,
     needs_review INTEGER NOT NULL DEFAULT 0,
@@ -125,11 +125,45 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 CREATE TABLE IF NOT EXISTS saved_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES students(id),
-    qa_id INTEGER NOT NULL REFERENCES qa_history(id),
+    qa_id INTEGER REFERENCES qa_history(id),     -- kind = answer: the one answer saved
     title TEXT NOT NULL,
     pdf_path TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (student_id, qa_id)
+    kind TEXT NOT NULL DEFAULT 'answer',         -- answer | class (whole class, topic-wise)
+    session_id INTEGER,                          -- kind = class: the class it was made from
+    topics TEXT,                                 -- kind = class: JSON list of topics included
+    qa_upto INTEGER                              -- kind = class: last answer included (unchanged class = no new AI call)
+);
+CREATE TABLE IF NOT EXISTS query_rewrites (     -- saves an AI call when a question was asked before
+    question TEXT PRIMARY KEY,                   -- normalised question
+    query TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS class_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    teacher_id TEXT NOT NULL,
+    started_at REAL NOT NULL,
+    last_at REAL NOT NULL,
+    ended_at REAL
+);
+CREATE TABLE IF NOT EXISTS tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    teacher_id TEXT NOT NULL,
+    session_id INTEGER,
+    mode TEXT NOT NULL,                 -- mcq | written | oral
+    language TEXT NOT NULL,
+    topics TEXT,                        -- JSON list
+    questions TEXT NOT NULL,            -- JSON, incl. correct answers: never sent to the app before answering
+    results TEXT NOT NULL DEFAULT '[]', -- JSON list, one per answered question
+    current INTEGER NOT NULL DEFAULT 0,
+    score REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'open',  -- open | done
+    outcome TEXT,                       -- JSON result: outcome (praise | good | reteach_offer), percent, weak topics
+    reteach TEXT,                       -- yes | no (student's answer to "shall I teach it again?")
+    created_at REAL NOT NULL,
+    finished_at REAL
 );
 """
 
@@ -155,6 +189,10 @@ class Database:
         ("qa_history", "emotion", "TEXT"), ("qa_history", "board", "TEXT"), ("qa_history", "emphasis", "TEXT"),
         ("qa_history", "check_result", "TEXT"), ("qa_history", "review_status", "TEXT"),
         ("qa_history", "reviewed_at", "TEXT"), ("qa_history", "verified_id", "INTEGER"),
+        ("qa_history", "scope", "TEXT"), ("qa_history", "blocked_topic", "TEXT"),
+        ("qa_history", "session_id", "INTEGER"), ("qa_history", "topic", "TEXT"),
+        ("qa_history", "notes_worthy", "INTEGER"), ("teachers", "play_store_url", "TEXT"),
+        ("saved_notes", "qa_upto", "INTEGER"),
         ("verified_answers", "active", "INTEGER NOT NULL DEFAULT 1"), ("verified_answers", "updated_at", "TEXT"),
     ]
 
@@ -164,7 +202,34 @@ class Database:
             have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
             if have and col not in have:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+        self._upgrade_saved_notes()
         self._conn.commit()
+
+    def _upgrade_saved_notes(self) -> None:
+        """Old saved_notes had one row per answer (qa_id required, unique). Class notes need qa_id optional,
+        so the table is rebuilt once, keeping every saved note."""
+        have = {r["name"] for r in self._conn.execute("PRAGMA table_info(saved_notes)")}
+        if "kind" in have:
+            return
+        self._conn.execute("PRAGMA foreign_keys = OFF")
+        self._conn.executescript("""
+            ALTER TABLE saved_notes RENAME TO saved_notes_old;
+            CREATE TABLE saved_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL REFERENCES students(id),
+                qa_id INTEGER REFERENCES qa_history(id),
+                title TEXT NOT NULL,
+                pdf_path TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                kind TEXT NOT NULL DEFAULT 'answer',
+                session_id INTEGER,
+                topics TEXT
+            );
+            INSERT INTO saved_notes (id, student_id, qa_id, title, pdf_path, created_at)
+                SELECT id, student_id, qa_id, title, pdf_path, created_at FROM saved_notes_old;
+            DROP TABLE saved_notes_old;
+        """)
+        self._conn.execute("PRAGMA foreign_keys = ON")
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:

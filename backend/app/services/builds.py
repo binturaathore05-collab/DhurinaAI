@@ -8,6 +8,8 @@ import json
 import os
 import urllib.request
 
+from .share import share_url
+
 API = "https://api.github.com"
 
 
@@ -36,6 +38,7 @@ def app_config(teacher: dict) -> dict:
         "subject": teacher["subject"] or "",
         "avatar": "assets/teacher/avatar.jpg",
         "accent": teacher["brand_color"] or "#2DD4BF",
+        "shareUrl": share_url(os.environ.get("PUBLIC_BASE_URL", ""), teacher["id"]) if os.environ.get("PUBLIC_BASE_URL") else "",
     }
 
 

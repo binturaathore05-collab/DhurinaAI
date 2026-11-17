@@ -5,20 +5,59 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../main.dart';
+import '../share.dart';
 import '../theme.dart';
 import 'library_screen.dart';
 import 'pay_screen.dart';
+import 'test_screen.dart';
 
-/// "Sir, save this" in any language saves the answer on screen as PDF notes.
+/// "Sir, save this" in any language saves the notes of the whole class so far as one PDF.
+/// Same lists as the server (backend tutor.py / quiz.py): everything in class can be said on the call.
 const _savePhrases = [
-  'save this', 'save notes', 'save as notes', 'save it',
-  'सेव कर', 'सेव करो', 'नोट्स सेव', 'नोट सेव', 'सहेज',
-  'ਸੇਵ ਕਰ', 'ਨੋਟਸ ਸੇਵ',
+  'save this', 'save notes', 'save as notes', 'save it', 'save the notes', 'make notes', 'give me notes',
+  'notes provide', 'provide notes', 'notes de do', 'notes dedo', 'notes do', 'notes bana do', 'notes bhej do',
+  'notes chahiye', 'notes save', 'notes kar do',
+  'सेव कर', 'सेव करो', 'सेव कर दो', 'नोट्स सेव', 'नोट सेव', 'सहेज', 'नोट्स दे दो', 'नोट्स दो', 'नोट्स बना दो',
+  'नोट्स भेज दो', 'नोट्स चाहिए', 'नोट्स प्रोवाइड', 'नोट्स प्रोवाइड कर दो',
+  'ਸੇਵ ਕਰ', 'ਨੋਟਸ ਸੇਵ', 'ਨੋਟਸ ਦੇ ਦਿਓ', 'ਨੋਟਸ ਬਣਾ ਦਿਓ', 'ਨੋਟਸ ਚਾਹੀਦੇ',
 ];
 
+/// Lower-case, punctuation → spaces, padded, so phrases match whole words only.
+String _padded(String text) =>
+    ' ${text.toLowerCase().replaceAll(RegExp(r'[^\w\u0900-\u0A7F]+'), ' ').trim()} ';
+
 bool isSaveCommand(String text) {
-  final low = text.toLowerCase();
-  return _savePhrases.any(low.contains);
+  final low = _padded(text);
+  return _savePhrases.any((p) => low.contains(' $p '));
+}
+
+/// "Sir, test lo" in any language: Sir gives a test on what he taught (same list as the server).
+const _testPhrases = [
+  'test lo', 'test le lo', 'test lijiye', 'test do', 'take my test', 'give me a test', 'test me', 'quiz me',
+  'viva lo', 'viva le lo', 'sawal do', 'sawal pucho', 'test lena', 'test start',
+  'टेस्ट लो', 'टेस्ट ले लो', 'टेस्ट लीजिए', 'टेस्ट दो', 'मेरा टेस्ट', 'सवाल दो', 'सवाल पूछो', 'प्रश्न दो',
+  'ਟੈਸਟ ਲਓ', 'ਟੈਸਟ ਲੈ ਲਓ', 'ਮੇਰਾ ਟੈਸਟ', 'ਸਵਾਲ ਦਿਓ',
+];
+
+bool isTestCommand(String text) {
+  // whole words only, so "what does test mean?" is a question, not a command
+  final low = _padded(text);
+  return _testPhrases.any((p) => low.contains(' $p '));
+}
+
+const _modeWords = {
+  'mcq': ['mcq', 'objective', 'options', 'एमसीक्यू', 'ऑब्जेक्टिव'],
+  'written': ['written', 'likhit', 'likh kar', 'likhkar', 'लिखित', 'लिखकर', 'लिख कर', 'ਲਿਖਤੀ'],
+  'oral': ['oral', 'viva', 'bol kar', 'bolkar', 'maukhik', 'मौखिक', 'बोलकर', 'बोल कर', 'वाइवा', 'ਮੌਖਿਕ', 'ਬੋਲ ਕੇ'],
+};
+
+/// "Sir, MCQ test lo" / "viva le lo": the kind of test was said on the call — no need to ask.
+String? testModeIn(String text) {
+  final low = _padded(text);
+  for (final e in _modeWords.entries) {
+    if (e.value.any((w) => low.contains(' $w '))) return e.key;
+  }
+  return null;
 }
 
 /// Screen 3 · Live class: the teacher's video, what Sir is saying / asking, the save-notes popup,
@@ -37,8 +76,9 @@ class _LiveScreenState extends State<LiveScreen> {
   Access? _access;
   Answer? _last;
   String? _lastQuestion;
-  bool _saved = false;
+  bool _saved = false; // the class notes are up to date with the answer on screen
   bool _saving = false;
+  SavedNote? _note;   // this class's notes PDF
   bool _thinking = false;
   bool _typing = false;
 
@@ -121,8 +161,12 @@ class _LiveScreenState extends State<LiveScreen> {
     final text = _input.text.trim();
     if (text.isEmpty || _thinking) return;
     _input.clear();
-    if (_last != null && isSaveCommand(text)) {
+    if (isSaveCommand(text)) {
       await _save();
+      return;
+    }
+    if (isTestCommand(text)) {
+      await _offerTest(mode: testModeIn(text));
       return;
     }
     setState(() {
@@ -136,6 +180,13 @@ class _LiveScreenState extends State<LiveScreen> {
         _saved = false;
         _access = a.access;
       });
+    } on CommandException catch (c) {
+      if (mounted) setState(() => _thinking = false);
+      if (c.command == 'save') {
+        await _save();
+      } else {
+        await _offerTest(mode: testModeIn(text));
+      }
     } on ApiException catch (e) {
       if (e.demoOver) {
         _toast(e.message);
@@ -150,17 +201,134 @@ class _LiveScreenState extends State<LiveScreen> {
     }
   }
 
-  Future<void> _save() async {
-    if (_last == null || _saved || _saving) return;
+  /// Notes of the whole class so far (greetings and small talk left out), one PDF per class.
+  Future<void> _save({List<String>? topics}) async {
+    if (_saving) return;
     setState(() => _saving = true);
     try {
-      await AppScope.of(context).api.saveNote(_last!.qaId);
-      setState(() => _saved = true);
+      final note = await AppScope.of(context).api.saveClassNotes(topics: topics);
+      if (mounted) {
+        setState(() {
+          _note = note;
+          _saved = true;
+        });
+      }
+    } on ApiException catch (e) {
+      _toast(e.message);
     } catch (_) {
       _toast('Could not save notes. Please try again.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Let the student untick topics before saving.
+  Future<void> _chooseTopics() async {
+    ClassSummary summary;
+    try {
+      summary = await AppScope.of(context).api.currentClass();
+    } catch (_) {
+      _toast('No internet connection. Please try again.');
+      return;
+    }
+    if (!mounted) return;
+    if (summary.topics.isEmpty) {
+      _toast('Nothing to save yet — ask Sir something about your studies first.');
+      return;
+    }
+    final picked = {for (final t in summary.topics) t.topic};
+    final accent = AppScope.of(context).cfg.accent;
+    final chosen = await showModalBottomSheet<List<String>>(
+      context: context,
+      backgroundColor: LT.surface2,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Topics for your notes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const Text('Untick what you don’t need.', style: TextStyle(color: LT.muted)),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(shrinkWrap: true, children: [
+                  for (final t in summary.topics)
+                    CheckboxListTile(
+                      value: picked.contains(t.topic),
+                      activeColor: accent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(t.topic, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      onChanged: (v) => setSheet(() => v == true ? picked.add(t.topic) : picked.remove(t.topic)),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: LT.onAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 14), textStyle: const TextStyle(fontWeight: FontWeight.w800)),
+                  onPressed: picked.isEmpty ? null : () => Navigator.of(ctx).pop(picked.toList()),
+                  child: Text(picked.length == summary.topics.length ? 'Save all topics' : 'Save ${picked.length} topics'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (chosen != null) await _save(topics: chosen);
+  }
+
+  /// Sir's test on today's topics. Returns true if the student stayed in class (Sir is teaching again).
+  Future<bool> _offerTest({String? intro, String? mode}) async {
+    mode ??= await chooseTestMode(context, intro: intro);
+    if (mode == null || !mounted) return false;
+    setState(() => _thinking = true);
+    TestState test;
+    try {
+      test = await AppScope.of(context).api.startTest(mode);
+    } on ApiException catch (e) {
+      _toast(e.message);
+      if (e.demoOver) _openPlans();
+      return false;
+    } catch (_) {
+      _toast('No internet connection. Please try again.');
+      return false;
+    } finally {
+      if (mounted) setState(() => _thinking = false);
+    }
+    if (!mounted) return false;
+    final again = await Navigator.of(context).push<Answer>(MaterialPageRoute(builder: (_) => TestScreen(test: test)));
+    _refreshAccess();
+    if (again == null || !mounted) return false;
+    setState(() {
+      _last = again;
+      _lastQuestion = 'Please teach me again';
+      _saved = false;
+      _access = again.access;
+    });
+    return true;
+  }
+
+  Future<void> _endClass(Access? access) async {
+    final end = await confirmAction(context, title: 'End this class?',
+        message: 'You can start again any time. Your saved notes stay in your library.', confirmLabel: 'End class', danger: true);
+    if (!end || !mounted) return;
+    ClassSummary? summary;
+    try {
+      summary = await AppScope.of(context).api.endClass();
+    } catch (_) {}
+    if (!mounted) return;
+    if (summary != null && summary.canTest) {
+      final take = await confirmAction(context, title: 'Quick test before you go?',
+          message: 'Sir has a few questions on today’s topics. It takes about 5 minutes.', confirmLabel: 'Take the test');
+      if (!mounted) return;
+      if (take && await _offerTest()) return; // Sir is teaching again: stay in class
+      if (!mounted) return;
+    }
+    (access != null && access.state != 'active') ? _openPlans() : _openLibrary();
   }
 
   void _openLibrary() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryScreen()));
@@ -206,6 +374,12 @@ class _LiveScreenState extends State<LiveScreen> {
                   ),
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
+                const SizedBox(width: 6),
+                RoundIconButton(icon: Icons.quiz_outlined, tooltip: 'Take a test', size: 40,
+                    background: LT.surface, onPressed: () => _offerTest()),
+                const SizedBox(width: 6),
+                RoundIconButton(icon: Icons.share_outlined, tooltip: 'Share this app', size: 40,
+                    background: LT.surface, onPressed: () => shareApp(context)),
               ]),
             ),
             // ---- teacher video (Phase 2: live avatar video replaces the photo) ----
@@ -251,12 +425,7 @@ class _LiveScreenState extends State<LiveScreen> {
                     background: cfg.accent, foreground: LT.onAccent,
                     onPressed: () => _toast('Voice is coming in the next update — tap the keyboard to type for now')),
                 RoundIconButton(icon: Icons.call_end_rounded, tooltip: 'End class', background: LT.danger,
-                    onPressed: () async {
-                      final end = await confirmAction(context, title: 'End this class?',
-                          message: 'You can start again any time. Your saved notes stay in your library.', confirmLabel: 'End class', danger: true);
-                      if (!end || !mounted) return;
-                      (access != null && access.state != 'active') ? _openPlans() : _openLibrary();
-                    }),
+                    onPressed: () => _endClass(access)),
               ]),
             ),
           ],
@@ -280,7 +449,7 @@ class _LiveScreenState extends State<LiveScreen> {
       const SizedBox(height: 6),
       Text(a.answer, style: const TextStyle(fontSize: 16, height: 1.45)),
       const SizedBox(height: 8),
-      Row(children: [
+      if (a.origin != 'redirect') Row(children: [
         Icon(a.origin == 'general_ai' ? Icons.info_outline : Icons.check, size: 15, color: LT.accentText),
         const SizedBox(width: 6),
         Expanded(
@@ -295,7 +464,7 @@ class _LiveScreenState extends State<LiveScreen> {
         Text(a.followUp, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ],
       const SizedBox(height: 12),
-      _saved ? _savedBanner(accent) : _savePopup(accent),
+      if (a.origin != 'redirect') _saved ? _savedBanner(accent) : _savePopup(accent),
     ]);
   }
 
@@ -313,16 +482,25 @@ class _LiveScreenState extends State<LiveScreen> {
             child: const Icon(Icons.description_outlined, color: LT.accentText, size: 20),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Save this explanation as notes?', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              Text('Or just say “Sir, save this”', style: TextStyle(fontSize: 11, color: LT.muted)),
+              Text(_note == null ? 'Save today’s class as notes?' : 'Update your class notes?',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              const Text('Topic-wise PDF · or say “Sir, save this”', style: TextStyle(fontSize: 11, color: LT.muted)),
+              GestureDetector(
+                onTap: _saving ? null : _chooseTopics,
+                child: const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Text('Choose topics', style: TextStyle(fontSize: 12, color: LT.accentText,
+                      fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
+                ),
+              ),
             ]),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: LT.onAccent,
                 textStyle: const TextStyle(fontWeight: FontWeight.w800)),
-            onPressed: _saving ? null : _save,
+            onPressed: _saving ? null : () => _save(),
             child: Text(_saving ? 'Saving…' : 'Save'),
           ),
         ]),
@@ -338,7 +516,10 @@ class _LiveScreenState extends State<LiveScreen> {
         child: Row(children: [
           CircleAvatar(radius: 14, backgroundColor: accent, child: const Icon(Icons.check, size: 16, color: LT.onAccent)),
           const SizedBox(width: 12),
-          const Expanded(child: Text('Saved as PDF in your Library', style: TextStyle(fontWeight: FontWeight.w700))),
+          const Expanded(child: Text('Class notes saved in your Library', style: TextStyle(fontWeight: FontWeight.w700))),
+          if (_note != null)
+            IconButton(tooltip: 'Share notes', icon: const Icon(Icons.share_outlined, size: 20),
+                onPressed: () => shareNote(context, _note!)),
           TextButton(onPressed: _openLibrary, child: const Text('Open')),
         ]),
       );
