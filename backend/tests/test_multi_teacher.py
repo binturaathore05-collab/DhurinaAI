@@ -343,3 +343,11 @@ def test_answers_have_no_markdown_and_any_subject_is_study(setup):
     assert "**" not in r["answer"] and "#" not in r["answer"] and r["follow_up"] == "क्यों?" and r["board"] == ["1576"]
     system = [c[0] for c in main.raw_llm.calls if "CLASS RULES" in c[0]][-1]
     assert "bhart ka ajad hua tha" in system and "If you are not sure, choose study" in system and "no markdown" in system
+
+
+def test_app_opens_with_the_current_teacher(setup):
+    admin, student, main = setup
+    ids = _add_teachers(admin)
+    assert student.get("/me/access").json()["active_faculty"]["id"] == ids["history"]   # nobody chosen yet: first
+    student.post("/class/ask", json={"question": "Maths wale sir ko bulao"})
+    assert student.get("/me/access").json()["active_faculty"]["name"] == "Gupta Sir"

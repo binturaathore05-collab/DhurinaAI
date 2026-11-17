@@ -50,10 +50,12 @@ class Access {
   final bool profileNeeded;
   final bool consentNeeded;
   final List<ClassOption> classOptions;
+  /// Multi-teacher: the teacher the student is with now (shown when the class screen opens).
+  final Faculty? activeFaculty;
   Access(this.state, this.demoLeft,
       {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0,
       this.accountStatus = 'active', this.accountMessage, this.serviceMessage,
-      this.profileNeeded = false, this.consentNeeded = false, this.classOptions = const []});
+      this.profileNeeded = false, this.consentNeeded = false, this.classOptions = const [], this.activeFaculty});
 
   /// Still something to do before the class can start.
   bool get setupNeeded => profileNeeded || consentNeeded;
@@ -61,7 +63,8 @@ class Access {
   Access withSetup({required bool profileNeeded, required bool consentNeeded}) => Access(state, demoLeft,
       daysLeft: daysLeft, renewSoon: renewSoon, planEndedAt: planEndedAt, graceLeft: graceLeft,
       accountStatus: accountStatus, accountMessage: accountMessage, serviceMessage: serviceMessage,
-      profileNeeded: profileNeeded, consentNeeded: consentNeeded, classOptions: ClassOption.defaults);
+      profileNeeded: profileNeeded, consentNeeded: consentNeeded, classOptions: ClassOption.defaults,
+      activeFaculty: activeFaculty);
 
   /// What the call screen shows above Sir (account first, then a platform pause).
   String? get notice => accountMessage ?? serviceMessage;
@@ -89,6 +92,7 @@ class Access {
       classOptions: ((j['class_options'] as List?) ?? [])
           .map((o) => ClassOption((o as Map)['value'].toString(), o['label'].toString()))
           .toList(),
+      activeFaculty: Faculty.fromJson(j['active_faculty']),
     );
   }
 }
@@ -105,6 +109,25 @@ class ClassOption {
   ];
 }
 
+/// One AI teacher of the institute (multi-teacher). The server says who is answering; the app shows that
+/// teacher's face and name and, on a switch, a short "call transfer" line first.
+class Faculty {
+  final int id;
+  final String name;
+  final String? avatarUrl; // server path such as /faculty/3/avatar (null = no photo uploaded)
+  final String? voiceId;
+  final List<String> subjects;
+  const Faculty(this.id, this.name, {this.avatarUrl, this.voiceId, this.subjects = const []});
+  static Faculty? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final id = j['id'], name = j['name'];
+    if (id is! num || name is! String) return null;
+    return Faculty(id.toInt(), name,
+        avatarUrl: j['avatar_url'] as String?, voiceId: j['voice_id'] as String?,
+        subjects: ((j['subjects'] as List?) ?? []).map((s) => s.toString()).toList());
+  }
+}
+
 class Answer {
   final int qaId;
   final String answer;
@@ -115,8 +138,13 @@ class Answer {
   final Access access;
   /// Reference code of this answer (e.g. LT-7F3K-92QD): lets Dhurina prove what Sir really said.
   final String verifyCode;
+  /// Multi-teacher: who answered, whether the student was just moved to this teacher, and the fixed line
+  /// the old teacher says before the new face appears ("…main aapko Gupta Sir se jod raha hoon").
+  final Faculty? faculty;
+  final bool switched;
+  final String handover;
   Answer(this.qaId, this.answer, this.followUp, this.origin, this.sources, this.language, this.access,
-      {this.verifyCode = ''});
+      {this.verifyCode = '', this.faculty, this.switched = false, this.handover = ''});
   factory Answer.fromJson(Map<String, dynamic> j) => Answer(
         (j['qa_id'] as num).toInt(),
         j['answer'] as String? ?? '',
@@ -126,6 +154,9 @@ class Answer {
         j['language'] as String? ?? 'en',
         Access.fromJson(j),
         verifyCode: j['verify_code'] as String? ?? '',
+        faculty: Faculty.fromJson(j['faculty']),
+        switched: j['switched'] == true,
+        handover: j['handover'] as String? ?? '',
       );
 }
 
@@ -208,7 +239,10 @@ class TestState {
   final List<String> topics;
   final TestQuestion? question;
   final TestResult? result;
-  TestState(this.id, this.mode, this.total, this.index, this.done, this.topics, this.question, this.result);
+  /// Multi-teacher: the teacher who gives this test (who taught most of the class); null = the app's teacher.
+  final String? teacherName;
+  TestState(this.id, this.mode, this.total, this.index, this.done, this.topics, this.question, this.result,
+      {this.teacherName});
   factory TestState.fromJson(Map<String, dynamic> j) {
     final q = j['question'] as Map<String, dynamic>?;
     final r = j['result'] as Map<String, dynamic>?;
@@ -221,6 +255,7 @@ class TestState {
       ((j['topics'] as List?) ?? []).map((t) => t.toString()).toList(),
       q == null ? null : TestQuestion(q['q'] as String, ((q['options'] as List?) ?? []).map((o) => o.toString()).toList()),
       r == null ? null : TestResult.fromJson(r),
+      teacherName: Faculty.fromJson(j['faculty'])?.name,
     );
   }
 }
@@ -299,6 +334,8 @@ class Receipt {
 
 /// What the screens need from the backend. [HttpApi] talks to the real server; [DemoApi] works offline.
 abstract class Api {
+  /// Full address of a picture the server gives as a path (teacher photos); null in the offline demo.
+  String? mediaUrl(String? path);
   bool get isDemo;
   Future<List<Plan>> plans();
   Future<void> sendOtp(String phone);
@@ -343,6 +380,10 @@ class HttpApi implements Api {
 
   @override
   bool get isDemo => false;
+
+  @override
+  String? mediaUrl(String? path) =>
+      path == null || path.isEmpty ? null : (path.startsWith('http') ? path : '$base${path.startsWith('/') ? '' : '/'}$path');
 
   Future<String?> _loadToken() async {
     _token ??= (await SharedPreferences.getInstance()).getString('token');
@@ -542,6 +583,9 @@ class DemoApi implements Api {
 
   int _demoUsed = 0;
   bool _subscribed = false;
+  late final Faculty _demoOwn = Faculty(1, cfg.teacherName, subjects: [cfg.subject]);
+  final Faculty _demoMaths = const Faculty(2, 'Gupta Sir', subjects: ['Mathematics']);
+  late Faculty _demoTeacher = _demoOwn;
   String? _simulated; // demo-only: preview renew-soon / grace / expired screens
   int _graceUsed = 0;
   bool _loggedIn = false;
@@ -555,6 +599,9 @@ class DemoApi implements Api {
 
   @override
   bool get isDemo => true;
+
+  @override
+  String? mediaUrl(String? path) => null;
 
   Access get _access {
     final ended = DateTime.now().subtract(const Duration(hours: 1));
@@ -654,7 +701,19 @@ class DemoApi implements Api {
     _history.insert(0, HistoryItem(id, question, answer, DateTime.now().toString(), false, false));
     final topic = question.length > 50 ? '${question.substring(0, 50)}…' : question;
     if (!_classTopics.contains(topic)) _classTopics.add(topic);
-    return Answer(id, answer, follow, 'teacher_notes', ["Sir’s notes"], hindi ? 'hi' : punjabi ? 'pa' : 'en', _access);
+    // demo of multi-teacher switching: a maths question (or "maths wale sir ko bulao") goes to a second teacher
+    final low = question.toLowerCase();
+    final maths = RegExp(r'math|ganit|गणित|percent|प्रतिशत|ज्यामिति|algebra|\d+\s*[x×+*/-]\s*\d+').hasMatch(low);
+    final back = RegExp(r'history|itihas|इतिहास|haldighati|हल्दीघाटी|rajasthan|राजस्थान').hasMatch(low);
+    final before = _demoTeacher;
+    if (maths) _demoTeacher = _demoMaths;
+    if (back && !maths) _demoTeacher = _demoOwn;
+    final switched = before.id != _demoTeacher.id;
+    final handover = !switched ? '' : hindi
+        ? 'यह ${_demoTeacher.subjects.first} का सवाल है — मैं आपको ${_demoTeacher.name} से जोड़ रहा हूँ।'
+        : 'This is a ${_demoTeacher.subjects.first} question — let me connect you to ${_demoTeacher.name}.';
+    return Answer(id, answer, follow, 'teacher_notes', ["Sir’s notes"], hindi ? 'hi' : punjabi ? 'pa' : 'en', _access,
+        faculty: _demoTeacher, switched: switched, handover: handover);
   }
 
   @override

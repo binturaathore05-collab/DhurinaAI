@@ -404,7 +404,9 @@ def set_my_name(body: StudentName, student=Depends(current_student)):
 
 @app.get("/me/access")
 def my_access(student=Depends(current_student)):
-    return _access(student["id"])
+    """Plan / safety state, plus the teacher the student is with now (the app shows that face and name on open)."""
+    f = _active_faculty(student["teacher_id"], student["id"])
+    return {**_access(student["id"]), "active_faculty": f.public() if f else None}
 
 
 # ---------- live class ----------
