@@ -131,3 +131,8 @@ explains at that level.
 ## Age-group rules — B2 (17 Nov 2026)
 Claude's defaults, editable in admin Settings → Age groups: Class 6–8 strict (no romance / dating, horror / gore),
 Class 9–10 medium (no dating advice), Class 11–12 medium, 18+ relaxed. Syllabus questions are answered in every group.
+
+## Team & roles — B5 (17 Nov 2026)
+Five admin roles (Super Admin, Safety Admin, Support, Technical, Auditor), Claude's split of permissions — see
+`backend/app/services/roles.py` and admin → Team. Only Super Admins manage the team and money settings; only Super /
+Safety Admins see student conversations or block students. New members get a one-time password.
