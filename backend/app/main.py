@@ -35,6 +35,7 @@ from .services import incidents
 from .services import roles
 from .services import data_protection
 from .services import alerts
+from .services import policy
 from .services.tutor import is_delete_command
 import threading
 import hashlib
@@ -879,6 +880,45 @@ def admin_me(user=Depends(require_admin)):
             "caps": roles.caps(user["role"]), "must_change": bool(user["must_change"]), "recent_logins": logins}
 
 
+# ---------- B8: safety policy versions ----------
+
+class Rollback(BaseModel):
+    note: str = ""
+
+
+@app.get("/admin/api/policy", dependencies=[Depends(need("settings_view"))])
+def admin_policy():
+    return policy.versions(db, admin.get_settings(db))
+
+
+@app.get("/admin/api/policy/compare", dependencies=[Depends(need("settings_view"))])
+def admin_policy_compare(a: int, b: int):
+    try:
+        return policy.compare(db, a, b)
+    except KeyError:
+        raise HTTPException(404, "Version not found")
+
+
+@app.post("/admin/api/policy/{vid}/rollback")
+def admin_policy_rollback(vid: int, body: Rollback, user=Depends(need("settings_safety"))):
+    """Bring back an earlier version: its rules become a new version (history is never rewritten)."""
+    try:
+        old = policy.get(db, vid)
+    except KeyError:
+        raise HTTPException(404, "Version not found")
+    current = admin.get_settings(db)
+    if policy.fingerprint(policy.snapshot(current)) == old["fingerprint"]:
+        raise HTTPException(400, "These rules are already in use")
+    try:
+        saved = admin.save_settings(db, old["rules"])
+    except admin.AdminError as exc:
+        raise HTTPException(400, str(exc))
+    why = (body.note or "").strip()
+    policy.record_if_changed(db, saved, user["email"], f"Rolled back to v{vid}" + (f": {why}" if why else ""), vid)
+    safety_lab.start_background(settings, db, "settings")   # the old rules are tested again with today's model
+    return policy.versions(db, saved)
+
+
 # ---------- B6: data protection (admin) ----------
 
 class StudentDelete(BaseModel):
@@ -1188,6 +1228,7 @@ def admin_get_settings():
 @app.put("/admin/api/settings")
 async def admin_put_settings(request: Request, user=Depends(need("settings_view"))):
     data = await request.json()
+    note = str((data or {}).pop("_note", "") or "")   # B8: why the safety rules were changed
     # B5: only sections whose values really change are checked (the page sends the whole form)
     current = admin.get_settings(db)
     changed = [sec for sec, vals in (data or {}).items() if isinstance(vals, dict) and sec in current
@@ -1196,10 +1237,12 @@ async def admin_put_settings(request: Request, user=Depends(need("settings_view"
         cap = "settings_safety" if sec in roles.SAFETY_SECTIONS else "settings_all"
         if not roles.has(user["role"], cap):
             raise HTTPException(403, f"Your role ({roles.label(user['role'])}) can't change these settings.")
+    policy.ensure_initial(db, current)   # B8: the rules before the first versioned change are v1
     try:
         saved = admin.save_settings(db, data)
     except admin.AdminError as exc:
         raise HTTPException(400, str(exc))
+    policy.record_if_changed(db, saved, user["email"], note)
     safety_lab.start_background(settings, db, "settings")   # A8: safety rules changed → run the safety tests again
     return saved
 

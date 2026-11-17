@@ -306,13 +306,26 @@ the usual hour; high), failed safety tests (high). The same alert isn't repeated
 "Alerts" at the top of the menu with the count of new alerts (refreshes every minute), Alerts page (open the case /
 page, mark as seen — logged with who). **Email** via any SMTP (`SMTP_HOST` …) to the addresses in Settings → Alerts,
 for critical only / critical + high / all; the email never contains what a child wrote — only what happened and a
-link (the B5 permissions decide who can open it). **WhatsApp** needs a WhatsApp Business API provider — not built.
+link (the B5 permissions decide who can open it). **WhatsApp** needs a WhatsApp Business API provider — not built
+(owner: at the very end).
+
+**B8 as built (17 Nov 2026):** the safety policy = topics Sir must not answer + trusted sites, warnings ladder,
+limits, age-group rules, lowest class. Every save in Settings that changes them makes a new numbered version (v1 =
+the rules when versions started) with who, when and "why" (asked in the save dialog, optional). Admin → **Safety
+policy**: version in use, compare any two versions (rule by rule; topics shown as + added / − removed), history with
+"Compare with previous" and "Roll back to vN" (Super / Safety Admin; the old rules become a new version — history is
+never rewritten — and the safety tests run again; a warning if that version was never verified). A version is
+**verified** when a live safety-test run passes while it is in use. Rollbacks are in the audit log.
+
+**Phase B complete (17 Nov 2026).** Open owner items: AI key on the server (live safety tests, decision 6), SMTP for
+alert emails, a paid server with a lasting disk + second copy of backups, lawyer's DPDP check (consent text, keeping
+periods, what stays after deletion), WhatsApp alerts (last).
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) — **built 17 Nov 2026** (see note below) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model.  — **built 17 Nov 2026** (see note below) |
 | B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21)  — **built 17 Nov 2026** (see note below) |
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) — **built 17 Nov 2026**, email yes, WhatsApp needs a provider (see note below) |
-| B8 | Safety policy versions with compare and rollback (18) |
+| B8 | Safety policy versions with compare and rollback (18) — **built 17 Nov 2026** (see note below) |
 
 ### Phase C — before launch for any voice / photo / video feature that ships
 - Voice: speech-to-text, then the same input check; output check before speaking; AI disclosure spoken at call start.

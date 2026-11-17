@@ -366,6 +366,18 @@ CREATE TABLE IF NOT EXISTS alerts (            -- B7: what the team is told at o
 CREATE INDEX IF NOT EXISTS alerts_open ON alerts (ack_at, level, at);
 CREATE INDEX IF NOT EXISTS alerts_dedup ON alerts (dedup_key, at);
 
+CREATE TABLE IF NOT EXISTS policy_versions (   -- B8: every version of the safety rules, who / when / why
+    id INTEGER PRIMARY KEY AUTOINCREMENT,       -- the version number (v1, v2, …)
+    created_at REAL NOT NULL,
+    created_by TEXT NOT NULL,
+    note TEXT,
+    rules TEXT NOT NULL,                        -- JSON of the safety sections
+    fingerprint TEXT NOT NULL,
+    rolled_back_from INTEGER,                   -- set when this version brought back an earlier one
+    verified_run INTEGER,                       -- the passing safety-test run (A8) that verified it
+    verified_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
     key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
     at REAL NOT NULL

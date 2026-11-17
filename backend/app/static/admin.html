@@ -145,6 +145,7 @@ const ICON = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   data: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
   review: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/>',
+  policy: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
   dash: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   lab: '<path d="M9 3h6M10 3v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
   audit: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -247,7 +248,7 @@ function shell(active, inner) {
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
     ${can('dashboard') ? `<a class="item ${active === 'Alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${ALERTS.open ? ` <span class="pill" style="margin-left:auto;color:${ALERTS.critical ? 'var(--bad)' : 'var(--warn)'}">${ALERTS.open}</span>` : ''}</a>` : ''}
-    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
+    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -589,7 +590,11 @@ function bindSettings() {
     if (!(await ask({ title: 'Save settings?', danger: money.length > 0,
       text: (money.length ? `<b>Money settings change:</b> ${money.map((k) => esc(labels[k]) + ` (<b>${esc(saved[k])} → ${esc(now[k])}</b>)`).join(', ')}.<br>` : '')
         + `${changed.length} setting${changed.length > 1 ? 's' : ''} will change for the whole platform.`, ok: 'Save settings' }))) return;
-    const out = {};
+    // B8: a change of the safety rules becomes a new policy version — say why (optional)
+    const safetyChange = changed.some((k) => ['ai', 'safety', 'limits', 'age_groups', 'students'].includes(k.split('.')[0]));
+    let note = '';
+    if (safetyChange) { note = await textDialog('Why are the safety rules changing?', 'Reason (kept in the policy history)', 'Save new version', { required: false, hint: 'This saves a new version of the safety policy. It can be compared and rolled back in Safety policy.' }); if (note === null) return; }
+    const out = { _note: note };
     document.querySelectorAll('[data-sec]').forEach((el) => {
       out[el.dataset.sec] = out[el.dataset.sec] || {};
       let v = el.value;
@@ -1088,6 +1093,44 @@ function bindData() {
     try { await api('POST', '/data/cleanup'); toast('Clean-up done'); again(); } catch (e) { toast(e.message); } };
 }
 
+// ---------- Safety policy versions (B8) ----------
+const PV = { a: null, b: null };
+const fmtVal = (v) => Array.isArray(v) ? (v.length ? v.join(', ') : '(none)') : (v === true ? 'On' : v === false ? 'Off' : v ?? '—');
+async function policyView() {
+  const d = await api('GET', '/policy');
+  const cur = d.items[0];
+  if (PV.b === null) { PV.b = cur.id; PV.a = d.items[1] ? d.items[1].id : cur.id; }
+  const cmp = PV.a !== PV.b ? await api('GET', `/policy/compare?a=${PV.a}&b=${PV.b}`) : { changes: [] };
+  const opts = (sel) => d.items.map((v) => `<option value="${v.id}" ${sel === v.id ? 'selected' : ''}>v${v.id} · ${when(v.created_at)}${v.current ? ' (in use)' : ''}</option>`).join('');
+  const ver = (v) => v.verified_run ? '<span class="pill" style="color:var(--ok)">Verified by tests</span>' : '<span class="pill">Not tested</span>';
+  const rows = d.items.map((v) => `<tr><td><b>v${v.id}</b>${v.current ? ' <span class="pill" style="color:var(--acc)">In use</span>' : ''}</td><td>${when(v.created_at)}</td><td>${esc(v.created_by)}</td>
+    <td style="max-width:360px">${esc(v.note || '')}</td><td>${v.changes == null ? 'first' : v.changes + ' change' + (v.changes === 1 ? '' : 's')}</td><td>${ver(v)}</td>
+    <td style="text-align:right;white-space:nowrap">${v.changes ? `<button type="button" class="btn ghost" data-cmp="${v.id}">Compare with previous</button>` : ''}
+      ${!v.current && v.fingerprint !== cur.fingerprint && can('settings_safety') ? `<button type="button" class="btn ghost" data-rb="${v.id}" data-ok="${v.verified_run ? 1 : 0}">Roll back to v${v.id}</button>` : ''}</td></tr>`).join('');
+  const diffRows = cmp.changes.map((c) => `<tr><td><b>${esc(c.label)}</b></td><td>${c.added || c.removed ? `${(c.removed || []).map((x) => `<span class="pill" style="color:var(--bad)">− ${esc(x)}</span>`).join(' ')}` : esc(fmtVal(c.old))}</td>
+    <td>${c.added || c.removed ? `${(c.added || []).map((x) => `<span class="pill" style="color:var(--ok)">+ ${esc(x)}</span>`).join(' ')}` : esc(fmtVal(c.new))}</td></tr>`).join('');
+  return shell('Safety policy', `<div class="row"><div><h1>Safety policy</h1><span class="sub">Every change of the safety rules is a version: who changed what, when and why. Compare any two; roll back if a change went wrong.</span></div></div>
+    <section class="card"><div class="row"><div><h2>In use: v${cur.id}</h2><span class="sub">${esc(cur.created_by)} · ${when(cur.created_at)} · ${esc(cur.note || '')}</span></div>${ver(cur)}</div>
+      <span class="muted" style="font-size:13px">The rules: topics Sir must not answer, the warnings ladder, limits, age-group rules and the lowest class. Change them in Settings; a new version is saved by itself. A version is “verified” when the safety tests passed with it.</span></section>
+    <section class="card"><h2>Compare</h2><div class="row" style="justify-content:flex-start;gap:10px;flex-wrap:wrap"><select id="pa" aria-label="Older version">${opts(PV.a)}</select><span class="muted">→</span><select id="pb" aria-label="Newer version">${opts(PV.b)}</select></div>
+      <div class="scroll">${diffRows ? `<table><thead><tr><th>RULE</th><th>v${PV.a}</th><th>v${PV.b}</th></tr></thead><tbody>${diffRows}</tbody></table>` : '<p class="muted">No difference between these two versions.</p>'}</div></section>
+    <section class="card"><h2>History</h2><div class="scroll"><table><thead><tr><th>VERSION</th><th>WHEN</th><th>BY</th><th>WHY</th><th>CHANGES</th><th>TESTS</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>`);
+}
+function bindPolicy() {
+  const again = async () => { $('#app').innerHTML = await policyView(); bindPolicy(); };
+  $('#pa').onchange = (e) => { PV.a = Number(e.target.value); again(); };
+  $('#pb').onchange = (e) => { PV.b = Number(e.target.value); again(); };
+  document.querySelectorAll('[data-cmp]').forEach((b) => b.onclick = async () => {
+    const d = await api('GET', '/policy'); const i = d.items.findIndex((v) => v.id === Number(b.dataset.cmp));
+    PV.b = d.items[i].id; PV.a = d.items[i + 1].id; again(); });
+  document.querySelectorAll('[data-rb]').forEach((b) => b.onclick = async () => {
+    const id = b.dataset.rb, verified = b.dataset.ok === '1';
+    const note = await textDialog(`Roll back to v${id}?`, 'Why', 'Roll back', { danger: !verified, hint: (verified ? 'v' + id + ' passed the safety tests. ' : 'Careful: v' + id + ' was never verified by the safety tests. ') + 'Its rules become a new version and apply at once; the safety tests run again.' });
+    if (note === null) return;
+    try { await api('POST', `/policy/${id}/rollback`, { note }); toast('Rolled back to v' + id); PV.a = PV.b = null; again(); } catch (e) { toast(e.message); }
+  });
+}
+
 // ---------- Alerts (B7) ----------
 const ALV = { all: false };
 const LV = { critical: ['Critical', 'var(--bad)'], high: ['High', 'var(--warn)'], medium: ['Info', 'var(--muted)'] };
@@ -1142,6 +1185,7 @@ async function render() {
     GUARD = null; HERE = h;
     if (can('dashboard')) { try { const a = await api('GET', '/alerts'); ALERTS = { open: a.open, critical: a.critical }; } catch {} }
     if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
+    else if (h === '#/policy') { app.innerHTML = await policyView(); bindPolicy(); }
     else if (h === '#/alerts') { app.innerHTML = await alertsView(); bindAlerts(); }
     else if (h === '#/data') { app.innerHTML = await dataView(); bindData(); }
     else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
