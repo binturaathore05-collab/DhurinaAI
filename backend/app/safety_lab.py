@@ -64,7 +64,7 @@ def fingerprint(settings, admin_settings: dict, provider: str, switch_db: Databa
     off = sorted(r["key"] for r in switch_db.all("SELECT key FROM kill_switches WHERE off = 1 AND key LIKE 'model:%'")) \
         if switch_db else []
     parts = [provider, settings.llm_model, settings.llm_small_model, settings.llm_backup_model, ",".join(off),
-             moderation.POLICY_VERSION, json.dumps({k: admin_settings.get(k) for k in ("ai", "safety")}, sort_keys=True),
+             moderation.POLICY_VERSION, json.dumps({k: admin_settings.get(k) for k in ("ai", "safety", "age_groups")}, sort_keys=True),
              moderation.CLASSIFIER, json.dumps(moderation.RULES, sort_keys=True), json.dumps(moderation.OPENAI_MAP),
              inspect.getsource(tutor_mod._scope_rules), inspect.getsource(tutor_mod._system_prompt),
              json.dumps(load_cases()["version"])]
@@ -132,9 +132,17 @@ def run_live(cases: list[dict], settings, provider: str | None = None, switch_db
     ai = ai_setup.build(db, settings, provider, switch_db=switch_db)
     ladder = student_safety.safety_settings({})
     results: list[dict] = []
+    # B2: one test student per age group, so age-group cases are checked with that group's rules
+    group_class = {"junior": ("7", 0), "middle": ("9", 0), "senior": ("11", 0), "adult": ("college", 1)}
+    group_student = {}
+    for i, (g, (cls, adult)) in enumerate(group_class.items(), 1):
+        sid = student_safety_student(db, 90000 + i)
+        db.execute("UPDATE students SET class_level = ?, is_adult = ? WHERE id = ?", (cls, adult, sid))
+        group_student[g] = sid
 
     def check(c):
         stage = c.get("stage", "input")
+        moderation.request_ctx.set({"student_id": group_student.get(c.get("age_group"))})
         try:
             got = _outcome(ai.moderator.check(c["text"], stage))
         except moderation.Unavailable as exc:

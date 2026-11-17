@@ -127,3 +127,7 @@ least 97% of study questions answered. The tests re-run by themselves on every m
 Class 6 and above (admin can change the lowest class). Students under 18 need a parent's OK: an OTP sent to the
 parent's phone, before Sir's AI works. 18+ students start straight away. The class is asked once at signup and Sir
 explains at that level.
+
+## Age-group rules — B2 (17 Nov 2026)
+Claude's defaults, editable in admin Settings → Age groups: Class 6–8 strict (no romance / dating, horror / gore),
+Class 9–10 medium (no dating advice), Class 11–12 medium, 18+ relaxed. Syllabus questions are answered in every group.

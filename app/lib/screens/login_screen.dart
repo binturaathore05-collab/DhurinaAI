@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,7 +18,23 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
   bool _busy = false;
+  bool _slow = false; // the server is waking up: say so instead of looking stuck
   String? _error;
+  Timer? _slowTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // wake the server while the student types the number
+    WidgetsBinding.instance.addPostFrameCallback((_) => AppScope.of(context).api.warmUp());
+  }
+
+  @override
+  void dispose() {
+    _slowTimer?.cancel();
+    _phone.dispose();
+    super.dispose();
+  }
 
   Future<void> _start() async {
     final digits = _phone.text.replaceAll(RegExp(r'\D'), '');
@@ -28,6 +46,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _busy = true;
       _error = null;
     });
+    _slowTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _busy) setState(() => _slow = true);
+    });
     try {
       await AppScope.of(context).api.sendOtp(digits);
       if (!mounted) return;
@@ -37,7 +58,13 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       setState(() => _error = 'No internet connection. Please try again.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _slowTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _slow = false;
+        });
+      }
     }
   }
 
@@ -95,6 +122,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
                   PrimaryButton(label: 'Start free demo call', icon: Icons.videocam_rounded, busy: _busy, onPressed: _start),
+                  if (_slow)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Center(
+                        child: Text('Connecting to Sir… this can take up to a minute the first time.',
+                            textAlign: TextAlign.center, style: TextStyle(color: LT.accentText, fontSize: 13)),
+                      ),
+                    ),
                   const SizedBox(height: 10),
                   Center(
                     child: Text(

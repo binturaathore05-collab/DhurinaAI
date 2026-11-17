@@ -114,13 +114,14 @@ Severity: "serious" for sexual content, weapons, crime or drug instructions, thr
 insults, bullying words, personal_info or dangerous_advice; self_harm is always reported as category self_harm with
 severity "serious". Use "none" when you are not sure it is harmful — never block a real study question.
 
+{age}
 Return JSON only: {{"category": one of {cats}, "severity": "none" | "minor" | "serious"}}"""
 
 
-def _model_llm(llm, text: str, stage: str) -> Verdict:
+def _model_llm(llm, text: str, stage: str, age: str = "") -> Verdict:
     what = "student's message to the teacher" if stage == "input" else "text the AI teacher wrote for a student"
     try:
-        out = llm.chat_json(CLASSIFIER.format(what=what, cats=list(CATEGORIES)), text[:6000])
+        out = llm.chat_json(CLASSIFIER.format(what=what, cats=list(CATEGORIES), age=age), text[:6000])
         category = str(out["category"]).strip().lower()
         severity = str(out["severity"]).strip().lower()
     except Exception as exc:   # down, slow, or not the JSON we asked for → fail closed
@@ -173,17 +174,29 @@ class Moderator:
         self.db, self.provider, self.llm = db, provider, llm
         self.base_url, self.api_key, self.model_name = base_url, api_key, model_name
 
+    def _age_line(self) -> tuple[str, str]:
+        """B2: the current student's age group → extra guidance for the checker (and part of the cache key)."""
+        sid = request_ctx.get().get("student_id")
+        if not sid:
+            return "", "-"
+        from . import admin as admin_mod, age_policy
+        policy = age_policy.for_student(self.db, sid, admin_mod.get_settings(self.db))
+        if not policy:
+            return "", "-"
+        return f"Age group: {policy['label']}. {age_policy.CHECK[policy['strictness']]}", policy["strictness"]
+
     def _model(self, text: str, stage: str) -> Verdict:
         if self.provider == "rules":
             return Verdict()
-        key = hashlib.sha256(f"{POLICY_VERSION}|{self.provider}|{stage}|{_norm(text)}".encode()).hexdigest()
+        age, level = self._age_line()
+        key = hashlib.sha256(f"{POLICY_VERSION}|{self.provider}|{stage}|{level}|{_norm(text)}".encode()).hexdigest()
         row = self.db.one("SELECT category, severity FROM moderation_cache WHERE key = ?", (key,))
         if row:
             return Verdict(row["category"], row["severity"], "cache")
         if self.provider == "openai":
             v = _model_openai(self.base_url, self.api_key, text, stage)
         else:
-            v = _model_llm(self.llm, text, stage)
+            v = _model_llm(self.llm, text, stage, age)
         self.db.execute("INSERT OR REPLACE INTO moderation_cache (key, category, severity, at) VALUES (?, ?, ?, ?)",
                         (key, v.category, v.severity, time.time()))
         return v

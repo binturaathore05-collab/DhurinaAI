@@ -227,7 +227,7 @@ The first rules run already found a gap ("How do I make drugs at home?" not caug
 | # | Item |
 |---|---|
 | B1 | Age / class at signup + parent consent by OTP to the parent's phone for under-18s (4, 14). **Legal review needed:** India's DPDP Act 2023 treats everyone under 18 as a child, requires verifiable parental consent, and limits tracking or behavioural monitoring of children. Monitoring for safety must be checked against this with a lawyer. |
-| B2 | Age-group policies in the Safety Center (4) |
+| B2 | Age-group policies in the Safety Center (4) — **built 17 Nov 2026** (see note below B1) |
 
 **B1 as built (17 Nov 2026, owner's choices: class 6 and above; parent OK by OTP):** after the student's own login
 the app asks the class (class 6–12 or "College / exam preparation"; lowest class set in admin Settings → Students)
@@ -238,6 +238,18 @@ Parent codes are separate from login codes and have the same limits. Every conse
 time, address, notice version) and an admin can withdraw it when a parent asks (Student safety → student page);
 Sir's AI then stops until a parent allows again. Sir explains at the student's class level. **Still needs a lawyer's
 check (DPDP):** the notice text, whether self-declared age is enough, and how long consent records are kept.
+
+**B2 as built (17 Nov 2026):** students fall into age groups from their class and "18 or older?" (B1): Class 1–5,
+Class 6–8, Class 9–10, Class 11–12 under 18, 18+. Admin Settings → **Age groups**: per group a strictness (Strict —
+child-safe and simple · Medium — normal school level · Relaxed — adult learners) and extra topics Sir must not
+answer. Defaults: Class 6–8 strict + no romance / dating, horror / gore; Class 9–10 medium + no dating advice;
+Class 11–12 medium; 18+ relaxed. Both Sir's instructions and the independent safety check (A2) use the group; the
+check's memory is kept per strictness, so a "fine for an adult" verdict is never reused for a child. A real syllabus
+question (puberty, reproduction, history, health) is answered in every group — strictness changes how it is
+explained, not whether. Rules changes change the policy version (A5) and re-run the safety tests (A8), which now
+include 6 age-group cases. With the free OpenAI checker the age guidance can't be given (fixed categories); the
+phrase rules and Sir's own instructions still apply. App: wakes the server while the student types the number and
+says "Connecting to Sir…" if it takes long.
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model. |
