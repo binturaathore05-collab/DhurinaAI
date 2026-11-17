@@ -132,9 +132,17 @@ def run_live(cases: list[dict], settings, provider: str | None = None, switch_db
     ai = ai_setup.build(db, settings, provider, switch_db=switch_db)
     ladder = student_safety.safety_settings({})
     results: list[dict] = []
+    # B2: one test student per age group, so age-group cases are checked with that group's rules
+    group_class = {"junior": ("7", 0), "middle": ("9", 0), "senior": ("11", 0), "adult": ("college", 1)}
+    group_student = {}
+    for i, (g, (cls, adult)) in enumerate(group_class.items(), 1):
+        sid = student_safety_student(db, 90000 + i)
+        db.execute("UPDATE students SET class_level = ?, is_adult = ? WHERE id = ?", (cls, adult, sid))
+        group_student[g] = sid
 
     def check(c):
         stage = c.get("stage", "input")
+        moderation.request_ctx.set({"student_id": group_student.get(c.get("age_group"))})
         try:
             got = _outcome(ai.moderator.check(c["text"], stage))
         except moderation.Unavailable as exc:
