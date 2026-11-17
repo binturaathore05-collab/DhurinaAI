@@ -112,7 +112,7 @@ Student message (text now; voice → text later; photo → text + image check la
 |---|---|---|
 | A1 | Enforce education-only + the admin's blocked topics (fixes finding 1) — **built 17 Nov 2026** (see note below) | Small, removes a false sense of safety |
 | A2 | Input & output moderation with fail-safe (section 6, 16) | Core protection |
-| A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) | Stop misuse |
+| A3 | Student status + warnings ladder + auto-block at account level + admin Block/Unblock page with history (7, 8, 9, S1) — **built 17 Nov 2026** (see note below) | Stop misuse |
 | A4 | Kill switches: all AI chat · one teacher · voice · photo (17) | Emergency control |
 | A5 | Session id, AI model, policy version on every answer + admin audit log (12 partial, 21) | Prove what the AI really said if a recording goes viral |
 | A6 | Rate limits: questions per minute and per day, OTP sends per number and per device (21) — **built 17 Nov 2026** (see note below) | Abuse + cost |
@@ -140,6 +140,24 @@ Retry-After). The app now sends a random per-install device id and shows the mes
 Limits: the device id and internet address can be changed by an attacker, so the per-number limits are the real
 guard on SMS cost; a cloud firewall / Play Integrity (S3) is still needed against large bot attacks. Set
 `TRUST_PROXY=1` only behind our own load balancer.
+
+**A3 as built:** every student has a status: **Active · Warning · Suspended (temporary) · Under review · Disabled**.
+It is checked on the server for every AI action (question, class notes, test, test answer, "teach again"), so logging
+out, reinstalling or starting a new class changes nothing. Suspended / under review: Sir's AI stops, but notes,
+library and (except under review) payments keep working. Disabled: nothing works, old logins included.
+**What counts:** off-topic chat never counts (a harmless question can never lead to a block). A topic the admin has
+blocked = small problem; a clearly harmful request (sexual content, weapons/bombs/drugs, crime, trying to break the
+rules, threats) = serious — the AI now marks these as `unsafe`, its text is never shown. **Default ladder** (admin
+Settings → "Student safety", can be switched off): 3 blocked-topic questions in 7 days → warning; 6 → suspended 24 h;
+1 serious request → suspended 24 h at once; 2 serious in 30 days → stopped until an admin reviews. A suspension ends by
+itself; a warning clears after a quiet week. **Admin → Student safety:** list (needs attention / by status / search by
+name, phone, ID), student page with what the student wrote, and Warn / Suspend (1–30 days) / Stop until reviewed /
+Disable / Unblock — a reason is required, remarks optional; every change (automatic or by whom) is kept in the
+history. The app shows the warning or the "AI Teacher paused" message on the call screen. **Care, not punishment:**
+a student who shares sadness, bullying or thoughts of self-harm is never marked unsafe; Sir answers warmly, tells
+them to talk to a parent / trusted adult and gives Tele-MANAS 14416. Limit: this still relies on the AI's own
+judgement; A2 adds an independent check. Not yet: teacher view of flags (owner decision 5), parent notification
+(Phase B), a separate admin audit log (A5).
 
 ### Phase B — also before launch
 | # | Item |
