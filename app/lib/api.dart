@@ -18,7 +18,7 @@ class ApiException implements Exception {
 
 /// The server recognised a class command ("Sir, save this" / "Sir, test lo") instead of a question.
 class CommandException implements Exception {
-  final String command; // save | test
+  final String command; // save | test | delete
   CommandException(this.command);
 }
 
@@ -329,6 +329,8 @@ abstract class Api {
   Future<Checkout> checkout(String planId);
   Future<Receipt> confirmPayment(String orderId, String paymentId, String signature);
   Future<void> logout();
+  /// B6: deletes the account and learning data on the server (can't be undone), then logs out.
+  Future<void> deleteMyData();
 
   static Api create(TeacherConfig cfg) => apiBaseUrl.isEmpty ? DemoApi(cfg) : HttpApi(apiBaseUrl, cfg.teacherId);
 }
@@ -435,6 +437,7 @@ class HttpApi implements Api {
     // the app handles "save this" / "test lo" itself; if the server still sees one, ask the screen to do it
     if (j['type'] == 'note_saved') throw CommandException('save');
     if (j['type'] == 'test_offer') throw CommandException('test');
+    if (j['type'] == 'delete_offer') throw CommandException('delete');
     return Answer.fromJson(j);
   }
 
@@ -523,6 +526,12 @@ class HttpApi implements Api {
   Future<void> logout() async {
     _token = null;
     await (await SharedPreferences.getInstance()).remove('token');
+  }
+
+  @override
+  Future<void> deleteMyData() async {
+    await _call('POST', '/me/delete', {'confirm': 'DELETE'});
+    await logout();
   }
 }
 
@@ -748,6 +757,15 @@ class DemoApi implements Api {
 
   @override
   Future<void> logout() async {
+    _loggedIn = false;
+  }
+
+  @override
+  Future<void> deleteMyData() async {
+    _history.clear();
+    _notes.clear();
+    _classLevel = null;
+    _parentOk = false;
     _loggedIn = false;
   }
 }

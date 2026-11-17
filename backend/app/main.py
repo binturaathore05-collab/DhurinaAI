@@ -33,6 +33,9 @@ from .services import consent
 from .services import safety_dashboard
 from .services import incidents
 from .services import roles
+from .services import data_protection
+from .services.tutor import is_delete_command
+import threading
 import hashlib
 from .languages import detect_language
 from fastapi.responses import Response
@@ -45,7 +48,7 @@ def sms_console(phone: str, message: str) -> None:
     print(f"[SMS to {phone}] {message}")  # replace with a real SMS provider in production
 
 
-db = Database(settings.database_path)
+db = Database(settings.database_path, settings.db_encryption_key or None)   # B6: encrypted at rest when keyed
 kb = KnowledgeBase(db)
 
 
@@ -281,6 +284,25 @@ def _after_answer(student_id: int, teacher_id: str, question: str, result) -> No
                                     question, result.qa_id, student_safety.safety_settings(admin.get_settings(db)))
 
 
+# ---------- B6: delete my data ----------
+
+class DeleteConfirm(BaseModel):
+    confirm: str
+
+
+@app.post("/me/delete")
+def delete_my_data(body: DeleteConfirm, student=Depends(current_student)):
+    """The student deletes their account and learning data (type DELETE to confirm). Can't be undone."""
+    if body.confirm.strip().upper() != "DELETE":
+        raise HTTPException(400, "Type DELETE to confirm")
+    try:
+        done = data_protection.delete_student(db, student["id"], "student", "Student asked in the app",
+                                              settings.notes_dir)
+    except data_protection.DataError as exc:
+        raise HTTPException(400, str(exc))
+    return {"deleted": True, **done}
+
+
 # ---------- B1: class + parent consent ----------
 
 class Profile(BaseModel):
@@ -460,6 +482,8 @@ def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, sess
 def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
     _limit_questions(student["id"])
     session_id = classroom.current_session(db, student["id"], teacher.id)
+    if is_delete_command(body.question):   # B6: "delete my data" → the app asks to confirm; nothing is deleted yet
+        return {"type": "delete_offer", **_access(student["id"])}
     if is_save_command(body.question):   # "Sir, save this" = notes of the whole class so far
         return {"type": "note_saved", "note": _class_notes(student["id"], teacher, session_id, None)}
     if quiz.is_test_command(body.question):   # "Sir, test lo" → the app asks MCQ / written / oral
@@ -852,6 +876,62 @@ def admin_me(user=Depends(require_admin)):
                                       (user["email"],))]
     return {"email": user["email"], "name": user["name"], "role": user["role"], "role_label": roles.label(user["role"]),
             "caps": roles.caps(user["role"]), "must_change": bool(user["must_change"]), "recent_logins": logins}
+
+
+# ---------- B6: data protection (admin) ----------
+
+class StudentDelete(BaseModel):
+    reason: str
+
+
+@app.post("/admin/api/students/{sid}/delete")
+def admin_delete_student(sid: int, body: StudentDelete, user=Depends(need("delete_data"))):
+    if not body.reason.strip():
+        raise HTTPException(400, "Write why (e.g. the parent asked by phone)")
+    try:
+        return data_protection.delete_student(db, sid, user["email"], body.reason, settings.notes_dir)
+    except KeyError:
+        raise HTTPException(404, "Student not found")
+    except data_protection.DataError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/admin/api/data", dependencies=[Depends(need("data_admin"))])
+def admin_data():
+    return {"encrypted": db.encrypted, "backup_dir": settings.backup_dir,
+            "backups": data_protection.list_backups(settings.backup_dir),
+            "last_backup": data_protection.last_job(db, "backup"), "last_cleanup": data_protection.last_job(db, "retention"),
+            "settings": data_protection.data_settings(admin.get_settings(db)),
+            "requests": data_protection.requests_log(db)}
+
+
+@app.post("/admin/api/data/backup", dependencies=[Depends(need("data_admin"))])
+def admin_data_backup():
+    data_protection.backup_now(db, settings.backup_dir, data_protection.data_settings(admin.get_settings(db))["backup_keep"])
+    return admin_data()
+
+
+@app.post("/admin/api/data/cleanup", dependencies=[Depends(need("data_admin"))])
+def admin_data_cleanup():
+    data_protection.run_retention(db, admin.get_settings(db))
+    return admin_data()
+
+
+def _data_jobs_loop():
+    """B6: every hour, run what is due — the daily encrypted backup and the daily clean-up of old data."""
+    while True:
+        time.sleep(60)
+        try:
+            data_protection.daily(db, lambda: admin.get_settings(db), settings.backup_dir)
+        except Exception as exc:   # never take the server down; say so in the logs
+            print(f"[data] daily job failed: {exc}")
+        time.sleep(3600 - 60)
+
+
+if os.environ.get("DATA_JOBS", "1") == "1":
+    threading.Thread(target=_data_jobs_loop, daemon=True, name="data-jobs").start()
+if not db.encrypted:
+    print("[data] WARNING: the database is NOT encrypted. Set DB_ENCRYPTION_KEY before launch.")
 
 
 # ---------- B5: team ----------
@@ -1248,7 +1328,7 @@ def admin_safety_student(sid: int, user=Depends(need("students"))):
         for v in d["violations"]:
             v["question"] = "(hidden — safety team only)"
     d["can"] = {"block": roles.has(user["role"], "block"), "consent": roles.has(user["role"], "consent"),
-                "evidence": roles.has(user["role"], "evidence")}
+                "evidence": roles.has(user["role"], "evidence"), "delete": roles.has(user["role"], "delete_data")}
     return d
 
 

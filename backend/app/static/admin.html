@@ -142,6 +142,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':
 const rupees = (paise) => '₹' + Math.round((paise || 0) / 100).toLocaleString('en-IN');
 const ICON = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  data: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
   review: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/>',
   dash: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
   lab: '<path d="M9 3h6M10 3v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
@@ -243,7 +244,7 @@ function shell(active, inner) {
   const item = (href, ic, label, cap) => (!cap || can(cap)) ? `<a class="item ${active === label ? 'on' : ''}" href="${href}">${icon(ic)}${label}</a>` : '';
   return `<div class="shell"><nav aria-label="Admin">
     <div class="brand"><span class="logo">L</span><span style="display:flex;flex-direction:column"><b style="font-size:17px">LiveTeach</b><span class="muted" style="font-size:12px">${esc(ME ? ME.name + ' · ' + ME.role_label : 'Dhurina Admin')}</span></span></div>
-    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
+    ${item('#/', 'users', 'Teachers', 'teachers_view')}${item('#/new', 'plus', 'Add teacher', 'teachers_edit')}${item('#/reports', 'chart', 'Reports', 'money')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -542,6 +543,8 @@ async function settingsView() {
       ${f('limits', 'otp_per_phone_day', 'Codes per number per day', s.limits.otp_per_phone_day, 'number')}${f('limits', 'otp_per_device_day', 'Codes per phone (device) per day', s.limits.otp_per_device_day, 'number')}
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
       ${f('limits', 'otp_wrong_per_phone_day', 'Wrong codes before a number is locked for the day', s.limits.otp_wrong_per_phone_day, 'number')}</div>`)}
+    ${card('Data keeping', 'Old data is deleted by itself every day. Parent consents, payments and the audit log are kept (legal duties).', `<div class="grid2">${f('data', 'conversation_months', 'Keep conversations (months)', s.data.conversation_months, 'number', 'Questions, answers, tests. Answers a safety case or a saved note points to are kept.')}
+      ${f('data', 'safety_months', 'Keep safety records (months)', s.data.safety_months, 'number', 'Flagged messages, safety events, closed cases')}${f('data', 'backup_keep', 'Daily backups to keep', s.data.backup_keep, 'number')}</div>`)}
     ${card('Students', 'Who can sign up', `<div class="grid2">${f('students', 'min_class', 'Lowest class allowed', s.students.min_class, 'number', 'Owner’s choice: class 6. Students under 18 always need a parent’s OK by OTP.')}</div>`)}
     ${card('Age groups', 'Rules by age, from the class and “18 or older?” given at signup. Used by Sir’s answers and the safety check. A real syllabus question is answered in every group.', `<div style="display:flex;flex-direction:column;gap:14px">${[
         ['primary', 'Class 1–5', 'about 6–10 years (only if the lowest class is below 6)'], ['junior', 'Class 6–8', 'about 11–13 years'], ['middle', 'Class 9–10', 'about 14–15 years'],
@@ -683,7 +686,7 @@ async function studentView(id) {
     <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
       ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
       ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
-    <section class="card"><div class="row"><h2>Class &amp; parent consent</h2>${x.consent_status === 'given' && (!x.can || x.can.consent) ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}</div>
+    <section class="card"><div class="row"><h2>Class &amp; parent consent</h2><span>${x.consent_status === 'given' && (!x.can || x.can.consent) ? '<button type="button" class="btn ghost" id="revoke" style="color:var(--bad)">Withdraw parent consent</button>' : ''}${x.can && x.can.delete && !String(x.phone).startsWith('deleted:') ? ' <button type="button" class="btn ghost" id="deldata" style="color:var(--bad)">Delete this student’s data</button>' : ''}</span></div>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
         ${kv('Class', x.class_level ? (x.class_level === 'college' ? 'College / exam preparation' : 'Class ' + esc(x.class_level)) : 'Not given yet')}${kv('18 or older', x.is_adult == null ? '—' : (x.is_adult ? 'Yes' : 'No'))}
         ${kv('Parent consent', esc(x.consent_status))}</div>
@@ -694,6 +697,11 @@ async function studentView(id) {
 }
 async function bindStudent(id) {
   const x = await api('GET', '/students/' + encodeURIComponent(id));
+  if ($('#deldata')) $('#deldata').onclick = async () => {
+    const reason = await textDialog('Delete this student’s data?', 'Who asked and how (e.g. mother called on 98…)', 'Delete data', { danger: true, hint: 'Questions, answers, notes, tests, name and class are deleted and the account is closed. Payments, consents and safety records stay. This can’t be undone.' });
+    if (!reason) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/delete`, { reason }); toast('Data deleted — account closed'); $('#app').innerHTML = await studentView(id); bindStudent(id); } catch (e) { toast(e.message); }
+  };
   if ($('#revoke')) $('#revoke').onclick = async () => {
     const reason = await switchDialog('parent consent for ' + (x.name || x.phone), true); if (!reason) return;
     try { await api('POST', `/students/${encodeURIComponent(id)}/consent/revoke`, { reason }); toast('Parent consent withdrawn — Sir’s AI is paused for this student');
@@ -1045,6 +1053,33 @@ function bindTeam() {
     try { const r = await api('POST', `/team/${b.dataset.reset}/reset`); await again(); showTempPassword(b.dataset.email, r.temp_password); } catch (err) { toast(err.message); } });
 }
 
+// ---------- Data & backups (B6) ----------
+const bytes = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+async function dataView() {
+  const d = await api('GET', '/data');
+  const lc = d.last_cleanup;
+  const rows = d.backups.map((b) => `<tr><td>${esc(b.file)}</td><td>${when(b.at)}</td><td>${bytes(b.bytes)}</td></tr>`).join('');
+  const reqs = d.requests.map((r) => `<tr><td>${when(r.done_at)}</td><td>${r.student_id ? `<a href="#/s/${r.student_id}">ID ${r.student_id}</a>` : '—'}</td><td>${esc(r.requested_by)}</td><td>${esc(r.reason || '')}</td>
+    <td class="muted" style="font-size:12px">${esc(Object.entries(r.details).map(([k, v]) => v + ' ' + k.replace('_', ' ')).join(' · '))}</td></tr>`).join('');
+  return shell('Data & backups', `<div class="row"><div><h1>Data & backups</h1><span class="sub">How students’ data is protected, kept and deleted.</span></div></div>
+    <section class="card" style="border-color:${d.encrypted ? 'var(--ok)' : 'var(--bad)'};background:${d.encrypted ? '#F0FDF4' : '#FEF2F2'}">
+      <b style="color:${d.encrypted ? 'var(--ok)' : 'var(--bad)'}">${d.encrypted ? 'Encrypted: the whole database and every backup are encrypted (AES-256).' : 'NOT encrypted. Set DB_ENCRYPTION_KEY on the server before launch.'}</b>
+      <span class="muted">${d.encrypted ? 'Keep the key safe (in the hosting settings). Without it no one — not even us — can read the data or a backup.' : 'Conversations and phone numbers are stored as plain text right now.'}</span></section>
+    <section class="card"><div class="row"><div><h2>Daily backups</h2><span class="sub">Taken every day by itself · newest ${d.settings.backup_keep} kept · folder ${esc(d.backup_dir)}</span></div><button class="btn primary" id="bk">Back up now</button></div>
+      <div class="scroll">${rows ? `<table><thead><tr><th>FILE</th><th>WHEN</th><th>SIZE</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">No backup yet.</p>'}</div>
+      <span class="muted" style="font-size:12px">On a free demo server these files vanish on restart. A real server needs a lasting disk; copying backups to a second place is the next step.</span></section>
+    <section class="card"><div class="row"><div><h2>Old data clean-up</h2><span class="sub">Conversations after ${d.settings.conversation_months} months · safety records after ${d.settings.safety_months} months · change in Settings → Data keeping</span></div><button class="btn ghost" id="cu">Run clean-up now</button></div>
+      ${lc ? `<span>Last run ${when(lc.at)}: ${['answers', 'tests', 'class_sessions', 'safety_events', 'flagged_messages', 'closed_cases'].map((k) => `${lc[k] || 0} ${k.replace('_', ' ')}`).join(' · ')} deleted.</span>` : '<p class="muted">Not run yet.</p>'}</section>
+    <section class="card"><h2>Delete-my-data requests</h2><span class="sub">From students in the app (or by telling Sir) and from admins on a parent’s request.</span>
+      <div class="scroll">${reqs ? `<table><thead><tr><th>WHEN</th><th>STUDENT</th><th>BY</th><th>WHY</th><th>DELETED</th></tr></thead><tbody>${reqs}</tbody></table>` : '<p class="muted">None yet.</p>'}</div></section>`);
+}
+function bindData() {
+  const again = async () => { $('#app').innerHTML = await dataView(); bindData(); };
+  $('#bk').onclick = async () => { try { await api('POST', '/data/backup'); toast('Backup made'); again(); } catch (e) { toast(e.message); } };
+  $('#cu').onclick = async () => { if (!(await ask({ title: 'Run the clean-up now?', text: 'Data older than the keeping periods is deleted now. It also runs by itself every day.', ok: 'Run clean-up', danger: true }))) return;
+    try { await api('POST', '/data/cleanup'); toast('Clean-up done'); again(); } catch (e) { toast(e.message); } };
+}
+
 // ---------- router ----------
 async function render() {
   const app = $('#app');
@@ -1070,6 +1105,7 @@ async function render() {
     if (h === '#/' && !can('teachers_view')) { location.hash = can('evidence') ? '#/review' : can('students') ? '#/safety' : '#/safety-dash'; return; }
     GUARD = null; HERE = h;
     if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
+    else if (h === '#/data') { app.innerHTML = await dataView(); bindData(); }
     else if (h === '#/new') { app.innerHTML = await formView(null); bindForm(null); }
     else if (h.startsWith('#/edit/')) { const id = decodeURIComponent(h.slice(7)); app.innerHTML = await formView(id); bindForm(id); }
     else if (h.startsWith('#/t/')) { const id = decodeURIComponent(h.slice(4)); app.innerHTML = await detailView(id); bindDetail(id); }

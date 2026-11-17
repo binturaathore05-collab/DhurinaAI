@@ -51,6 +51,11 @@ class Settings:
     # longer verify). Empty = derived from JWT_SECRET.
     audit_secret: str = field(default_factory=lambda: _env("AUDIT_SECRET"))
 
+    # B6: encrypt the whole database (and so every backup). Set once to a long random value and keep it safe:
+    # without it the data can't be read. Empty = not encrypted (local development only).
+    db_encryption_key: str = field(default_factory=lambda: _env("DB_ENCRYPTION_KEY"))
+    backup_dir: str = field(default_factory=lambda: _env("BACKUP_DIR", "backups"))
+
     notes_dir: str = field(default_factory=lambda: _env("NOTES_DIR", "notes_pdfs"))
 
 

@@ -283,10 +283,24 @@ teachers, app builds, Emergency, safety tests, no student data · **Auditor** re
 reports, settings. Every admin request is checked on the server (`services/roles.py`); the menu shows only allowed
 pages; Settings saves are checked per section (safety sections for Safety Admin, company / money / legal for Super
 Admin only). "School Admin" = Teacher (own students only, teacher dashboard).
+
+**B6 as built (17 Nov 2026):** **Encryption at rest:** the whole database is encrypted with SQLCipher (AES-256) when
+`DB_ENCRYPTION_KEY` is set (Render generates one) — conversations, phone numbers, everything; an existing plain
+database is converted once; a wrong key refuses to start. **Backups:** one encrypted copy a day (taken while the app
+runs), newest 14 kept; admin → **Data & backups** (Super Admin): status, "Back up now", list. Free demo servers lose
+them on restart — a real server needs a lasting disk, and copying backups to a second place is the next step.
+**Retention** (runs daily, owner's default 12 months chosen by Claude; admin Settings → Data keeping): conversations,
+tests, class sessions after 12 months; flagged messages, safety events and closed cases after 36 months; answers a
+case or a saved note points to are kept; parent consents, payments and the audit log are kept (legal duties). A
+deleted answer leaves its A5 seal (no text) so the remaining answers still verify. **Delete-my-data:** the student
+in Library → ⋮ → "Delete my account & data", or by telling Sir ("mera data delete kar do"), always with "type DELETE";
+or Super Admin / Support on a parent's request (reason required). Questions, answers, notes + PDFs, tests, sessions,
+name, class are deleted; the account is made anonymous and closed; payments, consents and safety records stay. All
+requests are listed on the Data page. **Lawyer check (DPDP):** the keeping periods and what is kept after deletion.
 | B3 | Safety dashboard incl. "AI tried to answer unsafely X times, stopped X times" (10) — **built 17 Nov 2026** (see note below) |
 | B4 | Human Review Center with roles; only safety-team roles can see flagged conversations (11, 19) — **built 17 Nov 2026** (see note below) |
 | B5 | Team & roles in Settings: Super Admin, Safety Admin, Support, Technical, Auditor (19). "School Admin" maps to **Teacher** in our model.  — **built 17 Nov 2026** (see note below) |
-| B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21) |
+| B6 | Encryption of stored conversations, retention period (e.g. auto-delete after N months), delete-my-data request, daily backups (14, 21)  — **built 17 Nov 2026** (see note below) |
 | B7 | Alerts in the admin panel + email / WhatsApp for serious incidents and spikes (20) |
 | B8 | Safety policy versions with compare and rollback (18) |
 

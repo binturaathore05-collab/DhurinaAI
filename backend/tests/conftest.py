@@ -4,7 +4,11 @@ B1 (class + parent consent) is enforced for every AI action. Most tests are abou
 student who has not filled in a class yet, so the B1 gate is switched off for them here. Tests that check B1 itself
 carry @pytest.mark.consent_gate and get the real gate.
 """
+import os
+
 import pytest
+
+os.environ.setdefault("DATA_JOBS", "0")   # no background backups / clean-ups while testing
 
 
 def pytest_configure(config):

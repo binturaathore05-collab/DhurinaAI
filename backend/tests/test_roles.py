@@ -82,7 +82,7 @@ def test_actions_need_the_right_role(client):
     assert em(aud).status_code == 403 and em(tech).status_code == 200
     # support sees the student's account but not what they wrote
     d = client.get("/admin/api/students/1", headers=sup).json()
-    assert d["violations"][0]["question"].startswith("(hidden") and d["can"] == {"block": False, "consent": True, "evidence": False}
+    assert d["violations"][0]["question"].startswith("(hidden") and d["can"] == {"block": False, "consent": True, "evidence": False, "delete": True}
     assert client.get("/admin/api/students/1", headers=saf).json()["violations"][0]["question"] == "secret words of the student"
     # settings: safety admin may change safety sections only; auditor nothing
     assert client.put("/admin/api/settings", headers=saf, json={"safety": {"suspend_hours": 48}}).status_code == 200

@@ -4,5 +4,6 @@ pydantic>=2.7
 PyJWT>=2.8
 cryptography>=42      # encrypts teachers' Razorpay secrets
 openpyxl>=3.1         # Excel export of reports
+sqlcipher3-binary>=0.5   # B6: encrypted database (DB_ENCRYPTION_KEY)
 playwright>=1.45   # PDF notes; then run: playwright install chromium
 pytest>=8

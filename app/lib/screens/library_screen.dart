@@ -7,6 +7,7 @@ import '../main.dart';
 import '../share.dart';
 import '../theme.dart';
 import 'pdf_screen.dart';
+import 'delete_data.dart';
 
 String dayLabel(String createdAt) {
   final d = DateTime.tryParse(createdAt);
@@ -138,7 +139,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(backgroundColor: LT.bg, title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.w800))),
+      appBar: AppBar(
+        backgroundColor: LT.bg,
+        title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            onSelected: (v) {
+              if (v == 'delete') confirmDeleteMyData(context);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'delete', child: Text('Delete my account & data')),
+            ],
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _reload,
         child: CustomScrollView(controller: _scroll, slivers: [
