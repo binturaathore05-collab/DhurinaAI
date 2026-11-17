@@ -35,6 +35,31 @@ MESSAGES: dict[str, dict[str, str]] = {
     "plan_ended": {
         "en": "Your plan has ended. Renew to continue learning with {teacher}.",
     },
+    "limit_ask_minute": {
+        "en": "You're asking very fast. Please wait {wait} and ask again.",
+        "hi": "आप बहुत तेज़ी से पूछ रहे हैं। {wait} रुककर फिर पूछिए।",
+        "pa": "ਤੁਸੀਂ ਬਹੁਤ ਤੇਜ਼ੀ ਨਾਲ ਪੁੱਛ ਰਹੇ ਹੋ। {wait} ਰੁਕ ਕੇ ਫਿਰ ਪੁੱਛੋ।",
+    },
+    "limit_ask_day": {
+        "en": "You've reached today's question limit. Please continue in {wait}.",
+        "hi": "आज के सवालों की सीमा पूरी हो गई। {wait} बाद फिर जारी रखिए।",
+        "pa": "ਅੱਜ ਦੇ ਸਵਾਲਾਂ ਦੀ ਸੀਮਾ ਪੂਰੀ ਹੋ ਗਈ। {wait} ਬਾਅਦ ਫਿਰ ਜਾਰੀ ਰੱਖੋ।",
+    },
+    "limit_otp_gap": {
+        "en": "A code was just sent. Please wait {wait} before asking for a new one.",
+        "hi": "कोड अभी भेजा गया है। नया कोड माँगने से पहले {wait} रुकिए।",
+        "pa": "ਕੋਡ ਹੁਣੇ ਭੇਜਿਆ ਗਿਆ ਹੈ। ਨਵਾਂ ਕੋਡ ਮੰਗਣ ਤੋਂ ਪਹਿਲਾਂ {wait} ਰੁਕੋ।",
+    },
+    "limit_otp": {
+        "en": "Too many code requests. Please try again in {wait}.",
+        "hi": "बहुत ज़्यादा कोड माँगे गए। {wait} बाद फिर कोशिश करें।",
+        "pa": "ਬਹੁਤ ਜ਼ਿਆਦਾ ਕੋਡ ਮੰਗੇ ਗਏ। {wait} ਬਾਅਦ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+    },
+    "limit_otp_locked": {
+        "en": "Too many wrong codes for this number. Please try again in {wait}.",
+        "hi": "इस नंबर पर बहुत ज़्यादा गलत कोड डाले गए। {wait} बाद फिर कोशिश करें।",
+        "pa": "ਇਸ ਨੰਬਰ 'ਤੇ ਬਹੁਤ ਜ਼ਿਆਦਾ ਗਲਤ ਕੋਡ ਪਾਏ ਗਏ। {wait} ਬਾਅਦ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+    },
     "notes_title": {"en": "Notes", "hi": "नोट्स", "pa": "ਨੋਟਸ"},
     "notes_question": {"en": "Question", "hi": "प्रश्न", "pa": "ਸਵਾਲ"},
     "notes_source": {"en": "Source", "hi": "स्रोत", "pa": "ਸਰੋਤ"},

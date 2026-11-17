@@ -61,7 +61,7 @@ Audit + gap analysis + phased plan: **`docs/safety-gap-analysis.md`**. S1 is fol
 Owner (17 Nov 2026): app ya admin par kahin bhi cyber attack / hacking — jaise OTP bypass karna ya bahut zyada OTP
 mangwana — in sab ko dhyan mein rakhte hue chalna hai. Falls under the launch rule: done before launch.
 
-**Already in place:** OTP stored hashed, expires, max wrong tries per code · OTP checked only on the server ·
+**Already in place:** OTP stored hashed, expires, max wrong tries per code · OTP limits per number, device and IP + number locked after 10 wrong codes a day (A6) · question limits per student (A6) · OTP checked only on the server ·
 admin lockout after 5 wrong passwords · tokens expire (admin 12 h) and end on password change · all database
 queries parameterised (no SQL injection) · page text escaped (XSS) · Razorpay signatures + webhook verified ·
 secrets encrypted, never in code.

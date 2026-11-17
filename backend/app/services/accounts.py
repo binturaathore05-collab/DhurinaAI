@@ -18,6 +18,10 @@ class AuthError(Exception):
     """Raised with a message already translated for the student."""
 
 
+class WrongCode(AuthError):
+    """The code typed does not match (counted towards the per-number lock)."""
+
+
 def _hash_code(phone: str, code: str, secret: str) -> str:
     return hmac.new(secret.encode(), f"{phone}:{code}".encode(), hashlib.sha256).hexdigest()
 
@@ -59,7 +63,7 @@ class OtpService:
             raise AuthError(t("otp_too_many", "en"))
         if not hmac.compare_digest(row["code_hash"], _hash_code(phone, code.strip(), self.secret)):
             self.db.execute("UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", (row["id"],))
-            raise AuthError(t("otp_invalid", "en"))
+            raise WrongCode(t("otp_invalid", "en"))
         self.db.execute("UPDATE otp_codes SET used = 1 WHERE id = ?", (row["id"],))
         return phone
 

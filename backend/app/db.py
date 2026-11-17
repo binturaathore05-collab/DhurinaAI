@@ -4,6 +4,7 @@ Every table that holds student or teacher data carries teacher_id, so one backen
 white-label teacher app while keeping their data apart.
 """
 import sqlite3
+from contextlib import contextmanager
 import threading
 
 SCHEMA = """
@@ -165,6 +166,12 @@ CREATE TABLE IF NOT EXISTS tests (
     created_at REAL NOT NULL,
     finished_at REAL
 );
+
+CREATE TABLE IF NOT EXISTS rate_events (       -- A6 rate limits: one row per counted event
+    key TEXT NOT NULL,                          -- e.g. ask:student:12, otp:phone:<teacher>:<phone>
+    at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_events_key_at ON rate_events (key, at);
 """
 
 
@@ -230,6 +237,17 @@ class Database:
             DROP TABLE saved_notes_old;
         """)
         self._conn.execute("PRAGMA foreign_keys = ON")
+
+    @contextmanager
+    def tx(self):
+        """Several statements as one step (no other request can slip in between)."""
+        with self._lock:
+            try:
+                yield self._conn
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:

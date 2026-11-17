@@ -22,6 +22,7 @@ from .services import style as style_mod
 from .services import teacher_data
 from .services import classroom, quiz, share
 from .services import admin_reports
+from .services import limits
 from fastapi.responses import Response
 from .services.knowledge import KnowledgeBase
 from .services.llm import FakeLLM, OpenAICompatibleLLM
@@ -84,6 +85,32 @@ def teacher_info(request: Request, teacher: TeacherProfile = Depends(teacher_fro
             "share_url": share.share_url(settings.public_base_url, row["id"], str(request.base_url))}
 
 
+# ---------- rate limits (A6) ----------
+
+def _limit_settings() -> dict:
+    return limits.settings(admin.get_settings(db))
+
+
+def _client_ip(request: Request) -> str:
+    if settings.trust_proxy:   # only behind our own proxy / load balancer, which sets this header
+        fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if fwd:
+            return fwd
+    return request.client.host if request.client else ""
+
+
+def _too_many(exc: limits.Limited) -> HTTPException:
+    return HTTPException(429, str(exc), headers={"Retry-After": str(exc.retry_after)})
+
+
+def _limit_questions(student_id: int) -> None:
+    """Every action that makes Sir's AI work counts: questions, class notes, new tests, written/oral answers."""
+    try:
+        limits.check_and_record(db, limits.question_rules(student_id, _limit_settings()))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+
+
 # ---------- login ----------
 
 class OtpRequest(BaseModel):
@@ -96,18 +123,37 @@ class OtpVerify(BaseModel):
 
 
 @app.post("/auth/otp")
-def send_otp(body: OtpRequest, teacher: TeacherProfile = Depends(teacher_from_header)):
+def send_otp(body: OtpRequest, request: Request, teacher: TeacherProfile = Depends(teacher_from_header),
+             x_device_id: str = Header("")):
     try:
-        otp.send(teacher.id, teacher.name, body.phone)
+        phone = accounts.normalize_phone(body.phone)
+        lim = _limit_settings()
+        limits.check_and_record(db, [limits.wrong_code_rule(teacher.id, phone, lim)], record=False)  # locked number
+        limits.check_and_record(db, limits.otp_send_rules(teacher.id, phone, x_device_id.strip(),
+                                                          _client_ip(request), lim))
+        otp.send(teacher.id, teacher.name, phone)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
     return {"sent": True}
 
 
 @app.post("/auth/verify")
 def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_header)):
     try:
-        phone = otp.verify(teacher.id, body.phone, body.code)
+        phone = accounts.normalize_phone(body.phone)
+        wrong = limits.wrong_code_rule(teacher.id, phone, _limit_settings())
+        limits.check_and_record(db, [wrong], record=False)   # too many wrong codes today: number is locked
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    try:
+        phone = otp.verify(teacher.id, phone, body.code)
+    except accounts.WrongCode as exc:
+        limits.record(db, wrong.key)
+        raise HTTPException(400, str(exc))
     except (accounts.AuthError, ValueError) as exc:
         raise HTTPException(400, str(exc))
     student_id = accounts.get_or_create_student(db, teacher.id, phone)
@@ -172,6 +218,7 @@ def _class_notes(student_id: int, teacher: TeacherProfile, session_id: int | Non
 
 @app.post("/class/ask")
 def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
+    _limit_questions(student["id"])
     session_id = classroom.current_session(db, student["id"], teacher.id)
     if is_save_command(body.question):   # "Sir, save this" = notes of the whole class so far
         return {"type": "note_saved", "note": _class_notes(student["id"], teacher, session_id, None)}
@@ -207,6 +254,7 @@ def class_notes(body: ClassNotes, student=Depends(current_student),
     if body.session_id and not db.one("SELECT 1 FROM class_sessions WHERE id = ? AND student_id = ?",
                                       (body.session_id, student["id"])):
         raise HTTPException(404, "Class not found")
+    _limit_questions(student["id"])
     return _class_notes(student["id"], teacher, sid, body.topics)
 
 
@@ -234,6 +282,7 @@ def new_test(body: NewTest, student=Depends(current_student), teacher: TeacherPr
         raise HTTPException(404, "Class not found")
     if body.mode not in quiz.MODES:
         raise HTTPException(400, "Choose MCQ, written or oral")
+    _limit_questions(student["id"])
     _consume(student["id"], teacher)   # a test counts as one question of the plan / demo
     try:
         return quiz.create_test(db, llm, student["id"], teacher.id, teacher.name, body.mode, sid, body.topics)
@@ -257,6 +306,9 @@ def get_test(test_id: int, student=Depends(current_student)):
 @app.post("/tests/{test_id}/answer")
 def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student),
                 teacher: TeacherProfile = Depends(teacher_from_header)):
+    row = db.one("SELECT mode FROM tests WHERE id = ? AND student_id = ?", (test_id, student["id"]))
+    if row is not None and row["mode"] != "mcq":   # MCQ is checked without AI, so it is not limited
+        _limit_questions(student["id"])
     try:
         return quiz.answer_question(db, llm, student["id"], test_id, body.answer, teacher.name)
     except KeyError:
@@ -269,6 +321,8 @@ def answer_test(test_id: int, body: TestAnswer, student=Depends(current_student)
 def test_reteach(test_id: int, body: Reteach, student=Depends(current_student),
                  teacher: TeacherProfile = Depends(teacher_from_header)):
     """'Shall I teach it again?' — yes: Sir teaches the weak topics again right away (counts as one question)."""
+    if body.yes:
+        _limit_questions(student["id"])
     try:
         request_text = quiz.reteach(db, student["id"], test_id, body.yes)
     except KeyError:
