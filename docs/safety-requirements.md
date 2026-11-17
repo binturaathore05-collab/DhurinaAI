@@ -77,6 +77,7 @@ secrets encrypted, never in code.
 | Server & network | HTTPS only; firewall; DDoS protection in front (e.g. Cloudflare); database not reachable from the internet; daily encrypted backups + restore test |
 | App (APK) | Code obfuscation; no secrets inside the app; certificate pinning; warn on rooted / tampered devices |
 | Uploads | File type + size checks; virus scan for teacher uploads; never run uploaded files |
+| AI keys | Owner (17 Nov 2026): at launch, if needed, switch the OpenAI key on Render to Render-managed **OIDC** (short-lived keys that rotate by themselves, so a leaked key soon stops working). Testing uses a plain key in Render only. Also: a spending limit on the OpenAI account and a new key whenever one may have been seen |
 | Monitoring | Alerts for spikes (OTP requests, failed logins, errors); security log kept safely; dependency updates and vulnerability scan in CI |
 | Before launch | Independent security test (penetration test) of app, APIs and panels; fix all high issues first |
 
