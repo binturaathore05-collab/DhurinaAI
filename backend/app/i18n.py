@@ -118,6 +118,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "नमस्ते! मैं {teacher} हूँ, आपका AI टीचर। मुझसे कुछ भी पूछिए — हिंदी, English, पंजाबी या किसी भी भाषा में। सवाल की फ़ोटो भी भेज सकते हैं।",
         "pa": "ਨਮਸਤੇ! ਮੈਂ {teacher} ਹਾਂ, ਤੁਹਾਡਾ AI ਟੀਚਰ। ਮੈਨੂੰ ਕੁਝ ਵੀ ਪੁੱਛੋ — ਹਿੰਦੀ, English, ਪੰਜਾਬੀ ਜਾਂ ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ। ਸਵਾਲ ਦੀ ਫੋਟੋ ਵੀ ਭੇਜ ਸਕਦੇ ਹੋ।",
     },
+    "institute_paused": {
+        "en": "Classes with {teacher} are paused for a little while. Your notes and library are still open. Please check again later.",
+        "hi": "{teacher} की क्लास कुछ समय के लिए रुकी हुई है। आपके नोट्स और लाइब्रेरी खुले हैं। थोड़ी देर बाद फिर देखिए।",
+        "pa": "{teacher} ਦੀਆਂ ਕਲਾਸਾਂ ਕੁਝ ਸਮੇਂ ਲਈ ਰੁਕੀਆਂ ਹੋਈਆਂ ਹਨ। ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ। ਥੋੜ੍ਹੀ ਦੇਰ ਬਾਅਦ ਫਿਰ ਦੇਖੋ।",
+    },
+    "institute_blocked": {
+        "en": "Classes with {teacher} have been stopped. Your notes and library are still open. For help, contact Dhurina support.",
+        "hi": "{teacher} की क्लास बंद कर दी गई है। आपके नोट्स और लाइब्रेरी खुले हैं। मदद के लिए Dhurina support से संपर्क करें।",
+        "pa": "{teacher} ਦੀਆਂ ਕਲਾਸਾਂ ਬੰਦ ਕਰ ਦਿੱਤੀਆਂ ਗਈਆਂ ਹਨ। ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ। ਮਦਦ ਲਈ Dhurina support ਨਾਲ ਸੰਪਰਕ ਕਰੋ।",
+    },
     "safety_retry": {
         "en": "Sir will answer in a moment. Please try again.",
         "hi": "सर थोड़ी देर में जवाब देंगे। कृपया फिर से कोशिश करें।",

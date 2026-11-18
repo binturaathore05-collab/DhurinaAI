@@ -116,9 +116,9 @@ If a Common Library user should pay Dhurina more, use the existing per-teacher s
 
 ## Pending after multi-teacher (unchanged order)
 1. Safety brief documents (§23).
-2. S3 hacking protection.
-3. Pausing or blocking a teacher or institute.
-4. Phase C: photo and voice safety.
+2. S3 hacking protection. **First part done 18 Nov 2026.**
+3. Pausing or blocking a teacher or institute. **Done 18 Nov 2026** (a teacher: switch off in Teachers; an institute: Admin → the institute → Institute status).
+4. Phase C: photo and voice safety. **Done 18 Nov 2026.**
 5. Parent dashboard.
 6. WhatsApp alerts (last).
 

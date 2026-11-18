@@ -37,6 +37,7 @@ from .services import data_protection
 from .services import alerts
 from .services import photo as photo_mod
 from .services import security
+from .services import institute_status
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
@@ -201,13 +202,21 @@ def teacher_admin(authorization: str = Header(""), x_teacher_id: str = Header(""
     token = authorization.removeprefix("Bearer ").strip()
     if token:
         try:
-            return institute_auth.read(db, token, settings.jwt_secret)
+            tid = institute_auth.read(db, token, settings.jwt_secret)
         except institute_auth.InstituteAuthError as exc:
             raise HTTPException(401, str(exc))
-    expected = os.environ.get(f"TEACHER_KEY_{x_teacher_id.upper()}", "") if x_teacher_id else ""
-    if not expected or not x_teacher_key or not hmac.compare_digest(expected, x_teacher_key):
-        raise HTTPException(403, "Not allowed")
-    return x_teacher_id
+    else:
+        expected = os.environ.get(f"TEACHER_KEY_{x_teacher_id.upper()}", "") if x_teacher_id else ""
+        if not expected or not x_teacher_key or not hmac.compare_digest(expected, x_teacher_key):
+            raise HTTPException(403, "Not allowed")
+        tid = x_teacher_id
+    _panel_open(tid)
+    return tid
+
+
+def _panel_open(tid: str) -> None:
+    if institute_status.state(db, tid) == "blocked":   # Dhurina blocked this institute: the panel is closed
+        raise HTTPException(403, "This institute account is blocked by Dhurina. Please contact Dhurina support.")
 
 
 # ---------- app config & languages ----------
@@ -243,11 +252,23 @@ def _too_many(exc: limits.Limited) -> HTTPException:
     return HTTPException(429, str(exc), headers={"Retry-After": str(exc.retry_after)})
 
 
+def _institute_message(teacher_id: str | None, lang: str = "en") -> str | None:
+    """Paused / blocked institute: the message its students see (None when active)."""
+    st = institute_status.state(db, teacher_id)
+    if st == "active":
+        return None
+    name = (db.one("SELECT name FROM teachers WHERE id = ?", (teacher_id,)) or {"name": "Sir"})["name"]
+    return t("institute_paused" if st == "paused" else "institute_blocked", lang, teacher=name)
+
+
 def _gate(student_id: int) -> None:
     """A3: a suspended / under-review / disabled student can't use Sir's AI (checked on the server every time,
     so logging out, reinstalling or a new class doesn't help). Notes, library and payments keep working."""
     row = db.one("SELECT teacher_id FROM students WHERE id = ?", (student_id,))
     moderation.request_ctx.set({"student_id": student_id, "teacher_id": row["teacher_id"] if row else None})
+    stopped = _institute_message(row["teacher_id"] if row else None)
+    if stopped:   # the institute is paused / blocked by Dhurina
+        raise HTTPException(403, stopped)
     if switches.ai_paused_for(db, row["teacher_id"] if row else None) or not raw_llm.available():   # A4 kill switch
         raise HTTPException(503, t("ai_paused", "en"))
     blocked = student_safety.can_use_ai(db, student_id)
@@ -279,6 +300,13 @@ class OtpVerify(BaseModel):
     code: str
 
 
+def _new_students_allowed(teacher_id: str, phone: str) -> None:
+    """A blocked institute takes no new students (its own students can still log in for notes and library)."""
+    if institute_status.state(db, teacher_id) == "blocked" and \
+            not db.one("SELECT 1 FROM students WHERE teacher_id = ? AND phone = ?", (teacher_id, phone)):
+        raise HTTPException(403, _institute_message(teacher_id))
+
+
 def _not_blocked_phone(phone: str) -> None:
     if security.is_blocked(db, "phone", phone):   # S3: admin → Security → blocked numbers
         security.note(db, "sec:blocked:phone")
@@ -291,6 +319,7 @@ def send_otp(body: OtpRequest, request: Request, teacher: TeacherProfile = Depen
     try:
         phone = accounts.normalize_phone(body.phone)
         _not_blocked_phone(phone)
+        _new_students_allowed(teacher.id, phone)
         lim = _limit_settings()
         limits.check_and_record(db, [limits.wrong_code_rule(teacher.id, phone, lim)], record=False)  # locked number
         limits.check_and_record(db, limits.otp_send_rules(teacher.id, phone, x_device_id.strip(),
@@ -360,7 +389,8 @@ def _access(student_id: int) -> dict:
     return {**accounts.access_status(db, student_id, lim["demo"], lim["grace_days"], lim["grace_questions"], lim["reminder"]),
             **student_safety.account(db, student_id),
             **consent.state(db, student_id, consent.min_class(admin.get_settings(db))),
-            "service_message": t("ai_paused", "en") if switches.ai_paused_for(db, tid) or not raw_llm.available() else None}
+            "service_message": _institute_message(tid) or (
+                t("ai_paused", "en") if switches.ai_paused_for(db, tid) or not raw_llm.available() else None)}
 
 
 def _after_answer(student_id: int, teacher_id: str, question: str, result) -> None:
@@ -949,6 +979,8 @@ def _pay_settings():
 
 @app.post("/pay/checkout")
 def checkout(body: Checkout, student=Depends(current_student)):
+    if institute_status.state(db, student["teacher_id"]) != "active":   # no new plans while the institute is stopped
+        raise HTTPException(403, "New plans can't be bought right now. " + (_institute_message(student["teacher_id"]) or ""))
     if student_safety.status(db, student["id"]) == "review":   # no new payments while the team reviews the account
         raise HTTPException(403, student_safety.account(db, student["id"])["account_message"])
     try:
@@ -1578,15 +1610,40 @@ def admin_page():
 
 @app.get("/admin/api/overview", dependencies=[Depends(need("teachers_view"))])
 def admin_overview():
-    return {"overview": admin.overview(db, _default_pct()), "teachers": admin.list_teachers(db, _default_pct())}
+    states = institute_status.all_states(db)
+    teachers = [{**t, "account_status": states.get(t["id"], "active")} for t in admin.list_teachers(db, _default_pct())]
+    return {"overview": admin.overview(db, _default_pct()), "teachers": teachers}
 
 
-@app.get("/admin/api/teachers/{tid}", dependencies=[Depends(need("teachers_view"))])
-def admin_teacher(tid: str):
+@app.get("/admin/api/teachers/{tid}")
+def admin_teacher(tid: str, user=Depends(need("teachers_view"))):
     try:
-        return admin.teacher_detail(db, tid, _default_pct())
+        out = admin.teacher_detail(db, tid, _default_pct())
     except KeyError:
         raise HTTPException(404, "Teacher not found")
+    return {**out, "account": institute_status.get(db, tid), "account_history": institute_status.history(db, tid),
+            "can_account": roles.has(user["role"], "institute_status")}
+
+
+class InstituteState(BaseModel):
+    state: str                     # active | paused | blocked
+    reason: str
+    until_days: int | None = None  # pause only: ends by itself after this many days
+
+
+@app.post("/admin/api/teachers/{tid}/account")
+def admin_institute_state(tid: str, body: InstituteState, user=Depends(need("institute_status"))):
+    """Super Admin: pause, block or make active a whole institute."""
+    if not db.one("SELECT 1 FROM teachers WHERE id = ?", (tid,)):
+        raise HTTPException(404, "Teacher not found")
+    if body.until_days is not None and not 1 <= body.until_days <= 365:
+        raise HTTPException(400, "A pause can be 1 to 365 days")
+    until = time.time() + body.until_days * 86400 if body.until_days else None
+    try:
+        acc = institute_status.change(db, tid, body.state, body.reason, user["email"], until)
+    except institute_status.StatusError as exc:
+        raise HTTPException(400, str(exc))
+    return {"account": acc, "account_history": institute_status.history(db, tid)}
 
 
 @app.post("/admin/api/teachers", dependencies=[Depends(need("teachers_edit"))])
@@ -1635,6 +1692,8 @@ def admin_build(tid: str, request: Request):
     t = db.one("SELECT * FROM teachers WHERE id = ?", (tid,))
     if t is None:
         raise HTTPException(404, "Teacher not found")
+    if institute_status.state(db, tid) == "blocked":
+        raise HTTPException(400, "This institute is blocked — make it active first")
     base = os.environ.get("PUBLIC_BASE_URL") or str(request.base_url).rstrip("/")
     avatar = f"{base}/teachers/{tid}/avatar" if t["avatar_url"] else ""
     try:
@@ -2255,7 +2314,9 @@ class InstituteLogin(BaseModel):
 def institute_login(body: InstituteLogin, request: Request):
     try:
         limits.check_and_record(db, [limits.Rule(f"inst-login:{_client_ip(request)}", 20, 900, "limit_otp")])   # 20 / 15 min / IP
-        return institute_auth.login(db, body.login, body.password, settings.jwt_secret)
+        out = institute_auth.login(db, body.login, body.password, settings.jwt_secret)
+        _panel_open(institute_auth.read(db, out["token"], settings.jwt_secret))
+        return out
     except institute_auth.InstituteAuthError as exc:
         raise HTTPException(400, str(exc))
     except limits.Limited as exc:
@@ -2312,7 +2373,14 @@ def institute_home(teacher_id: str = Depends(teacher_admin)):
             "review": {"waiting": rv["total_answers"], "questions": rv["total"], "top": rv["items"]},
             "files": {"total": lib["total"], **lib["counts"]},
             "students": students, "months": months,
-            "week_questions": week["n"] or 0, "from_notes": round((week["own"] or 0) / week["n"], 2) if week["n"] else 0}
+            "week_questions": week["n"] or 0, "from_notes": round((week["own"] or 0) / week["n"], 2) if week["n"] else 0,
+            "account": _panel_account(teacher_id)}
+
+
+def _panel_account(teacher_id: str) -> dict:
+    """What the institute sees about its own status (a banner when Dhurina paused it)."""
+    a = institute_status.get(db, teacher_id)
+    return {"state": a["state"], "reason": a["reason"], "until": a["until"]}
 
 
 @app.post("/teacher/faculty")

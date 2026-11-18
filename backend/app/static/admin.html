@@ -291,7 +291,7 @@ async function teachersView() {
   const { overview: o, teachers } = await api('GET', '/overview');
   const rows = teachers.map((t) => `<tr data-name="${esc((t.name + ' ' + t.subject).toLowerCase())}">
       <td><a class="who" href="#/t/${encodeURIComponent(t.id)}">${avatar(t)}<span style="display:flex;flex-direction:column"><b>${esc(t.name)}</b><span class="muted" style="font-size:12px">${esc(t.subject)}</span></span></a></td>
-      <td>${pill(t.status)}</td><td><b>${t.teacher_percent} / ${t.platform_percent}</b></td><td>${t.students}</td><td>${t.active_plans}</td>
+      <td>${pill(t.status)}${t.account_status && t.account_status !== 'active' ? ' ' + accPill(t.account_status) : ''}</td><td><b>${t.teacher_percent} / ${t.platform_percent}</b></td><td>${t.students}</td><td>${t.active_plans}</td>
       <td><b>${rupees(t.this_month.total_paise)}</b></td><td style="text-align:right"><a href="#/t/${encodeURIComponent(t.id)}"><b>Open</b></a></td></tr>`).join('');
   return shell('Institutes / Apps', `
     <div class="row"><div><h1>Institutes / Apps</h1><span class="sub">Every institute is one white-label app with one or more AI teachers inside. Add an institute, then build its app.</span></div>
@@ -432,6 +432,7 @@ async function detailView(id) {
       ${t.has_avatar ? `<img class="av" style="width:60px;height:60px;border:3px solid var(--acc)" src="/teachers/${encodeURIComponent(t.id)}/avatar" alt="${esc(t.name)}">` : ''}
       <div><h1>${esc(t.name)}</h1><span class="sub" style="display:flex;gap:10px;align-items:center">${esc(t.subject)} · ${esc(t.app_name || '')} ${pill(t.status)}</span></div></div>
       <div class="row"><a class="btn ghost" href="#/reports" onclick="RP.teacher='${esc(t.id)}';RP.offset=0">Sales report</a><a class="btn ghost" href="#/edit/${encodeURIComponent(t.id)}">Edit details</a><button class="btn primary" id="build">${icon('build', 18)}Build new version</button></div></div>
+    ${accountCard(t)}
     <div class="stats">${stat('Students', t.students, 'signed up')}${stat('Active plans', t.active_plans, 'paying now')}${stat('This month', rupees(t.this_month.total_paise), 'total paid by students')}
       ${stat('Teacher · ' + t.teacher_percent + '%', rupees(t.this_month.teacher_paise), 'this teacher’s split · settled by Razorpay')}${stat('Dhurina · ' + t.effective_platform_percent + '%', rupees(t.this_month.platform_paise), 'this teacher’s split · auto-split')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:18px">
@@ -451,7 +452,41 @@ async function detailView(id) {
     <section class="card" id="lib"><span class="muted">Loading content library…</span></section>`);
 }
 
+// Pause / block a whole institute (Super Admin)
+const ACC = { active: ['Active', 'var(--ok)'], paused: ['Paused', 'var(--warn)'], blocked: ['Blocked', 'var(--bad)'] };
+const accPill = (s) => { const [l, c] = ACC[s] || ACC.active; return `<span class="pill" style="color:${c}">${l}</span>`; };
+function accountCard(t) {
+  const a = t.account || { state: 'active' };
+  const hist = (t.account_history || []).map((h) => `<tr><td>${when(h.at)}</td><td>${accPill(h.old_status)} → ${accPill(h.new_status)}${h.until ? `<div class="muted" style="font-size:12px;margin-top:4px">until ${when(h.until)}</div>` : ''}</td><td>${esc(h.by_who === 'system' ? 'Automatic' : h.by_who)}</td><td>${esc(h.reason || '')}</td></tr>`).join('');
+  const btn = (st, label, style = 'ghost', extra = '') => `<button type="button" class="btn ${style}" data-acc="${st}" ${extra}>${label}</button>`;
+  const off = a.state !== 'active';
+  return `<section class="card" style="${off ? `border-color:${ACC[a.state][1]};background:${a.state === 'blocked' ? '#FEF2F2' : '#FFFBEB'}` : ''}">
+    <div class="row"><div><h2>Institute status ${accPill(a.state)}</h2><span class="sub">${
+      a.state === 'paused' ? `Paused${a.until ? ' until ' + when(a.until) + ' (ends by itself)' : ''}: Sir's AI is stopped for its students and no new plans can be bought. Notes, library and the institute panel stay open.`
+      : a.state === 'blocked' ? 'Blocked: AI stopped, no new plans, no new students, institute panel closed, no app builds. Nothing is deleted.'
+      : 'Pause it for a while (e.g. fees due) or block it (serious problem). Students keep their notes; nothing is deleted.'}</span>
+      ${off && a.reason ? `<div style="margin-top:6px"><b>Why:</b> ${esc(a.reason)} <span class="muted" style="font-size:12px">· ${esc(a.by || '')} · ${when(a.at)}</span></div>` : ''}</div>
+      ${t.can_account ? `<span class="row" style="gap:8px">${a.state !== 'paused' ? btn('paused', 'Pause') : ''}${a.state !== 'blocked' ? btn('blocked', 'Block', 'ghost', 'style="color:var(--bad)"') : ''}${off ? btn('active', 'Make active again', 'primary') : ''}</span>` : ''}</div>
+    ${hist ? `<details><summary class="muted" style="cursor:pointer">History (${(t.account_history || []).length})</summary><div class="scroll"><table><thead><tr><th>WHEN</th><th>CHANGE</th><th>BY</th><th>WHY</th></tr></thead><tbody>${hist}</tbody></table></div></details>` : ''}</section>`;
+}
+function bindAccount(id) {
+  document.querySelectorAll('[data-acc]').forEach((b) => b.onclick = async () => {
+    const st = b.dataset.acc;
+    const text = { paused: 'Sir’s AI stops for all its students and no new plans can be bought. Students keep notes and library. The institute sees the reason in its panel.',
+      blocked: 'AI stops, no new plans, <b>no new students</b>, the institute panel is <b>closed</b> and no new app builds. Nothing is deleted.',
+      active: 'Everything works again at once.' }[st];
+    const m = await dialog({ paused: 'Pause this institute', blocked: 'Block this institute', active: 'Make the institute active again' }[st], `<p>${text}</p>
+      <label class="f">Why${st === 'active' ? ' (what was sorted out)' : ' (the institute sees this)'}<input type="text" id="accr" required maxlength="500"></label>
+      ${st === 'paused' ? '<label class="f">Ends by itself after<select id="accd"><option value="">— no end date (make active by hand) —</option><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="15">15 days</option><option value="30">30 days</option></select></label>' : ''}`,
+      { paused: 'Pause', blocked: 'Block', active: 'Make active' }[st]);
+    if (!m) return;
+    const days = m.querySelector('#accd') ? m.querySelector('#accd').value : '';
+    try { await api('POST', `/teachers/${encodeURIComponent(id)}/account`, { state: st, reason: m.querySelector('#accr').value, until_days: days ? +days : null });
+      toast({ paused: 'Institute paused', blocked: 'Institute blocked', active: 'Institute active again' }[st]); render(); } catch (e) { toast(e.message); } });
+}
+
 async function bindDetail(id) {
+  bindAccount(id);
   document.querySelectorAll('input[data-item]').forEach((c) => c.onchange = async () => {
     try { await api('POST', `/teachers/${encodeURIComponent(id)}/checklist`, { item: c.dataset.item, done: c.checked }); toast('Checklist updated'); }
     catch (e) { toast(e.message); c.checked = !c.checked; } });
