@@ -16,6 +16,7 @@ Alerts (level):
   otp_spike       unusually many login codes (OTP SMS) sent in an hour (S3: attack / SMS cost)  high
   login_attack    many wrong admin passwords / codes in an hour (S3)        high
   new_login       an admin logged in from a new place (S3)                  medium
+  institute       an institute was paused / blocked / made active again     high / medium
 The same alert is not repeated within an hour (dedup key).
 """
 import json

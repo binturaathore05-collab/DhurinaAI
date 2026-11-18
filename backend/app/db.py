@@ -128,6 +128,16 @@ CREATE TABLE IF NOT EXISTS admin_logins (
     success INTEGER NOT NULL,
     at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS institute_status_log (   -- every pause / block / back to active of an institute
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id TEXT NOT NULL,
+    old_status TEXT,
+    new_status TEXT NOT NULL,
+    reason TEXT,
+    until REAL,
+    by_who TEXT,
+    at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS admin_sessions (   -- S3: every admin login; can be seen and ended
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -590,6 +600,9 @@ class Database:
         ("admin_users", "totp_secret", "TEXT"), ("admin_users", "totp_pending", "TEXT"),
         ("admin_users", "totp_on", "INTEGER NOT NULL DEFAULT 0"), ("admin_users", "totp_last_step", "INTEGER"),
         ("admin_users", "backup_codes", "TEXT"), ("students", "token_version", "INTEGER NOT NULL DEFAULT 0"),
+        # pause / block a whole institute (Super Admin)
+        ("teachers", "account_status", "TEXT NOT NULL DEFAULT 'active'"), ("teachers", "account_reason", "TEXT"),
+        ("teachers", "account_until", "REAL"), ("teachers", "account_by", "TEXT"), ("teachers", "account_at", "REAL"),
     ]
 
     def _migrate(self) -> None:

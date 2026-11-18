@@ -255,7 +255,7 @@ function shell(active, inner) {
     <div class="me">${D.me.avatar ? `<img src="${esc(D.me.avatar)}" alt="">` : `<span class="av"></span>`}<span style="display:flex;flex-direction:column;min-width:0"><b>${esc(D.me.name)}</b><span class="muted" style="font-size:12px">${esc(D.me.app)}</span></span></div>
     ${it('home', 'home', 'Home')}${it('teachers', 'users', 'Teachers')}${it('library', 'book', 'Content library', (D.files.pending + D.files.unclear) || '')}${it('style', 'spark', 'Teaching Style')}
     ${it('review', 'check', 'Review answers', D.review.questions || '')}${it('students', 'users', 'Students & Earnings')}${it('safety', 'shield', 'Student safety')}${it('settings', 'gear', 'Settings')}
-    <span class="spacer"></span><a class="item" href="#logout">${icon('out')}Log out</a></nav><main>${inner}</main></div>`;
+    <span class="spacer"></span><a class="item" href="#logout">${icon('out')}Log out</a></nav><main>${D.account && D.account.state === 'paused' ? `<div class="note" style="border-color:var(--warn);background:#FFFBEB"><b>Dhurina has paused your app${D.account.until ? ' until ' + new Date(ms(D.account.until)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}.</b> Your students can’t ask Sir right now and can’t buy new plans; their notes and library stay open. Reason: ${esc(D.account.reason || '—')}. Please contact Dhurina support.</div>` : ''}${inner}</main></div>`;
 }
 const stat = (k, v, n) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="n">${n}</span></div>`;
 const head = (title, sub, right = '') => `<div class="row"><div><h1>${title}</h1><span class="sub">${sub}</span></div>${right}</div>`;

@@ -31,6 +31,7 @@ PERMS = {
     "tests_run": {"owner", "safety", "technical"},
     "audit": {"owner", "safety", "auditor"},
     "team": {"owner"},
+    "institute_status": {"owner"},                            # pause / block / reactivate a whole institute
     "security_view": {"owner", "safety", "technical", "auditor"},   # S3: Security page (sessions, block list)
     "security_edit": {"owner", "safety", "technical"},              # block / unblock numbers and IP addresses
     "data_admin": {"owner"},                                  # B6: backups, clean-up, data-keeping

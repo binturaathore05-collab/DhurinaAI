@@ -213,3 +213,11 @@ before launch), logged-in devices with "log out other devices", alert on a login
 numbers and IP addresses (IP blocks end by themselves because many students share one mobile-network IP), "log out on
 other phones" for students, OTP-flood and password-guessing alerts, browser security headers, a request ceiling per IP,
 obfuscated APK and a library security scan. Old admin logins end once after this update (log in again).
+
+## Pause or block an institute (Claude, 18 Nov 2026 — owner can change)
+Only the Super Admin can do it (Admin → Institutes / Apps → the institute → Institute status), always with a reason the
+institute sees. **Pause** (e.g. Dhurina's fees due; can end by itself after 1–30 days): Sir's AI stops for its
+students and no new plans can be bought; notes, library, sign-ups and the institute panel stay open (a banner shows the
+reason). **Block** (serious problem): as pause, plus no new students, the institute panel is closed and no new app
+builds. Nothing is ever deleted; "Make active again" brings everything back. Every change is in a history, the audit
+log and raises an alert. One AI teacher inside an institute is still switched off in the Teachers list.
