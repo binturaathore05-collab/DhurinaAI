@@ -109,6 +109,26 @@ class TutorAnswer:
 SCOPES = ("study", "off_topic", "blocked", "unsafe")
 
 
+# The student spoke: the phone's speech-to-text can turn study words into similar-sounding names
+# (owner's test: "थार मरुस्थल" came out as "सिद्धार्थ मल्होत्रा", "विश्व के महाद्वीप" as "रात्रि का महादेव").
+SPOKEN_RULE = (
+    "This question was SPOKEN; the phone turned the speech into text and may have misheard words that sound alike "
+    "(e.g. a film star's name in place of a place name: \"सिद्धार्थ मल्होत्रा … मरुस्थल\" = \"थार मरुस्थल\"; "
+    "\"रात्रि का महादेव\" = \"विश्व के महाद्वीप\"). Work out the most likely study question from how it sounds and "
+    "the rest of the words, start with one short line saying what you understood (e.g. \"आप थार मरुस्थल के बारे में "
+    "पूछ रहे हैं —\"), then answer it. If you really cannot tell, ask the student kindly to say it once more.")
+STUDY_NUDGE = ("Look again: this question names a study topic (a subject, place, scientific or historical word) — it "
+               "may be misspelled, Hinglish or misheard by the phone. Treat it as study (scope \"study\"), work out "
+               "what the student most likely means and answer it. Use off_topic only if it is clearly about films, "
+               "games, gossip or personal matters.")
+
+
+def looks_like_study(question: str) -> bool:
+    """A free check: does the question contain a school-subject word (desert, computer, river, …)?"""
+    from .faculty import subject_candidates
+    return bool(subject_candidates(question))
+
+
 def _scope_rules(teacher: TeacherProfile, blocked_topics: list[str]) -> str:
     """Education-only mode + the admin's blocked topics (Admin → Settings → AI answers)."""
     subject = f" ({teacher.subject})" if teacher.subject else ""
@@ -120,7 +140,8 @@ def _scope_rules(teacher: TeacherProfile, blocked_topics: list[str]) -> str:
         "the class is fine: answer it briefly and steer back to studies.",
         "- Any school subject or exam topic is study, even when it is not your own subject and even when the student "
         "spells it badly or writes Hinglish (e.g. \"bhart ka ajad hua tha\" = when did India become free → study, "
-        "answer it). If you are not sure, choose study.",
+        "answer it). A question that names a study word (a desert, river, computer, battle, formula, …) is study even "
+        "if other words look odd or like a famous person's name. If you are not sure, choose study.",
         "- Anything else (films, games, gossip, relationships, personal advice, jokes, shopping, coding help for "
         "non-study projects, …) is off_topic: do not answer it.",
     ]
@@ -241,7 +262,7 @@ class Tutor:
         return self.rewrite(question)[0]
 
     def answer(self, student_id: int, teacher: TeacherProfile, question: str,
-               session_id: int | None = None) -> TutorAnswer:
+               session_id: int | None = None, spoken: bool = False) -> TutorAnswer:
         lang = get_language(detect_language(question))
         st = self.db.one("SELECT name FROM students WHERE id = ?", (student_id,))
         level = style_mod.get_level(self.db, student_id)
@@ -260,6 +281,8 @@ class Tutor:
         if teacher.taken_over_from:
             rules += (f"\nThe student was just handed over to you from {teacher.taken_over_from} (the institute's other "
                       "teacher). Greet them in one short line as the new teacher, then answer.")
+        if spoken:
+            rules += "\n" + SPOKEN_RULE
         system = _system_prompt(teacher, lang.english_name, rules, _scope_rules(teacher, self.blocked_topics() + (policy["blocked_topics"] if policy else [])))
         recent = list(reversed(self.db.all("SELECT question, answer, follow_up FROM qa_history WHERE student_id = ? "
                                            "ORDER BY id DESC LIMIT 3", (student_id,))))
@@ -302,6 +325,14 @@ class Tutor:
             elif origin == "verified":
                 sources = [{"title": t("source_teacher_notes", lang.code), "ref": "verified"}]
         scope = _scope_of(reply)
+        if scope == "off_topic" and (spoken or looks_like_study(question)):
+            # a study word is in the question (or the phone may have misheard it): ask once more before turning
+            # the student away — costs one extra call only in this rare case
+            again = self.llm.chat_json(system, context + f"Student's question: {question}\n" + STUDY_NUDGE)
+            if _scope_of(again) == "study" and str(again.get("answer", "")).strip():
+                reply, origin = again, "general_ai"
+                sources = [{"title": t("source_general_ai", lang.code), "ref": None}]
+                scope = "study"
         if scope != "study":
             return self._redirect(student_id, question, lang.code, scope, reply.get("blocked_topic"), level, session_id)
         needs_review = origin == "general_ai"

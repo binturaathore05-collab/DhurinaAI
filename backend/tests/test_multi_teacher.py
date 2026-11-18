@@ -351,3 +351,21 @@ def test_app_opens_with_the_current_teacher(setup):
     assert student.get("/me/access").json()["active_faculty"]["id"] == ids["history"]   # nobody chosen yet: first
     student.post("/class/ask", json={"question": "Maths wale sir ko bulao"})
     assert student.get("/me/access").json()["active_faculty"]["name"] == "Gupta Sir"
+
+
+def test_a_study_word_is_never_sent_away_and_spoken_questions_may_be_misheard(setup):
+    admin, student, main = setup
+    # the model first says off_topic for a misheard voice question; a study word is in it → one more look
+    main.llm.replies = [{"query": "Thar desert"},
+                        {"answer": "", "follow_up": "", "found_in_notes": False, "scope": "off_topic"},
+                        {"answer": "आप थार मरुस्थल के बारे में पूछ रहे हैं — यह राजस्थान में है।", "follow_up": "",
+                         "found_in_notes": False, "scope": "study"}]
+    r = student.post("/class/ask", json={"question": "सिद्धार्थ मल्होत्रा ना बहुत बड़ा मरुस्थल है", "voice": True}).json()
+    assert "थार मरुस्थल" in r["answer"] and r["origin"] == "general_ai"
+    sys_prompts = [c[0] for c in main.raw_llm.calls if "CLASS RULES" in c[0]]
+    assert "SPOKEN" in sys_prompts[-1]
+    # a clear non-study question stays off topic, with no second call
+    main.llm.replies = [{"query": "film"}, {"answer": "", "follow_up": "", "found_in_notes": False, "scope": "off_topic"}]
+    n = len(main.raw_llm.calls)
+    r = student.post("/class/ask", json={"question": "who is the best film hero?"}).json()
+    assert r["origin"] == "redirect" and len(main.raw_llm.calls) - n <= 2
