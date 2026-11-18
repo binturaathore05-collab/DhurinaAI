@@ -158,6 +158,7 @@ const ICON = {
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   hub: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   filter: '<path d="M3 4h18l-7 9v6l-4 2v-8z"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   back: '<path d="M15 18l-6-6 6-6"/>', build: '<path d="M3 21l9-9M14 7l3-3 3 3-3 3z"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
@@ -257,7 +258,7 @@ function shell(active, inner) {
     ${can('dashboard') ? `<a class="item ${active === 'Alerts' ? 'on' : ''}" href="#/alerts" id="bell">${icon('bell')}Alerts${ALERTS.open ? ` <span class="pill" style="margin-left:auto;color:${ALERTS.critical ? 'var(--bad)' : 'var(--warn)'}">${ALERTS.open}</span>` : ''}</a>` : ''}
     ${item('#/', 'users', 'Institutes / Apps', 'teachers_view')}${item('#/new', 'plus', 'Add institute', 'teachers_edit')}${item('#/common', 'data', 'Common content', 'library_common')}${item('#/reports', 'chart', 'Reports', 'money')}
     <span class="navh">AI Teacher Safety Center</span>${item('#/center', 'hub', 'Safety Center', 'dashboard')}${item('#/filters', 'filter', 'Content filters', 'settings_view')}${item('#/safety-dash', 'dash', 'Safety dashboard', 'dashboard')}${item('#/review', 'review', 'Review center', 'evidence')}${item('#/safety', 'shield', 'Student safety', 'students')}${item('#/emergency', 'alert', 'Emergency', 'emergency_view')}${item('#/tests', 'lab', 'Safety tests', 'tests_view')}${item('#/teacher-lab', 'lab', 'Multi-teacher tests', 'tests_view')}${item('#/audit', 'audit', 'Audit', 'audit')}${item('#/policy', 'policy', 'Safety policy', 'settings_view')}
-    <span class="navh">Admin</span>${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
+    <span class="navh">Admin</span>${item('#/security', 'lock', 'Security', 'security_view')}${item('#/team', 'users', 'Team', 'team')}${item('#/data', 'data', 'Data & backups', 'data_admin')}${item('#/settings', 'gear', 'Settings', 'settings_view')}
     <span class="spacer"></span><a class="item" href="#/logout">${icon('out')}Log out</a></nav>
     <main id="main">${inner}</main></div>`;
 }
@@ -274,6 +275,15 @@ function loginView() {
       <button type="button" id="eye" style="position:absolute;right:6px;top:6px;height:32px;border:0;background:var(--surf);border-radius:8px;padding:0 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Show</button></span></label>
     <button class="btn primary" id="go" type="submit">Log in</button><span id="lerr" class="err" role="alert"></span>
     <span class="muted" style="font-size:12px">Forgot your password? Ask the owner to reset it. After 5 wrong tries the account locks for 15 minutes. You stay logged in for 12 hours or until you press Log out.</span></form>`;
+}
+
+function codeView() {
+  return `<form class="login card" id="cf" style="gap:16px"><div style="display:flex;gap:12px;align-items:center"><span style="flex:none;width:44px;height:44px;border-radius:12px;background:var(--acc);color:#fff;display:grid;place-items:center">${icon('lock')}</span>
+      <div><h1 style="font-size:22px">2-step login</h1><span class="sub">Open your authenticator app and type the 6-digit code for LiveTeach Admin.</span></div></div>
+    <label class="f">Code<input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="9" placeholder="123 456" required style="font:700 22px/1.2 ui-monospace,monospace;letter-spacing:4px"></label>
+    <button class="btn primary" type="submit">Log in</button><span id="cerr" class="err" role="alert"></span>
+    <span class="muted" style="font-size:12px">Lost your phone? Type one of your backup codes (like a1b2-c3d4) instead. No backup codes? Ask the Super Admin to turn off your 2-step login.</span>
+    <button type="button" class="btn ghost" id="cback">Back</button></form>`;
 }
 
 // ---------- Teachers ----------
@@ -781,6 +791,7 @@ async function settingsView() {
     ${card('Limits (safety &amp; AI cost)', 'Checked on the server for every student and every login; changes apply at once', `<div class="grid2">${f('limits', 'questions_per_minute', 'Questions per minute (per student)', s.limits.questions_per_minute, 'number', 'Questions, class notes, new tests and written/oral answers count. MCQ answers don’t.')}
       ${f('limits', 'questions_per_day', 'Questions per day (per student)', s.limits.questions_per_day, 'number', 'Also for paid students: stops one account running up AI cost')}
       ${f('limits', 'photos_per_day', 'Photo questions per day (per student)', s.limits.photos_per_day, 'number', 'A photo question costs more AI than a typed one')}
+      ${f('limits', 'requests_per_ip_minute', 'Requests per minute (per IP address)', s.limits.requests_per_ip_minute, 'number', 'Stops bots. Keep it high: many students on one mobile network can share one IP')}
       ${f('limits', 'otp_gap_seconds', 'Seconds between two codes (same number)', s.limits.otp_gap_seconds, 'number')}${f('limits', 'otp_per_phone_10min', 'Codes per number in 10 minutes', s.limits.otp_per_phone_10min, 'number')}
       ${f('limits', 'otp_per_phone_day', 'Codes per number per day', s.limits.otp_per_phone_day, 'number')}${f('limits', 'otp_per_device_day', 'Codes per phone (device) per day', s.limits.otp_per_device_day, 'number')}
       ${f('limits', 'otp_per_ip_hour', 'Codes per internet address per hour', s.limits.otp_per_ip_hour, 'number', 'Keep generous: many mobile users share one address')}
@@ -789,7 +800,9 @@ async function settingsView() {
       <label class="f">Send alert emails to<textarea data-sec="alerts" name="email_to" rows="3">${esc((s.alerts.email_to || []).join('\n'))}</textarea><span class="h">One email per line. Needs SMTP on the server.</span></label>
       <label class="f">Which alerts by email<select data-sec="alerts" name="email_level">${[['critical', 'Only critical (upset student, AI failure, shutdown)'], ['high', 'Critical and high (recommended)'], ['all', 'All']].map(([v, l]) => `<option value="${v}" ${s.alerts.email_level === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${f('alerts', 'pending_hours', 'Alert when a high-priority case waits (hours)', s.alerts.pending_hours, 'number')}${f('alerts', 'spike_min', 'Spike: at least this many in an hour', s.alerts.spike_min, 'number', 'and 3× the usual hour')}
-      ${f('alerts', 'check_down_min', 'Safety check failed this many times in 10 min', s.alerts.check_down_min, 'number')}</div>`)}
+      ${f('alerts', 'check_down_min', 'Safety check failed this many times in 10 min', s.alerts.check_down_min, 'number')}
+      ${f('alerts', 'otp_hour', 'Login codes (SMS) sent in one hour', s.alerts.otp_hour, 'number', 'More than this → alert (attack or SMS bill)')}
+      ${f('alerts', 'failed_logins_hour', 'Wrong admin logins in one hour', s.alerts.failed_logins_hour, 'number')}</div>`)}
     ${card('Data keeping', 'Old data is deleted by itself every day. Parent consents, payments and the audit log are kept (legal duties).', `<div class="grid2">${f('data', 'conversation_months', 'Keep conversations (months)', s.data.conversation_months, 'number', 'Questions, answers, tests. Answers a safety case or a saved note points to are kept.')}
       ${f('data', 'safety_months', 'Keep safety records (months)', s.data.safety_months, 'number', 'Flagged messages, safety events, closed cases')}${f('data', 'backup_keep', 'Daily backups to keep', s.data.backup_keep, 'number')}</div>`)}
     ${card('Students', 'Who can sign up', `<div class="grid2">${f('students', 'min_class', 'Lowest class allowed', s.students.min_class, 'number', 'Owner’s choice: class 6. Students under 18 always need a parent’s OK by OTP.')}</div>`)}
@@ -934,7 +947,7 @@ async function studentView(id) {
     <td>${esc(h.by_who === 'auto' ? 'Automatic' : h.by_who === 'system' ? 'System' : h.by_who)}</td><td>${esc(h.reason || '')}${h.remarks ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(h.remarks)}</div>` : ''}</td></tr>`).join('');
   return shell('Student safety', `<div class="row"><div style="display:flex;gap:14px;align-items:center"><a class="btn ghost" style="width:44px;padding:0" href="#/safety" aria-label="Back to student safety">${icon('back')}</a>
       <div><h1>${esc(x.name || 'No name')}</h1><span class="sub">${esc(x.phone)} · ID ${x.id} · ${esc(x.teacher_name)}</span></div></div><div class="row">${btns}</div></div>
-    <section class="card"><div class="row"><h2>Status</h2>${spill(st)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+    <section class="card"><div class="row"><h2>Status</h2><span class="row" style="gap:8px">${spill(st)}${can('students') ? '<button type="button" class="btn ghost" id="slogout" title="E.g. the phone was lost or someone else knows the login">Log out all phones</button>' : ''}</span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
       ${kv('Reason', esc(x.status_reason || '—'))}${kv('Until', st === 'suspended' ? when(x.status_until) : st === 'review' ? 'An admin decides' : '—')}
       ${kv('Joined', esc((x.joined || '—').slice(0, 10)))}${kv('Questions asked', x.questions)}</div></section>
     ${x.plan ? `<section class="card"><div class="row"><div><h2>Plan</h2><span class="sub">${x.plan.active ? `Active until ${when(x.plan.ends_at)}${x.plan.free_until ? ' · free plan (no payment) until ' + when(x.plan.free_until) : ''}` : 'No active plan (free demo questions only)'}</span></div>
@@ -954,6 +967,9 @@ async function studentView(id) {
 async function bindStudent(id) {
   const x = await api('GET', '/students/' + encodeURIComponent(id));
   const reload = async () => { $('#app').innerHTML = await studentView(id); bindStudent(id); };
+  if ($('#slogout')) $('#slogout').onclick = async () => {
+    if (!(await ask({ title: 'Log out all phones?', text: 'The student is logged out on every phone and logs in again with an OTP. Their classes, notes and plan stay.', ok: 'Log out all phones' }))) return;
+    try { await api('POST', `/students/${encodeURIComponent(id)}/logout-all`); toast('Logged out on every phone'); } catch (e) { toast(e.message); } };
   if ($('#fpgive')) $('#fpgive').onclick = async () => {
     const m = await dialog('Give a free plan', `<p>The student gets a full plan <b>without paying</b> (e.g. for testing). It starts now, or after a plan they already have.</p>
       <label class="f">Days<input type="number" id="fpdays" min="1" max="366" value="30" required></label>
@@ -1293,14 +1309,15 @@ async function teamView() {
   const rows = d.members.map((m) => `<tr style="${m.active ? '' : 'opacity:.55'}"><td><b>${esc(m.name || '')}</b><div class="muted" style="font-size:12px">${esc(m.email)}</div></td>
     <td><select data-role="${m.id}" aria-label="Role of ${esc(m.email)}" ${m.email === ME.email ? 'disabled' : ''}>${opt(m.role)}</select></td>
     <td>${m.active ? (m.must_change ? '<span class="pill" style="color:var(--warn)">Hasn’t set own password</span>' : '<span class="pill" style="color:var(--ok)">Active</span>') : '<span class="pill">Switched off</span>'}</td>
+    <td>${m.totp_on ? '<span class="pill" style="color:var(--ok)">On</span>' : '<span class="pill" style="color:var(--muted)">Off</span>'}</td>
     <td class="muted" style="font-size:12px">${esc(m.last_login || 'never')}</td>
-    <td style="text-align:right;white-space:nowrap">${m.email === ME.email ? '<span class="muted">you</span>' : `<button type="button" class="btn ghost" data-reset="${m.id}" data-email="${esc(m.email)}">Reset password</button>
+    <td style="text-align:right;white-space:nowrap">${m.email === ME.email ? '<span class="muted">you</span>' : `${m.totp_on ? `<button type="button" class="btn ghost" data-2off="${m.id}" data-email="${esc(m.email)}">Turn off 2-step</button>` : ''}<button type="button" class="btn ghost" data-reset="${m.id}" data-email="${esc(m.email)}">Reset password</button>
       <button type="button" class="btn ghost" data-active="${m.id}" data-on="${m.active ? 0 : 1}" style="${m.active ? 'color:var(--bad)' : ''}">${m.active ? 'Switch off' : 'Switch on'}</button>`}</td></tr>`).join('');
   return shell('Team', `<div class="row"><div><h1>Team</h1><span class="sub">Who can use this admin panel, and what each role may do. Checked on the server for every request.</span></div></div>
     <section class="card"><h2>Add someone</h2><form id="tadd" class="grid2" style="align-items:end">
       <label class="f">Email<input id="te" type="email" required placeholder="name@dhurina.in"></label><label class="f">Name<input id="tn" type="text" placeholder="Their name"></label>
       <label class="f">Role<select id="tr">${opt('support')}</select></label><button class="btn primary" type="submit">Add and get one-time password</button></form><span class="err" id="terr"></span></section>
-    <section class="card"><h2>Members</h2><div class="scroll"><table><thead><tr><th>PERSON</th><th>ROLE</th><th>STATUS</th><th>LAST LOGIN</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>
+    <section class="card"><h2>Members</h2><div class="scroll"><table><thead><tr><th>PERSON</th><th>ROLE</th><th>STATUS</th><th>2-STEP LOGIN</th><th>LAST LOGIN</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>
     <section class="card"><h2>What each role can do</h2><div class="scroll"><table><tbody>${d.roles.map((r) => `<tr><td style="width:180px"><b>${esc(r.label)}</b></td><td>${esc(r.text)}</td></tr>`).join('')}</tbody></table></div>
       <span class="muted" style="font-size:12px">“School Admin” from the safety brief is the Teacher: each teacher sees only their own students in the teacher dashboard.</span></section>`);
 }
@@ -1317,9 +1334,119 @@ function bindTeam() {
     const on = b.dataset.on === '1';
     if (!(await ask({ title: on ? 'Switch this person on?' : 'Switch this person off?', text: on ? 'They can log in again with their password.' : 'They are logged out at once and can’t log in. Their history stays in the audit log.', ok: on ? 'Switch on' : 'Switch off', danger: !on }))) return;
     try { await api('PUT', '/team/' + b.dataset.active, { active: on }); toast(on ? 'Switched on' : 'Switched off'); again(); } catch (err) { toast(err.message); } });
+  document.querySelectorAll('[data-2off]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'Turn off their 2-step login?', text: `Only when ${esc(b.dataset.email)} lost their phone and backup codes. They are logged out everywhere and can log in with the password alone (then set up 2-step again).`, ok: 'Turn off', danger: true }))) return;
+    try { await api('POST', `/team/${b.dataset['2off']}/2step-off`); toast('2-step login turned off'); again(); } catch (err) { toast(err.message); } });
   document.querySelectorAll('[data-reset]').forEach((b) => b.onclick = async () => {
     if (!(await ask({ title: 'Reset password?', text: 'Their current password and open sessions stop working. You get a new one-time password to give them.', ok: 'Reset' }))) return;
     try { const r = await api('POST', `/team/${b.dataset.reset}/reset`); await again(); showTempPassword(b.dataset.email, r.temp_password); } catch (err) { toast(err.message); } });
+}
+
+// ---------- Security (S3) ----------
+const device = (ua) => { ua = ua || '';
+  const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const o = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iPhone' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+  return b + (o ? ' on ' + o : ''); };
+function needTwoStepView() {
+  return `<div class="login card" style="gap:16px"><h1 style="font-size:22px">Turn on 2-step login</h1>
+    <span class="sub">The Super Admin made 2-step login required for the whole team. After your password you will also type a 6-digit code from an app on your phone. It takes 2 minutes.</span>
+    <button class="btn primary" id="tson">Set it up now</button></div>`;
+}
+function setupTwoStep(after) {
+  return (async () => {
+    let d; try { d = await api('POST', '/2step/start'); } catch (e) { return toast(e.message); }
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Set up 2-step login');
+    m.innerHTML = `<div class="box" style="max-width:460px"><h3>Set up 2-step login</h3>
+      <p>1. On your phone install <b>Google Authenticator</b> or <b>Microsoft Authenticator</b> (free).<br>2. In the app tap <b>+</b> → <b>Scan a QR code</b> and scan this:</p>
+      <div style="display:grid;place-items:center;background:#fff;border-radius:12px;padding:8px">${d.qr_svg || '<span class="muted">QR not available — type the key below</span>'}</div>
+      <p class="muted" style="font-size:12px">Can't scan? Choose “Enter a setup key” and type: <b style="font-family:ui-monospace,monospace;letter-spacing:1px">${esc(d.secret)}</b></p>
+      <label class="f">3. Type the 6-digit code the app shows<input id="tsc" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" style="font:700 20px ui-monospace,monospace;letter-spacing:3px"></label>
+      <span class="err" id="tse"></span>
+      <div class="acts"><button type="button" class="btn ghost" data-x>Cancel</button><button type="button" class="btn primary" id="tsok">Turn on</button></div></div>`;
+    document.body.append(m); m.querySelector('#tsc').focus();
+    m.querySelector('[data-x]').onclick = () => m.remove();
+    const ok = async () => {
+      try { const r = await api('POST', '/2step/confirm', { code: m.querySelector('#tsc').value }); m.remove(); showBackupCodes(r.backup_codes, after); }
+      catch (e) { m.querySelector('#tse').textContent = e.message; } };
+    m.querySelector('#tsok').onclick = ok; m.querySelector('#tsc').onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+  })();
+}
+function showBackupCodes(codes, after) {
+  const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+  m.innerHTML = `<div class="box"><h3>Your backup codes</h3><p>If you lose your phone, each code logs you in once. <b>Write them down or save them somewhere safe</b> — they are shown only now.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font:700 17px/1.6 ui-monospace,monospace;background:var(--surf);border-radius:10px;padding:12px;text-align:center">${codes.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
+    <div class="acts"><button type="button" class="btn ghost" id="bcc">Copy</button><button type="button" class="btn primary" id="bco">I saved them</button></div></div>`;
+  document.body.append(m);
+  m.querySelector('#bcc').onclick = async () => { try { await navigator.clipboard.writeText(codes.join('\n')); toast('Copied'); } catch { toast('Select and copy them by hand'); } };
+  m.querySelector('#bco').onclick = () => { m.remove(); toast('2-step login is on'); after && after(); };
+}
+async function securityView() {
+  const [d, me] = await Promise.all([api('GET', '/security'), api('GET', '/me')]);
+  ME = me;
+  const r = d.recent;
+  const sessRow = (x, mine) => `<tr><td>${mine ? '' : `<b>${esc(x.name || x.email)}</b><div class="muted" style="font-size:12px">${esc(x.email)}</div>`}${esc(device(x.ua))}${x.this ? ' <span class="pill" style="color:var(--ok)">this device</span>' : ''}</td>
+    <td>${esc(x.ip || '—')}</td><td>${when(x.created)}</td><td>${when(x.last_seen)}</td>
+    <td style="text-align:right">${x.this ? '' : `<button type="button" class="btn ghost" data-end="${esc(x.id)}" style="color:var(--bad)">End</button>`}</td></tr>`;
+  const head = (who) => `<thead><tr><th>${who ? 'WHO · DEVICE' : 'DEVICE'}</th><th>IP</th><th>LOGGED IN</th><th>LAST USED</th><th></th></tr></thead>`;
+  const blocks = d.blocks.map((b) => `<tr><td>${b.kind === 'ip' ? 'IP address' : 'Phone number'}</td><td><b>${esc(b.value)}</b></td><td>${esc(b.reason || '')}</td>
+    <td class="muted" style="font-size:12px">${esc(b.by_who || '')} · ${when(b.at)}</td><td>${b.until ? when(b.until) : 'Until removed'}</td>
+    <td style="text-align:right">${d.can_edit ? `<button type="button" class="btn ghost" data-unblock="${b.id}">Unblock</button>` : ''}</td></tr>`).join('');
+  return shell('Security', `<div class="row"><div><h1>Security</h1><span class="sub">Logins, logged-in devices, blocked numbers and IP addresses, and attacks in the last 24 hours.</span></div></div>
+    <section class="card"><div class="row"><div><h2>Your 2-step login</h2><span class="sub">After the password, a 6-digit code from an app on your phone. A stolen password alone is then not enough.</span></div>
+      ${me.two_step ? '<span class="pill" style="color:var(--ok)">On</span>' : '<span class="pill" style="color:var(--bad)">Off</span>'}</div>
+      ${me.two_step ? `<span class="muted">Backup codes left: <b>${me.backup_left}</b>${me.backup_left < 3 ? ' — make new ones' : ''}</span>
+        <div class="row" style="justify-content:flex-start;gap:8px"><button type="button" class="btn ghost" id="newbc">New backup codes</button>${me.require_2step ? '' : '<button type="button" class="btn ghost" id="tsoff" style="color:var(--bad)">Turn off</button>'}</div>`
+      : '<div><button type="button" class="btn primary" id="tson">Turn on 2-step login</button></div>'}</section>
+    ${d.can_team ? `<section class="card"><div class="row"><div><h2>Whole team</h2><span class="sub">Make 2-step login required: anyone without it must set it up at their next click.</span></div>
+      <label class="chk"><input type="checkbox" id="req" ${d.require_2step ? 'checked' : ''}> Required for everyone</label></div>
+      <div class="scroll"><table><thead><tr><th>PERSON</th><th>ROLE</th><th>2-STEP LOGIN</th></tr></thead><tbody>${d.team_2step.map((t) => `<tr><td><b>${esc(t.name || '')}</b> <span class="muted">${esc(t.email)}</span></td><td>${esc(t.role)}</td><td>${t.on ? '<span class="pill" style="color:var(--ok)">On</span>' : '<span class="pill" style="color:var(--bad)">Off</span>'}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+    <section class="card"><div class="row"><div><h2>Your logged-in devices</h2><span class="sub">Don't know one? End it and change your password.</span></div>
+      ${d.my_sessions.length > 1 ? '<button type="button" class="btn ghost" id="endothers" style="color:var(--bad)">Log out all other devices</button>' : ''}</div>
+      <div class="scroll"><table>${head(false)}<tbody>${d.my_sessions.map((x) => sessRow(x, true)).join('')}</tbody></table></div></section>
+    ${d.team_sessions ? `<section class="card"><h2>Everyone logged in now</h2><div class="scroll"><table>${head(true)}<tbody>${d.team_sessions.map((x) => sessRow(x, false)).join('')}</tbody></table></div></section>` : ''}
+    <section class="card"><div><h2>Blocked numbers and IP addresses</h2><span class="sub">A blocked number can't get a login code. A blocked IP address can't reach the app or panels at all.</span></div>
+      ${d.can_edit ? `<form id="bf" class="grid2" style="align-items:end">
+        <label class="f">What<select id="bk"><option value="phone">Phone number</option><option value="ip">IP address</option></select></label>
+        <label class="f">Number or IP<input id="bv" type="text" required placeholder="98765 43210 or 203.0.113.7"></label>
+        <label class="f">Why<input id="br" type="text" required maxlength="300" placeholder="e.g. asked 200 OTPs in an hour"></label>
+        <label class="f">For how long (IP)<select id="bh"><option value="24">24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
+        <button class="btn primary" type="submit">Block</button></form><span class="err" id="berr"></span>
+        <span class="muted" style="font-size:12px">Careful with IP addresses: in India many students on one mobile network share one IP, so an IP block can stop real students. Prefer blocking the number. Your own IP (${esc(d.your_ip || '?')}) can't be blocked.</span>` : ''}
+      ${d.blocks.length ? `<div class="scroll"><table><thead><tr><th>KIND</th><th>VALUE</th><th>WHY</th><th>BY</th><th>UNTIL</th><th></th></tr></thead><tbody>${blocks}</tbody></table></div>` : '<span class="muted">Nothing is blocked.</span>'}</section>
+    <section class="card"><h2>Last 24 hours</h2><div class="stats">${stat('Login codes sent', r.otp_sent, 'OTP SMS')}${stat('Wrong codes', r.wrong_codes, 'typed by students')}
+      ${stat('Wrong admin logins', r.admin_failed, 'password or 2-step code')}${stat('Blocked requests', r.blocked_requests, 'from the block list')}${stat('Too many requests', r.too_many_requests, 'bots stopped')}</div>
+      ${r.failed_admin_logins.length ? `<div class="scroll"><table><thead><tr><th>WRONG ADMIN LOGIN</th><th>IP</th><th>WHEN (UTC)</th></tr></thead><tbody>${r.failed_admin_logins.map((f) => `<tr><td>${esc(f.email)}</td><td>${esc(f.ip || '')}</td><td>${esc(f.at)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      <span class="muted" style="font-size:12px">Alerts come by themselves when too many login codes are sent or wrong admin logins pile up in an hour (Settings → Alerts), and when someone logs in from a new place.</span></section>
+    <section class="card"><h2>Already protecting the app</h2><span class="muted" style="line-height:1.7">Login codes stored only as hashes, short expiry, number locked after 10 wrong codes a day · limits on codes per number, phone and network · admin locked after 5 wrong tries · every database query safe from injection · page text escaped · payments signature-checked · secrets encrypted · photos re-made and never stored · browser security headers on every reply · a request ceiling per IP against bots.</span></section>`);
+}
+function bindSecurity() {
+  const again = async () => { $('#app').innerHTML = await securityView(); bindSecurity(); };
+  if ($('#tson')) $('#tson').onclick = () => setupTwoStep(again);
+  if ($('#tsoff')) $('#tsoff').onclick = async () => {
+    const m = await dialog('Turn off 2-step login', '<p>Your account is then protected by the password alone.</p><label class="f">Your password<input type="password" id="tsp" required autocomplete="current-password"></label>', 'Turn off');
+    if (!m) return; try { await api('POST', '/2step/off', { password: m.querySelector('#tsp').value }); toast('2-step login is off'); again(); } catch (e) { toast(e.message); } };
+  if ($('#newbc')) $('#newbc').onclick = async () => {
+    const m = await dialog('New backup codes', '<p>The old backup codes stop working.</p><label class="f">Code from your authenticator app<input id="nbc" type="text" inputmode="numeric" maxlength="7" required></label>', 'Make new codes');
+    if (!m) return; try { const r = await api('POST', '/2step/backup-codes', { code: m.querySelector('#nbc').value }); showBackupCodes(r.backup_codes, again); } catch (e) { toast(e.message); } };
+  if ($('#req')) $('#req').onchange = async (e) => {
+    const on = e.target.checked;
+    if (!(await ask({ title: on ? 'Require 2-step login for everyone?' : 'Stop requiring 2-step login?', text: on ? 'Team members without it must set it up before they can do anything else.' : 'Team members can then log in with the password alone.', ok: on ? 'Require' : 'Stop requiring', danger: !on }))) { e.target.checked = !on; return; }
+    try { await api('PUT', '/security/require-2step', { on }); toast(on ? 'Required for everyone' : 'Not required any more'); } catch (err) { toast(err.message); } again(); };
+  if ($('#endothers')) $('#endothers').onclick = async () => {
+    if (!(await ask({ title: 'Log out all other devices?', text: 'Every other place where you are logged in is logged out at once. This device stays in.', ok: 'Log out others', danger: true }))) return;
+    try { const r = await api('POST', '/sessions/end-others'); toast(`${r.ended} logged out`); again(); } catch (e) { toast(e.message); } };
+  document.querySelectorAll('[data-end]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'End this login?', text: 'That device is logged out at once.', ok: 'End', danger: true }))) return;
+    try { await api('POST', `/sessions/${encodeURIComponent(b.dataset.end)}/end`); toast('Logged out'); again(); } catch (e) { toast(e.message); } });
+  if ($('#bk')) { const kind = () => { $('#bh').closest('label').style.display = $('#bk').value === 'ip' ? '' : 'none'; }; $('#bk').onchange = kind; kind(); }
+  if ($('#bf')) $('#bf').onsubmit = async (e) => { e.preventDefault();
+    const kind = $('#bk').value;
+    if (!(await ask({ title: 'Block this?', text: kind === 'ip' ? 'Nobody on this network can use the app or the panels until the block ends.' : 'This number can no longer get a login code.', ok: 'Block', danger: true }))) return;
+    try { await api('POST', '/security/block', { kind, value: $('#bv').value, reason: $('#br').value, hours: kind === 'ip' ? +$('#bh').value : null }); toast('Blocked'); again(); }
+    catch (err) { $('#berr').textContent = err.message; } };
+  document.querySelectorAll('[data-unblock]').forEach((b) => b.onclick = async () => {
+    if (!(await ask({ title: 'Unblock?', text: 'They can use the app again at once.', ok: 'Unblock' }))) return;
+    try { await api('DELETE', `/security/block/${b.dataset.unblock}`); toast('Unblocked'); again(); } catch (e) { toast(e.message); } });
 }
 
 // ---------- Data & backups (B6) ----------
@@ -1502,10 +1629,17 @@ async function render() {
   if (!KEY) {
     app.innerHTML = loginView();
     $('#eye').onclick = () => { const k = $('#key'); const show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('#eye').textContent = show ? 'Hide' : 'Show'; };
+    const done = (r) => { KEY = r.token; try { sessionStorage.setItem('adminToken', KEY); } catch {}
+      if (r.backup_left !== undefined) setTimeout(() => toast(`Backup code used — ${r.backup_left} left`), 400); render(); };
     const go = async () => {
       try {
         const r = await api('POST', '/login', { email: $('#email').value, password: $('#key').value });
-        KEY = r.token; try { sessionStorage.setItem('adminToken', KEY); } catch {} render();
+        if (!r.need_code) return done(r);
+        app.innerHTML = codeView(); $('#code').focus();   // S3: 2-step login — the code from the phone
+        $('#cf').onsubmit = async (e) => { e.preventDefault();
+          try { done(await api('POST', '/login/code', { ticket: r.ticket, code: $('#code').value })); }
+          catch (err) { $('#cerr').textContent = err.message; $('#code').select(); } };
+        $('#cback').onclick = () => render();
       } catch (e) { $('#lerr').textContent = e.message; }
     };
     $('#lf').onsubmit = (e) => { e.preventDefault(); go(); }; $('#email').focus();
@@ -1515,13 +1649,16 @@ async function render() {
   try {
     if (h === '#/logout') {
       if (!(await ask({ title: 'Log out?', text: 'You will need your email and password to log in again.', ok: 'Log out' }))) { history.replaceState(null, '', HERE || '#/'); return; }
+      try { await api('POST', '/logout'); } catch {}
       KEY = ''; ME = null; try { sessionStorage.removeItem('adminToken'); } catch {} location.hash = '#/'; return render(); }
     if (!ME) ME = await api('GET', '/me');
     if (ME.must_change) { app.innerHTML = firstPasswordView(); bindFirstPassword(); return; }
+    if (ME.needs_2step) { app.innerHTML = needTwoStepView(); $('#tson').onclick = () => setupTwoStep(() => { ME = null; render(); }); return; }
     if (h === '#/' && !can('teachers_view')) { location.hash = can('evidence') ? '#/review' : can('students') ? '#/safety' : '#/safety-dash'; return; }
     GUARD = null; HERE = h;
     if (can('dashboard')) { try { const a = await api('GET', '/alerts'); ALERTS = { open: a.open, critical: a.critical }; } catch {} }
     if (h === '#/team') { app.innerHTML = await teamView(); bindTeam(); }
+    else if (h === '#/security') { app.innerHTML = await securityView(); bindSecurity(); }
     else if (h === '#/policy') { app.innerHTML = await policyView(); bindPolicy(); }
     else if (h === '#/center') { app.innerHTML = await centerView(); }
     else if (h === '#/filters') { app.innerHTML = await filtersView(); bindFilters(); }

@@ -57,7 +57,7 @@ Owner's brief (17 Nov 2026): `docs/safety-requirements-owner-brief.md` (24 secti
 Owner's instruction: don't build everything yet — first audit the existing app.
 Audit + gap analysis + phased plan: **`docs/safety-gap-analysis.md`**. S1 is folded into its Phase A (A3).
 
-## S3 · Cyber security: hacking, OTP abuse, attacks on app and admin — before launch · status: **noted, not started**
+## S3 · Cyber security: hacking, OTP abuse, attacks on app and admin — before launch · status: **first part built (18 Nov 2026)**
 Owner (17 Nov 2026): app ya admin par kahin bhi cyber attack / hacking — jaise OTP bypass karna ya bahut zyada OTP
 mangwana — in sab ko dhyan mein rakhte hue chalna hai. Falls under the launch rule: done before launch.
 
@@ -83,5 +83,17 @@ secrets encrypted, never in code.
 
 Touches: backend (limits, checks, logging), app (cooldown, integrity, pinning), admin (security page: blocked
 numbers/IPs, login alerts, sessions), server setup (Step 6).
+
+**Built 18 Nov 2026:** admin 2-step login (authenticator app, 8 backup codes, a code works once; Super Admin can make
+it required; Super Admin can turn it off for someone who lost their phone) · admin sessions (see and end them, "log out
+all other devices", Log out ends the session on the server) · alert on an admin login from a new place · block list
+for phone numbers (until removed) and IP addresses (24 h / 7 d / 30 d; your own IP can't be blocked) · students: "log
+out on other phones" in Profile, admin "Log out all phones", a new number ends the other logins · alerts for OTP
+floods (100/h) and wrong admin logins (10/h) · browser security headers (CSP, no framing, nosniff, HSTS) · a request
+ceiling per IP (600/min) · obfuscated APK · library security scan (pip-audit) in CI · Admin → Security page.
+
+**Still to do:** Play Integrity (needs the Play Console app) · rooted-phone warning · certificate pinning (after
+Cloudflare, so the certificate is stable) · Cloudflare in front + paid server (owner, Step 6) · penetration test
+before launch (owner) · OIDC for the AI key at launch if needed (owner).
 
 <!-- Next points from the owner go below as S4, S5, … -->

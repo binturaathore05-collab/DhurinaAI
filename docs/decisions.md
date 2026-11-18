@@ -205,3 +205,11 @@ the normal way (text check → right teacher → answer check). An unsafe photo 
 Settings → Limits); admin → Emergency → "Photo questions" switches it off. Cost: about ₹0.3 per photo with gpt-4o-mini.
 **AI line:** following A7 (tell once, no labels everywhere), Sir says "Namaste! I'm …, your AI teacher" only at the
 student's very first class (on screen and spoken), never again.
+
+## Security, first part — S3 (Claude, 18 Nov 2026 — owner can change)
+Owner asked to start security. Built the simple version first: 2-step login for the admin team (authenticator app;
+**not required yet** during testing — Super Admin can switch "Required for everyone" on in Admin → Security; turn it on
+before launch), logged-in devices with "log out other devices", alert on a login from a new place, block list for
+numbers and IP addresses (IP blocks end by themselves because many students share one mobile-network IP), "log out on
+other phones" for students, OTP-flood and password-guessing alerts, browser security headers, a request ceiling per IP,
+obfuscated APK and a library security scan. Old admin logins end once after this update (log in again).

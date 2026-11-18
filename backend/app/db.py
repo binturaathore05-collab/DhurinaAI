@@ -128,6 +128,25 @@ CREATE TABLE IF NOT EXISTS admin_logins (
     success INTEGER NOT NULL,
     at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS admin_sessions (   -- S3: every admin login; can be seen and ended
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    ip TEXT,
+    ua TEXT,
+    created REAL NOT NULL,
+    last_seen REAL,
+    ended REAL
+);
+CREATE TABLE IF NOT EXISTS blocked (          -- S3: phone numbers / IP addresses that may not use the app
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,                       -- phone | ip
+    value TEXT NOT NULL,
+    reason TEXT,
+    by_who TEXT,
+    at REAL,
+    until REAL,                               -- NULL = until removed
+    UNIQUE (kind, value)
+);
 CREATE TABLE IF NOT EXISTS platform_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -567,6 +586,10 @@ class Database:
         ("teachers", "panel_login", "TEXT"), ("teachers", "panel_password_hash", "TEXT"),
         ("teachers", "panel_must_change", "INTEGER NOT NULL DEFAULT 0"), ("teachers", "panel_failed", "INTEGER NOT NULL DEFAULT 0"),
         ("teachers", "panel_locked_until", "REAL"), ("teachers", "panel_pw_changed", "REAL"), ("content_links", "accepted", "INTEGER NOT NULL DEFAULT 0"),
+        # S3: admin 2-step login (secret encrypted; backup codes hashed) and "log out every other phone" for students
+        ("admin_users", "totp_secret", "TEXT"), ("admin_users", "totp_pending", "TEXT"),
+        ("admin_users", "totp_on", "INTEGER NOT NULL DEFAULT 0"), ("admin_users", "totp_last_step", "INTEGER"),
+        ("admin_users", "backup_codes", "TEXT"), ("students", "token_version", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     def _migrate(self) -> None:

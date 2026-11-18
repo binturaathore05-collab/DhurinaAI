@@ -181,6 +181,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// S3: e.g. an old phone was lost or someone else knows the login — every other phone is logged out.
+  Future<void> _logoutOthers() async {
+    final ok = await confirmAction(context,
+        title: 'Log out on other phones?',
+        message: 'Every other phone with your account is logged out at once. This phone stays logged in.',
+        confirmLabel: 'Log out others');
+    if (!ok || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await AppScope.of(context).api.logoutOthers();
+      messenger.showSnackBar(const SnackBar(content: Text('Done — only this phone is logged in now')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   Future<void> _logout() async {
     final ok = await confirmAction(context,
         title: 'Log out?', message: 'Your classes, notes and plan stay saved. Log in again with your number any time.',
@@ -252,6 +268,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 12),
                   _card(children: [
                     _tile(Icons.phone_iphone_rounded, 'Change mobile number', _changeNumber),
+                    const Divider(color: LT.border, height: 1),
+                    _tile(Icons.devices_other_rounded, 'Log out on other phones', _logoutOthers),
                     const Divider(color: LT.border, height: 1),
                     _tile(Icons.logout_rounded, 'Log out', _logout),
                   ]),

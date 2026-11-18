@@ -14,7 +14,8 @@ MINUTE, HOUR, DAY = 60, 3600, 86400
 DEFAULT_LIMITS = {
     "questions_per_minute": 8,      # a real student rarely asks more than this in a minute
     "questions_per_day": 500,       # paid plans are "unlimited", but this caps runaway AI cost per student
-    "photos_per_day": 30,           # Phase C: a photo question costs more AI than a typed one
+    "photos_per_day": 30,
+    "requests_per_ip_minute": 600,  # S3: any request, per IP address (bots); high, as many students can share one IP           # Phase C: a photo question costs more AI than a typed one
     "otp_per_phone_10min": 3,
     "otp_per_phone_day": 10,
     "otp_gap_seconds": 30,          # same as the app's "Resend in 0:30" timer

@@ -36,6 +36,7 @@ from .services import roles
 from .services import data_protection
 from .services import alerts
 from .services import photo as photo_mod
+from .services import security
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
@@ -126,6 +127,38 @@ async def _audit_middleware(request: Request, call_next):
     return response
 
 
+_ip_limiter = security.IpLimiter(limits.DEFAULT_LIMITS["requests_per_ip_minute"])
+_ip_limit_read = {"at": 0.0}
+
+
+@app.middleware("http")
+async def _security_middleware(request: Request, call_next):
+    """S3: blocked IP addresses, a per-IP request ceiling, and browser security headers on every reply."""
+    from fastapi.responses import JSONResponse
+    ip = _client_ip(request)
+    if time.time() - _ip_limit_read["at"] > 60:   # the ceiling from admin → Settings → Limits, read once a minute
+        _ip_limit_read["at"] = time.time()
+        try:
+            _ip_limiter.per_minute = _limit_settings()["requests_per_ip_minute"]
+        except Exception:
+            pass
+    if request.url.path != "/health":
+        if security.is_blocked(db, "ip", ip):
+            security.note(db, "sec:blocked:ip")
+            response = JSONResponse({"detail": "Access from this network is blocked. Please contact support."}, 403)
+        elif not _ip_limiter.allow(ip):
+            security.note(db, "sec:ip_limit")
+            response = JSONResponse({"detail": "Too many requests. Please wait a minute."}, 429, {"Retry-After": "60"})
+        else:
+            response = await call_next(request)
+    else:
+        response = await call_next(request)
+    https = request.url.scheme == "https" or (settings.trust_proxy and request.headers.get("x-forwarded-proto") == "https")
+    for k, v in security.headers(response.headers.get("content-type", ""), https).items():
+        response.headers.setdefault(k, v)
+    return response
+
+
 @app.exception_handler(switches.AIPaused)
 def _ai_paused(request: Request, exc: switches.AIPaused):
     from fastapi.responses import JSONResponse
@@ -149,12 +182,15 @@ def teacher_from_header(x_teacher_id: str = Header(...)) -> TeacherProfile:
 
 def current_student(authorization: str = Header(...)):
     try:
-        student_id, teacher_id = accounts.read_token(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+        student_id, teacher_id, tv = accounts.read_token(authorization.removeprefix("Bearer ").strip(),
+                                                         settings.jwt_secret, with_version=True)
     except accounts.AuthError as exc:
         raise HTTPException(401, str(exc))
     row = db.one("SELECT * FROM students WHERE id = ?", (student_id,))
     if row is None:
         raise HTTPException(401, "Unknown student")
+    if tv != (row["token_version"] or 0):   # S3: "log out every other phone" / number changed
+        raise HTTPException(401, "You were logged out. Please log in again.")
     if row["status"] == "disabled":   # A3: a disabled account can do nothing, even with an old login
         raise HTTPException(403, student_safety.account(db, student_id)["account_message"])
     return {"id": student_id, "teacher_id": teacher_id}
@@ -243,11 +279,18 @@ class OtpVerify(BaseModel):
     code: str
 
 
+def _not_blocked_phone(phone: str) -> None:
+    if security.is_blocked(db, "phone", phone):   # S3: admin → Security → blocked numbers
+        security.note(db, "sec:blocked:phone")
+        raise HTTPException(403, "This number can't use the app. Please contact support.")
+
+
 @app.post("/auth/otp")
 def send_otp(body: OtpRequest, request: Request, teacher: TeacherProfile = Depends(teacher_from_header),
              x_device_id: str = Header("")):
     try:
         phone = accounts.normalize_phone(body.phone)
+        _not_blocked_phone(phone)
         lim = _limit_settings()
         limits.check_and_record(db, [limits.wrong_code_rule(teacher.id, phone, lim)], record=False)  # locked number
         limits.check_and_record(db, limits.otp_send_rules(teacher.id, phone, x_device_id.strip(),
@@ -264,6 +307,7 @@ def send_otp(body: OtpRequest, request: Request, teacher: TeacherProfile = Depen
 def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_header)):
     try:
         phone = accounts.normalize_phone(body.phone)
+        _not_blocked_phone(phone)
         wrong = limits.wrong_code_rule(teacher.id, phone, _limit_settings())
         limits.check_and_record(db, [wrong], record=False)   # too many wrong codes today: number is locked
     except ValueError as exc:
@@ -280,8 +324,23 @@ def verify_otp(body: OtpVerify, teacher: TeacherProfile = Depends(teacher_from_h
     student_id = accounts.get_or_create_student(db, teacher.id, phone)
     if student_safety.status(db, student_id) == "disabled":
         raise HTTPException(403, student_safety.account(db, student_id)["account_message"])
-    token = accounts.issue_token(student_id, teacher.id, settings.jwt_secret, settings.jwt_days)
-    return {"token": token, **_access(student_id)}
+    return {"token": _student_token(student_id, teacher.id), **_access(student_id)}
+
+
+def _student_token(student_id: int, teacher_id: str) -> str:
+    tv = db.one("SELECT token_version FROM students WHERE id = ?", (student_id,))["token_version"] or 0
+    return accounts.issue_token(student_id, teacher_id, settings.jwt_secret, settings.jwt_days, tv)
+
+
+def _logout_everywhere(student_id: int) -> None:
+    db.execute("UPDATE students SET token_version = COALESCE(token_version, 0) + 1 WHERE id = ?", (student_id,))
+
+
+@app.post("/me/logout-all")
+def logout_all(student=Depends(current_student)):
+    """S3: log out every other phone. This phone gets a fresh login and stays in."""
+    _logout_everywhere(student["id"])
+    return {"token": _student_token(student["id"], student["teacher_id"])}
 
 
 def _limits(teacher_id: str) -> dict:
@@ -490,7 +549,8 @@ def change_phone_verify(body: NewPhoneCode, student=Depends(current_student)):
         raise HTTPException(400, str(exc))
     except limits.Limited as exc:
         raise _too_many(exc)
-    return {"phone": phone}
+    _logout_everywhere(student["id"])   # S3: a new number ends the logins on every other phone
+    return {"phone": phone, "token": _student_token(student["id"], student["teacher_id"])}
 
 
 @app.get("/me/access")
@@ -1066,7 +1126,8 @@ AVATAR_DIR = os.environ.get("AVATAR_DIR", "avatars")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
-_FIRST_LOGIN_OK = {"/admin/api/me", "/admin/api/password"}
+_FIRST_LOGIN_OK = {"/admin/api/me", "/admin/api/password", "/admin/api/logout"}
+_SETUP_2STEP_OK = _FIRST_LOGIN_OK | {"/admin/api/2step/start", "/admin/api/2step/confirm"}
 
 
 def require_admin(request: Request, authorization: str = Header("")):
@@ -1076,6 +1137,8 @@ def require_admin(request: Request, authorization: str = Header("")):
         raise HTTPException(401, str(exc))
     if user["must_change"] and request.url.path not in _FIRST_LOGIN_OK:   # B5: one-time password → own password first
         raise HTTPException(403, "Please set your own password first.")
+    if not user["totp_on"] and security.require_2step(db) and request.url.path not in _SETUP_2STEP_OK:
+        raise HTTPException(403, "Turn on 2-step login first.")   # S3: Super Admin made it required
     return user
 
 
@@ -1104,18 +1167,183 @@ class PasswordChange(BaseModel):
 @app.post("/admin/api/login")
 def admin_login(body: AdminLogin, request: Request):
     try:
-        return admin_auth.login(db, body.email, body.password, settings.jwt_secret,
-                                request.client.host if request.client else "")
+        return admin_auth.login(db, body.email, body.password, settings.jwt_secret, _client_ip(request),
+                                request.headers.get("user-agent", ""))
     except admin_auth.LoginError as exc:
         raise HTTPException(401, str(exc))
+
+
+class LoginCode(BaseModel):
+    ticket: str
+    code: str
+
+
+@app.post("/admin/api/login/code")
+def admin_login_code(body: LoginCode, request: Request):
+    """S3: step 2 of the login — the code from the authenticator app (or a backup code)."""
+    try:
+        return admin_auth.login_code(db, body.ticket, body.code, settings.jwt_secret, _client_ip(request),
+                                     request.headers.get("user-agent", ""))
+    except admin_auth.LoginError as exc:
+        raise HTTPException(401, str(exc))
+
+
+@app.post("/admin/api/logout")
+def admin_logout(authorization: str = Header(""), user=Depends(require_admin)):
+    """Ends this login on the server too (the token stops working at once)."""
+    sid = admin_auth.session_id(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+    if sid:
+        security.end_session(db, sid, user["id"])
+    return {"ok": True}
 
 
 @app.get("/admin/api/me")
 def admin_me(user=Depends(require_admin)):
     logins = [dict(r) for r in db.all("SELECT at, ip, success FROM admin_logins WHERE email = ? ORDER BY id DESC LIMIT 5",
                                       (user["email"],))]
+    required = security.require_2step(db)
     return {"email": user["email"], "name": user["name"], "role": user["role"], "role_label": roles.label(user["role"]),
-            "caps": roles.caps(user["role"]), "must_change": bool(user["must_change"]), "recent_logins": logins}
+            "caps": roles.caps(user["role"]), "must_change": bool(user["must_change"]), "recent_logins": logins,
+            "two_step": bool(user["totp_on"]), "backup_left": security.backup_left(user),
+            "require_2step": required, "needs_2step": required and not user["totp_on"]}
+
+
+# ---------- S3: 2-step login, sessions, block list ----------
+
+class TwoStepCode(BaseModel):
+    code: str
+
+
+class TwoStepOff(BaseModel):
+    password: str
+
+
+@app.post("/admin/api/2step/start")
+def two_step_start(user=Depends(require_admin)):
+    """A new secret for the authenticator app (QR code + the key to type). Not on until a code is confirmed."""
+    return security.start_2step(db, user["id"], user["email"])
+
+
+@app.post("/admin/api/2step/confirm")
+def two_step_confirm(body: TwoStepCode, user=Depends(require_admin)):
+    try:
+        codes = security.confirm_2step(db, user["id"], body.code)
+    except security.SecurityError as exc:
+        raise HTTPException(400, str(exc))
+    return {"on": True, "backup_codes": codes}   # shown once; only hashes are kept
+
+
+@app.post("/admin/api/2step/off")
+def two_step_off(body: TwoStepOff, user=Depends(require_admin)):
+    if security.require_2step(db):
+        raise HTTPException(400, "2-step login is required for the whole team (Security page)")
+    if not admin_auth.check_password(body.password or "", user["password_hash"]):
+        raise HTTPException(400, "Password is wrong")
+    security.turn_off_2step(db, user["id"])
+    return {"on": False}
+
+
+@app.post("/admin/api/2step/backup-codes")
+def two_step_new_codes(body: TwoStepCode, user=Depends(require_admin)):
+    """New backup codes (the old ones stop working); needs a code from the app."""
+    try:
+        security.check_2step(db, user, body.code)
+    except security.SecurityError as exc:
+        raise HTTPException(400, str(exc))
+    plain, hashed = security.new_backup_codes()
+    db.execute("UPDATE admin_users SET backup_codes = ? WHERE id = ?", (hashed, user["id"]))
+    return {"backup_codes": plain}
+
+
+@app.post("/admin/api/team/{uid}/2step-off")
+def team_two_step_off(uid: int, user=Depends(need("team"))):
+    """Super Admin: a team member lost their phone and backup codes → 2-step off and every login of theirs ends."""
+    if not db.one("SELECT 1 FROM admin_users WHERE id = ?", (uid,)):
+        raise HTTPException(404, "Team member not found")
+    security.turn_off_2step(db, uid)
+    security.end_all_sessions(db, uid)
+    return admin_team()
+
+
+@app.get("/admin/api/security")
+def security_page(request: Request, authorization: str = Header(""), user=Depends(need("security_view"))):
+    me_sid = admin_auth.session_id(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+    team = roles.has(user["role"], "team")
+    mine = security.sessions(db, user["id"])
+    everyone = security.sessions(db) if team else None
+    for x in mine + (everyone or []):
+        x["this"] = x["id"] == me_sid
+    return {"require_2step": security.require_2step(db), "my_sessions": mine,
+            "team_sessions": everyone,
+            "team_2step": [{"email": m["email"], "name": m["name"], "role": roles.label(m["role"]), "on": bool(m["totp_on"])}
+                           for m in db.all("SELECT email, name, role, totp_on FROM admin_users WHERE active = 1")] if team else None,
+            "blocks": security.blocks(db), "recent": security.recent(db),
+            "can_edit": roles.has(user["role"], "security_edit"), "can_team": team,
+            "ip_block_hours": security.IP_BLOCK_HOURS, "your_ip": _client_ip(request)}
+
+
+class RequireTwoStep(BaseModel):
+    on: bool
+
+
+@app.put("/admin/api/security/require-2step")
+def security_require(body: RequireTwoStep, user=Depends(need("team"))):
+    if body.on and not user["totp_on"]:
+        raise HTTPException(400, "Turn on your own 2-step login first")
+    security.set_require_2step(db, body.on)
+    return {"require_2step": body.on}
+
+
+@app.post("/admin/api/sessions/end-others")
+def sessions_end_others(authorization: str = Header(""), user=Depends(require_admin)):
+    sid = admin_auth.session_id(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+    return {"ended": security.end_other_sessions(db, user["id"], sid)}
+
+
+@app.post("/admin/api/sessions/{sid}/end")
+def sessions_end(sid: str, user=Depends(require_admin)):
+    """Your own session, or (Super Admin) anyone's."""
+    ok = security.end_session(db, sid, None if roles.has(user["role"], "team") else user["id"])
+    if not ok:
+        raise HTTPException(404, "Session not found or already ended")
+    return {"ended": True}
+
+
+class BlockAdd(BaseModel):
+    kind: str           # phone | ip
+    value: str
+    reason: str
+    hours: float | None = None   # None: phone = until removed, IP = 24 hours
+
+
+@app.post("/admin/api/security/block")
+def security_block(body: BlockAdd, request: Request, user=Depends(need("security_edit"))):
+    value = body.value
+    try:
+        if body.kind == "phone":
+            value = accounts.normalize_phone(value)
+        security.block(db, body.kind, value, body.reason, user["email"], body.hours, _client_ip(request))
+    except (security.SecurityError, ValueError) as exc:
+        raise HTTPException(400, str(exc))
+    return {"blocks": security.blocks(db)}
+
+
+@app.delete("/admin/api/security/block/{bid}")
+def security_unblock(bid: int, user=Depends(need("security_edit"))):
+    try:
+        security.unblock(db, bid)
+    except KeyError:
+        raise HTTPException(404, "Not in the block list")
+    return {"blocks": security.blocks(db)}
+
+
+@app.post("/admin/api/students/{sid}/logout-all")
+def admin_student_logout_all(sid: int, user=Depends(need("students"))):
+    """S3: e.g. a student's phone was lost — every login of this student ends."""
+    if not db.one("SELECT 1 FROM students WHERE id = ?", (sid,)):
+        raise HTTPException(404, "Student not found")
+    _logout_everywhere(sid)
+    return {"ok": True}
 
 
 # ---------- B8: safety policy versions ----------

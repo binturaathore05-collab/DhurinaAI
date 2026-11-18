@@ -75,17 +75,20 @@ def get_or_create_student(db: Database, teacher_id: str, phone: str) -> int:
     return row["id"]
 
 
-def issue_token(student_id: int, teacher_id: str, secret: str, days: int) -> str:
+def issue_token(student_id: int, teacher_id: str, secret: str, days: int, version: int = 0) -> str:
     now = int(time.time())
-    return jwt.encode({"sub": str(student_id), "tid": teacher_id, "iat": now, "exp": now + days * 86400},
+    return jwt.encode({"sub": str(student_id), "tid": teacher_id, "iat": now, "exp": now + days * 86400, "tv": version},
                       secret, algorithm="HS256")
 
 
-def read_token(token: str, secret: str) -> tuple[int, str]:
+def read_token(token: str, secret: str, with_version: bool = False):
+    """(student id, teacher id) — plus the token version (S3: "log out every other phone") when asked."""
     try:
         data = jwt.decode(token, secret, algorithms=["HS256"])
     except jwt.PyJWTError as exc:
         raise AuthError("Session expired. Please log in again.") from exc
+    if with_version:
+        return int(data["sub"]), data["tid"], int(data.get("tv", 0))
     return int(data["sub"]), data["tid"]
 
 
