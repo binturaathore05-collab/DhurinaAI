@@ -95,7 +95,15 @@ Owner's brief: `docs/multi-teacher-owner-brief.md`. This file is the plan Claude
   name fade in. Face = photo from the server, the app's own photo for its own teacher, else the first letter of the
   name. The app opens on the teacher the student was last with (`/me/access` → `active_faculty`). Tests carry their
   teacher. New teachers need no new APK.
-- **Next:** the owner tests the whole app end to end; fixes first; then Step 3 (institute panel screens).
+- **Step 3 (institute panel): built** (18 Nov 2026, branch `step3-institute-panel`). `/teacher-panel` is now the
+  institute's real panel (the demo data is gone): its own login (set / reset by Super Admin on the institute's page,
+  one-time password, must change at first login, scrypt hash, 5 wrong = 15 min lock, a new password ends other
+  logins); Home (questions, share from own content, active students, own earnings, review waiting); Teachers (add /
+  edit / photo / switch off); Content library (upload with progress, folders, Pending check, Text unclear, preview,
+  edit, replace, delete); Teaching Style; Review answers; Students & Earnings (own share only); Student safety (own
+  flagged students, numbers hidden, read-only, every look audited); Settings (change password). YouTube learning is
+  not built yet and is no longer shown.
+- **Next:** the owner tests app + panels end to end; fixes first.
 
 ## Owner decisions still to confirm (Claude's suggestions)
 1. One plan covers all teachers of an institute.

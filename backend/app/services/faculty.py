@@ -199,6 +199,7 @@ def save(db: Database, institute_id: str, data: dict, faculty_id: int | None = N
     """Add or edit a faculty (admin panel / institute panel). No code needed for a new teacher or subject."""
     if not db.one("SELECT 1 FROM teachers WHERE id = ?", (institute_id,)):
         raise KeyError(institute_id)
+    ensure_default(db, institute_id)   # the app's own teacher comes first, also when the first add is a new one
     old = get(db, institute_id, faculty_id) if faculty_id else None
     if faculty_id and old is None:
         raise KeyError(faculty_id)

@@ -434,6 +434,9 @@ async function detailView(id) {
         ${kv('Free demo', t.demo_questions != null ? t.demo_questions + ' questions' : 'Default (Settings)')}${kv('Grace', t.grace_days != null ? t.grace_days + ' days · ' + (t.grace_questions ?? 0) + ' questions' : 'Default (Settings)')}
         ${kv('Razorpay', t.razorpay_key_id ? 'Connected · ' + esc(t.razorpay_key_id) : 'Not connected')}
         <span class="muted">Split (this teacher)</span><b>Teacher ${t.teacher_percent}% · Dhurina ${t.effective_platform_percent}% <a href="#/edit/${encodeURIComponent(t.id)}" style="font-size:12px">Change</a></b></div></section></div>
+    <section class="card"><div class="row"><div><h2>Institute panel login</h2><span class="sub">The institute logs in at <b>${esc(location.origin)}/teacher-panel</b> to add its teachers, upload content, review answers and see its students and earnings.</span></div>
+      ${can('teachers_edit') ? `<button type="button" class="btn ${t.panel_login ? 'ghost' : 'primary'}" id="plset">${t.panel_login ? 'Reset password' : 'Create login'}</button>` : ''}</div>
+      <span>${t.panel_login ? `Login: <b>${esc(t.panel_login)}</b>${t.panel_must_change ? ' · <span class="muted">waiting for the first login (must change the password)</span>' : ''}` : '<span class="muted">No login yet.</span>'}</span></section>
     <section class="card" id="fac"><span class="muted">Loading teachers…</span></section>
     <section class="card" id="lib"><span class="muted">Loading content library…</span></section>`);
 }
@@ -443,7 +446,17 @@ async function bindDetail(id) {
     try { await api('POST', `/teachers/${encodeURIComponent(id)}/checklist`, { item: c.dataset.item, done: c.checked }); toast('Checklist updated'); }
     catch (e) { toast(e.message); c.checked = !c.checked; } });
   $('#build').onclick = async () => { if (!(await ask({ title: 'Build a new app version?', text: 'A new version of this teacher’s app will be built (about 7 minutes). Students get it only after you upload it to the Play Store.', ok: 'Build now' }))) return; try { await api('POST', `/teachers/${encodeURIComponent(id)}/build`); toast('App build started — ready in about 7 minutes'); loadBuilds(id); } catch (e) { toast(e.message); } };
-  loadBuilds(id); loadFaculty(id).then(() => loadLibrary(id));   // the library needs the teacher list
+  loadBuilds(id); loadFaculty(id).then(() => loadLibrary(id));
+  const pl = $('#plset'); if (pl) pl.onclick = async () => {
+    const t = await api('GET', '/teachers/' + encodeURIComponent(id));
+    const m = await dialog(t.panel_login ? 'Reset the institute’s password' : 'Create the institute’s login', `
+      <label class="f">Login (email or mobile)<input type="text" id="pll" value="${esc(t.panel_login || '')}" required maxlength="120"></label>
+      <span class="muted" style="font-size:13px">A one-time password is shown once. Give it to the institute; they must change it at the first login. Any older password stops working.</span>`, t.panel_login ? 'Reset password' : 'Create login');
+    if (!m) return;
+    try { const r = await api('PUT', `/teachers/${encodeURIComponent(id)}/panel-login`, { login: m.querySelector('#pll').value });
+      await dialog('Give this to the institute', `<p>Panel: <b>${esc(location.origin)}/teacher-panel</b><br>Login: <b>${esc(r.login)}</b><br>One-time password: <b style="font-size:18px;letter-spacing:1px">${esc(r.password)}</b></p>
+        <span class="muted" style="font-size:13px">Shown only now. Share it privately (not in a group).</span>`, '');
+      render(); } catch (e) { toast(e.message); } };   // the library needs the teacher list
 }
 async function loadBuilds(id) {
   const el = $('#builds'); if (!el) return;

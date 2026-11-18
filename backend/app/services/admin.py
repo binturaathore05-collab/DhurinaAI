@@ -306,6 +306,7 @@ def teacher_detail(db: Database, tid: str, default_percent: float = 20) -> dict:
         "id": t["id"], "name": t["name"], "subject": t["subject"], "app_name": t["app_name"],
         "subjects": [x.strip() for x in (t["subject"] or "").split(",") if x.strip()],
         "brand_color": t["brand_color"], "status": t["status"], "has_avatar": bool(t["avatar_url"]),
+        "panel_login": t["panel_login"], "panel_must_change": bool(t["panel_must_change"]),
         "platform_percent": pct, "effective_platform_percent": pct_eff, "teacher_percent": 100 - pct_eff,
         "demo_questions": t["demo_questions"], "grace_days": t["grace_days"], "grace_questions": t["grace_questions"],
         "monthly_price": plans.get("monthly"), "yearly_price": plans.get("yearly"),
