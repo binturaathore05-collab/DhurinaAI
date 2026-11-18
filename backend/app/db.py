@@ -562,7 +562,11 @@ class Database:
         ("kb_chunks", "faculty_id", "INTEGER"), ("verified_answers", "faculty_id", "INTEGER"),
         ("moderation_cache", "subject", "TEXT"), ("query_rewrites", "subject", "TEXT"),
         ("content_files", "pages", "INTEGER"), ("content_files", "pages_read", "INTEGER"),
-        ("content_files", "unclear", "REAL"), ("content_links", "accepted", "INTEGER NOT NULL DEFAULT 0"),
+        ("content_files", "unclear", "REAL"),
+        # Step 3: the institute's own panel login (set by Super Admin; scrypt hash only)
+        ("teachers", "panel_login", "TEXT"), ("teachers", "panel_password_hash", "TEXT"),
+        ("teachers", "panel_must_change", "INTEGER NOT NULL DEFAULT 0"), ("teachers", "panel_failed", "INTEGER NOT NULL DEFAULT 0"),
+        ("teachers", "panel_locked_until", "REAL"), ("teachers", "panel_pw_changed", "REAL"), ("content_links", "accepted", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     def _migrate(self) -> None:

@@ -187,3 +187,10 @@ Payments are not set up yet, so testers would stop after the 3 demo questions. S
 plan without payment (admin → Student safety → the student → Plan → "Give free plan", days + why) and end it again.
 It never counts as money or as a paying plan in reports; every change is in the audit log. Also usable later for
 scholarships. On the free demo server it is lost when the server restarts.
+
+## Institute panel login (Claude, 18 Nov 2026 — owner can change)
+Each institute logs in to `/teacher-panel` with its own login (email or mobile) and password. Super Admin creates it
+and resets it on the institute's page (admin → Institutes / Apps → the institute → "Institute panel login"); a
+one-time password is shown once and must be changed at the first login. The institute sees only its own students
+(numbers hidden), its own share of the money, and its own flagged students (read-only; every look is in the audit log).
+

@@ -39,7 +39,7 @@ from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
 from .services.tutor import is_delete_command, is_profile_command
-from .services import faculty as faculty_mod, library
+from .services import faculty as faculty_mod, library, institute_auth
 import threading
 import hashlib
 from .languages import detect_language
@@ -89,7 +89,19 @@ async def _audit_middleware(request: Request, call_next):
         return await call_next(request)
     body = await request.body() if method != "GET" else b""
     if path.startswith("/teacher/"):   # who it is, read before the action (a password change ends the old login)
-        who, role = f"teacher:{request.headers.get('x-teacher-id', '?')}", "teacher"
+        role, token = "teacher", request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        who = f"teacher:{request.headers.get('x-teacher-id', '?')}"
+        if token:
+            try:
+                who = f"teacher:{institute_auth.read(db, token, settings.jwt_secret)}"
+            except Exception:
+                who = "teacher:invalid login"
+        elif path == "/teacher/login":
+            try:
+                import json as _json
+                who = "teacher-login:" + str(_json.loads(body).get("login", "?"))[:80]
+            except Exception:
+                pass
     else:
         role, who = "admin", "?"
         token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
@@ -147,9 +159,16 @@ def current_student(authorization: str = Header(...)):
     return {"id": student_id, "teacher_id": teacher_id}
 
 
-def teacher_admin(x_teacher_id: str = Header(...), x_teacher_key: str = Header(...)) -> str:
-    expected = os.environ.get(f"TEACHER_KEY_{x_teacher_id.upper()}", "")
-    if not expected or not hmac.compare_digest(expected, x_teacher_key):
+def teacher_admin(authorization: str = Header(""), x_teacher_id: str = Header(""), x_teacher_key: str = Header("")) -> str:
+    """The institute panel: its own login (Bearer token from /teacher/login), or the older teacher key from .env."""
+    token = authorization.removeprefix("Bearer ").strip()
+    if token:
+        try:
+            return institute_auth.read(db, token, settings.jwt_secret)
+        except institute_auth.InstituteAuthError as exc:
+            raise HTTPException(401, str(exc))
+    expected = os.environ.get(f"TEACHER_KEY_{x_teacher_id.upper()}", "") if x_teacher_id else ""
+    if not expected or not x_teacher_key or not hmac.compare_digest(expected, x_teacher_key):
         raise HTTPException(403, "Not allowed")
     return x_teacher_id
 
@@ -898,6 +917,8 @@ def teacher_safety(status: str = "", q: str = "", offset: int = 0, limit: int = 
     """Owner (17 Nov 2026): the teacher also sees flagged students — only their own app's students; can't block."""
     out = student_safety.list_students(db, status, q, teacher_id, offset, limit)
     out.pop("counts", None)   # the platform-wide counts are Dhurina's
+    for x in out.get("items", []):   # numbers stay hidden from the institute, as on its Students page
+        x["phone"] = teacher_data.mask_phone(x.get("phone") or "")
     return out
 
 
@@ -908,6 +929,7 @@ def teacher_safety_student(sid: int, teacher_id: str = Depends(teacher_admin)):
     if row is None or row["teacher_id"] != teacher_id:
         raise HTTPException(404, "Student not found")
     d = student_safety.detail(db, sid)
+    d["phone"] = teacher_data.mask_phone(d.get("phone") or "")
     return {k: d[k] for k in ("id", "name", "phone", "status", "status_until", "status_reason", "joined", "questions",
                               "violations", "history", "class_level")}
 
@@ -1918,6 +1940,137 @@ async def institute_library_assign(lid: int, request: Request, teacher_id: str =
 def institute_library_delete(lid: int, teacher_id: str = Depends(teacher_admin)):
     _lib(lambda: library.remove(db, teacher_id, lid))
     return {"ok": True}
+
+
+# ---------- Step 3: the institute's own panel (login, home, teachers, content) ----------
+
+class InstituteLogin(BaseModel):
+    login: str
+    password: str
+
+
+@app.post("/teacher/login")
+def institute_login(body: InstituteLogin, request: Request):
+    try:
+        limits.check_and_record(db, [limits.Rule(f"inst-login:{_client_ip(request)}", 20, 900, "limit_otp")])   # 20 / 15 min / IP
+        return institute_auth.login(db, body.login, body.password, settings.jwt_secret)
+    except institute_auth.InstituteAuthError as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+
+
+class InstitutePassword(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/teacher/password")
+def institute_password(body: InstitutePassword, teacher_id: str = Depends(teacher_admin)):
+    try:
+        token = institute_auth.change_password(db, teacher_id, body.current_password, body.new_password,
+                                               settings.jwt_secret)
+    except institute_auth.InstituteAuthError as exc:
+        raise HTTPException(400, str(exc))
+    return {"changed": True, "token": token}   # older logins (other devices) end; this one goes on
+
+
+@app.get("/teacher/home")
+def institute_home(teacher_id: str = Depends(teacher_admin)):
+    """Everything the panel's Home and menu need, in one call (only this institute's numbers, never Dhurina's share)."""
+    t = db.one("SELECT * FROM teachers WHERE id = ?", (teacher_id,))
+    if t is None:
+        raise HTTPException(404, "Not found")
+    now = time.time()
+    pct = t["platform_commission_percent"] if t["platform_commission_percent"] is not None else _default_pct()
+    split = 100 - pct
+    lt = time.localtime(now)
+    months = []   # the institute's own earnings, last 6 months (never Dhurina's share)
+    for k in range(5, -1, -1):
+        y, m = lt.tm_year, lt.tm_mon - k
+        while m <= 0:
+            y, m = y - 1, m + 12
+        a = time.mktime((y, m, 1, 0, 0, 0, 0, 0, -1))
+        b = time.mktime((y + (m == 12), m % 12 + 1, 1, 0, 0, 0, 0, 0, -1))
+        rows = db.all("SELECT p.amount_paise, COALESCE(p.platform_percent, ?) AS pct FROM payments p "
+                      "JOIN plans pl ON pl.id = p.plan_id WHERE pl.teacher_id = ? AND p.status = 'paid' "
+                      "AND p.created_at >= datetime(?, 'unixepoch') AND p.created_at < datetime(?, 'unixepoch')",
+                      (pct, teacher_id, a, b))
+        months.append({"label": time.strftime("%b", time.localtime(a)),
+                       "paise": sum(r["amount_paise"] - round(r["amount_paise"] * r["pct"] / 100) for r in rows)})
+    week = db.one("SELECT COUNT(*) AS n, SUM(CASE WHEN q.origin = 'teacher_notes' THEN 1 ELSE 0 END) AS own "
+                  "FROM qa_history q JOIN students s ON s.id = q.student_id WHERE s.teacher_id = ? "
+                  "AND q.created_at >= datetime(?, 'unixepoch')", (teacher_id, now - 7 * 86400))
+    rv = teacher_data.review_page(db, teacher_id, 0, 3, status="pending")
+    lib = library.list_links(db, teacher_id)
+    students = teacher_data.students_page(db, teacher_id, 0, 1)["counts"]
+    return {"me": {"name": t["name"], "app": t["name"], "login": t["panel_login"] or "", "avatar": t["avatar_url"] or "",
+                   "subjects": t["subject"] or "", "split": round(split, 2), "must_change": bool(t["panel_must_change"])},
+            "faculty": len(faculty_mod.list_faculty(db, teacher_id)),
+            "review": {"waiting": rv["total_answers"], "questions": rv["total"], "top": rv["items"]},
+            "files": {"total": lib["total"], **lib["counts"]},
+            "students": students, "months": months,
+            "week_questions": week["n"] or 0, "from_notes": round((week["own"] or 0) / week["n"], 2) if week["n"] else 0}
+
+
+@app.post("/teacher/faculty")
+async def institute_faculty_add(request: Request, teacher_id: str = Depends(teacher_admin)):
+    return _save_faculty(teacher_id, await request.json(), None)
+
+
+@app.put("/teacher/faculty/{fid}")
+async def institute_faculty_edit(fid: int, request: Request, teacher_id: str = Depends(teacher_admin)):
+    return _save_faculty(teacher_id, await request.json(), fid)
+
+
+@app.delete("/teacher/faculty/{fid}")
+def institute_faculty_delete(fid: int, teacher_id: str = Depends(teacher_admin)):
+    _lib(lambda: faculty_mod.delete(db, teacher_id, fid))
+    return {"ok": True}
+
+
+@app.get("/teacher/library/{lid}")
+def institute_library_preview(lid: int, offset: int = 0, teacher_id: str = Depends(teacher_admin)):
+    return _lib(lambda: library.preview(db, teacher_id, lid, offset))
+
+
+@app.put("/teacher/library/{lid}/text")
+async def institute_library_edit(lid: int, request: Request, teacher_id: str = Depends(teacher_admin)):
+    d = await request.json()
+    return _lib(lambda: library.edit_text(db, teacher_id, lid, str(d.get("text", "")), **_kw()))
+
+
+@app.post("/teacher/library/{lid}/replace")
+async def institute_library_replace(lid: int, request: Request, teacher_id: str = Depends(teacher_admin)):
+    d = await request.json()
+    return _lib(lambda: library.replace(db, teacher_id, lid, str(d.get("filename", "")), _b64(d.get("data_base64", "")), **_kw()))
+
+
+@app.post("/teacher/library/{lid}/accept")
+def institute_library_accept(lid: int, teacher_id: str = Depends(teacher_admin)):
+    return _lib(lambda: library.accept(db, teacher_id, lid))
+
+
+@app.post("/teacher/library/{lid}/recheck")
+def institute_library_recheck(lid: int, teacher_id: str = Depends(teacher_admin)):
+    _lib(lambda: library.preview(db, teacher_id, lid))
+    return library.recheck(db, lid, moderator)
+
+
+class PanelLogin(BaseModel):
+    login: str
+
+
+@app.put("/admin/api/teachers/{tid}/panel-login", dependencies=[Depends(need("teachers_edit"))])
+def admin_panel_login(tid: str, body: PanelLogin):
+    """Set or reset the institute's own panel login. The one-time password is shown here once."""
+    if not db.one("SELECT 1 FROM teachers WHERE id = ?", (tid,)):
+        raise HTTPException(404, "Teacher not found")
+    try:
+        temp = institute_auth.set_login(db, tid, body.login)
+    except institute_auth.InstituteAuthError as exc:
+        raise HTTPException(400, str(exc))
+    return {"login": institute_auth.clean_login(body.login), "password": temp}
 
 
 # test lab for the brief's 7 checks (5 prototype teachers, a throw-away database; no AI cost)
