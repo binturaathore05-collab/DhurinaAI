@@ -427,25 +427,17 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
                 const SizedBox(width: 6),
-                // a labelled "Test" button, so students see at once where tests / mocks are
+                // the test icon (owner: icon only, no word): a clipboard with a tick, ringed in the app's colour
                 Tooltip(
                   message: 'Take a test (MCQ, written or oral)',
                   child: Material(
                     color: LT.surface,
-                    shape: const StadiumBorder(),
+                    shape: CircleBorder(side: BorderSide(color: cfg.accent, width: 1.5)),
                     child: InkWell(
-                      customBorder: const StadiumBorder(),
+                      customBorder: const CircleBorder(),
                       onTap: () => _offerTest(),
-                      child: Container(
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: cfg.accent, width: 1.5))),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.assignment_turned_in_outlined, size: 18, color: LT.accentText),
-                          const SizedBox(width: 6),
-                          const Text('Test', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                        ]),
-                      ),
+                      child: const SizedBox(width: 40, height: 40,
+                          child: Icon(Icons.assignment_turned_in_outlined, size: 20, color: LT.accentText)),
                     ),
                   ),
                 ),
