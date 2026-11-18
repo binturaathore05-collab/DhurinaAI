@@ -48,6 +48,20 @@ DELETE_PHRASES = [
 ]
 
 
+# "open my profile" said or typed to Sir → the app opens the Profile screen (same list in the app)
+PROFILE_PHRASES = [
+    "my profile", "open profile", "profile kholo", "profile khol do", "profile dikhao", "mera profile", "logout",
+    "log out", "number change", "number badalna", "number badlo", "mera number badlo", "mera naam badlo",
+    "मेरा प्रोफाइल", "प्रोफाइल खोलो", "प्रोफाइल दिखाओ", "लॉग आउट", "नंबर बदलो", "मेरा नंबर बदलो", "मेरा नाम बदलो",
+    "ਮੇਰਾ ਪ੍ਰੋਫਾਈਲ", "ਪ੍ਰੋਫਾਈਲ ਖੋਲ੍ਹੋ", "ਲੌਗ ਆਊਟ", "ਨੰਬਰ ਬਦਲੋ",
+]
+
+
+def is_profile_command(text: str) -> bool:
+    low = _padded(text)
+    return any(f" {p} " in low for p in PROFILE_PHRASES)
+
+
 def is_delete_command(text: str) -> bool:
     low = _padded(text)
     return any(f" {p} " in low for p in DELETE_PHRASES)

@@ -8,6 +8,7 @@ import '../share.dart';
 import '../theme.dart';
 import 'pdf_screen.dart';
 import 'delete_data.dart';
+import 'profile_screen.dart';
 
 String dayLabel(String createdAt) {
   final d = DateTime.tryParse(createdAt);
@@ -143,6 +144,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         backgroundColor: LT.bg,
         title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          IconButton(tooltip: 'Profile', icon: const Icon(Icons.account_circle_outlined), onPressed: () => openProfile(context)),
           PopupMenuButton<String>(
             tooltip: 'More',
             onSelected: (v) {
@@ -161,6 +163,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                _profileCard(accent),
+                const SizedBox(height: 14),
                 TextField(
                   onChanged: _onSearch,
                   decoration: const InputDecoration(
@@ -212,6 +216,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
     );
   }
+
+  /// Just under the title: the student's own account (name, number, plan, log out, change number…).
+  Widget _profileCard(Color accent) => Material(
+        color: LT.surface,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => openProfile(context),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: LT.border)),
+            child: Row(children: [
+              CircleAvatar(radius: 20, backgroundColor: LT.accentSoft,
+                  child: const Icon(Icons.person_outline_rounded, color: LT.accentText)),
+              const SizedBox(width: 12),
+              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('My Profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                SizedBox(height: 2),
+                Text('Name · mobile number · plan · log out', style: TextStyle(color: LT.muted, fontSize: 12)),
+              ])),
+              const Icon(Icons.chevron_right_rounded, color: LT.muted),
+            ]),
+          ),
+        ),
+      );
 
   Widget _savedNotesBox(Color accent) => Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
