@@ -74,6 +74,15 @@ jobs:
               open(gradle, 'w').write(g)
           except FileNotFoundError:
               pass
+          # the photo plugin (image_picker) makes Android's release lint crash (a lint bug); that lint is not needed here
+          for root in ('android/build.gradle.kts', 'android/build.gradle'):
+              try:
+                  r = open(root).read()
+              except FileNotFoundError:
+                  continue
+              if 'lintVital' not in r:
+                  r += '\nsubprojects {\n    tasks.matching { it.name.startsWith("lintVital") }.configureEach { enabled = false }\n}\n'
+                  open(root, 'w').write(r)
           PY
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q "android.permission.INTERNET" "$MANIFEST" || \
