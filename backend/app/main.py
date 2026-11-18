@@ -35,10 +35,11 @@ from .services import incidents
 from .services import roles
 from .services import data_protection
 from .services import alerts
+from .services import photo as photo_mod
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
-from .services.tutor import is_delete_command, is_profile_command
+from .services.tutor import is_delete_command, is_photo_command, is_profile_command
 from .services import faculty as faculty_mod, library, institute_auth
 import threading
 import hashlib
@@ -496,7 +497,16 @@ def change_phone_verify(body: NewPhoneCode, student=Depends(current_student)):
 def my_access(student=Depends(current_student)):
     """Plan / safety state, plus the teacher the student is with now (the app shows that face and name on open)."""
     f = _active_faculty(student["teacher_id"], student["id"])
-    return {**_access(student["id"]), "active_faculty": f.public() if f else None}
+    return {**_access(student["id"]), "active_faculty": f.public() if f else None, "ai_intro": _ai_intro(student, f)}
+
+
+def _ai_intro(student, f) -> dict | None:
+    """A7 / Phase C: Sir says once that he is an AI teacher, at the student's very first class (before the first
+    question). After that the class is just a class (owner: no AI labels everywhere)."""
+    if db.one("SELECT 1 FROM qa_history WHERE student_id = ? LIMIT 1", (student["id"],)):
+        return None
+    name = f.name if f else (db.one("SELECT name FROM teachers WHERE id = ?", (student["teacher_id"],)) or {"name": "Sir"})["name"]
+    return {lang: t("ai_intro", lang, teacher=name) for lang in ("en", "hi", "pa")}
 
 
 # ---------- live class ----------
@@ -594,21 +604,84 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     if quiz.is_test_command(body.question):   # "Sir, test lo" → the app asks MCQ / written / oral
         return {"type": "test_offer", "mode": quiz.mode_in(body.question), **classroom.class_summary(
             db, student["id"], classroom.latest_session_with_content(db, student["id"], session_id))}
-    verdict = _check_input(body.question)
+    if is_photo_command(body.question):   # "photo se poochna hai" → the app opens the camera
+        return {"type": "photo", **_access(student["id"])}
+    return _ask_question(student, teacher, body.question, session_id, body.voice)
+
+
+def _ask_question(student, teacher: TeacherProfile, question: str, session_id, voice: bool = False,
+                  extra: dict | None = None) -> dict:
+    """Input check → (counts one question) → the right teacher → answer → answer check."""
+    verdict = _check_input(question)
     if not verdict.safe:
-        result = _safe_reply(student["id"], teacher, body.question, verdict, session_id)
-        f = _active_faculty(teacher.id, student["id"])
-        _tag(result, f, session_id)
-        return {"type": "answer", **result.__dict__, **_access(student["id"])}
+        return _stopped(student, teacher, question, verdict, session_id, extra)
     _consume(student["id"], teacher)
     # multi-teacher: subject from the safety check (our own checker) or the free keyword match, else from the search
     # keyword call the teacher makes anyway (no extra AI call); sticky; "Maths wale sir ko bulao"
-    r = faculty_mod.route(db, teacher.id, student["id"], body.question, verdict.subject, tutor.subject_of)
+    r = faculty_mod.route(db, teacher.id, student["id"], question, verdict.subject, tutor.subject_of)
     result = _answer_safely(student["id"], teacher.as_faculty(r.faculty, r.previous.name if r.switched else None),
-                            body.question, session_id, body.voice)
+                            question, session_id, voice)
     _tag(result, r.faculty, session_id)
     result.switched, result.handover = r.switched, faculty_mod.handover_line(r, result.language)
-    return {"type": "answer", **result.__dict__, **_access(student["id"])}
+    return {"type": "answer", **result.__dict__, **(extra or {}), **_access(student["id"])}
+
+
+def _stopped(student, teacher: TeacherProfile, question: str, verdict, session_id, extra: dict | None = None) -> dict:
+    result = _safe_reply(student["id"], teacher, question, verdict, session_id)
+    _tag(result, _active_faculty(teacher.id, student["id"]), session_id)
+    return {"type": "answer", **result.__dict__, **(extra or {}), **_access(student["id"])}
+
+
+class PhotoAsk(BaseModel):
+    photo_base64: str
+    caption: str = ""               # optional: "Q3 samjhao" (typed or spoken)
+    voice: bool = False
+
+
+@app.post("/class/ask-photo")
+def ask_photo(body: PhotoAsk, student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
+    """Phase C: a photo of a question. Photo safety check → read the question from it → the normal question path.
+    The photo is never stored."""
+    if switches.is_off(db, "photo"):   # A4: admin → Emergency → Photo questions
+        raise HTTPException(503, t("photo_off", "en"))
+    _limit_questions(student["id"])
+    try:
+        limits.check_and_record(db, limits.photo_rules(student["id"], _limit_settings()))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    caption = " ".join((body.caption or "").split())[:300]
+    try:
+        jpeg = photo_mod.prepare(_b64(body.photo_base64))
+    except photo_mod.PhotoError as exc:
+        raise HTTPException(400, str(exc))
+    session_id = classroom.current_session(db, student["id"], teacher.id)
+    shown = f"📷 {caption}".strip()
+    if caption:   # the note is the student's own words: the normal text check first (free, cached)
+        v = _check_input(caption)
+        if not v.safe:
+            return _stopped(student, teacher, shown, v, session_id, {"photo_text": ""})
+    url = photo_mod.data_url(jpeg)
+    try:
+        v = photo_mod.check(moderator, url, caption)
+    except moderation.Unavailable:
+        moderator.log("input", moderation.Verdict("check_failed", "none", "model"), f"[photo] {caption}", "retry")
+        raise _retry()
+    try:
+        reading = photo_mod.read(raw_llm, url, caption) if v.safe else None
+    except switches.AIPaused:
+        raise HTTPException(503, t("ai_paused", "en"))
+    except Exception:
+        raise _retry()
+    if reading is not None and not reading.safe:
+        v = photo_mod.verdict_of(reading)
+    if not v.safe:
+        moderator.log("input", v, f"[photo] {caption}", {"care": "care_reply", "serious": "refused"}.get(v.severity, "redirected"))
+        return _stopped(student, teacher, shown, v, session_id, {"photo_text": ""})
+    if not reading.question:
+        lang = detect_language(caption) if caption else "hi"
+        return {"type": "photo_unclear", "message": t("photo_unclear", lang), **_access(student["id"])}
+    question = reading.question + (f"\n({caption})" if caption else "")
+    return _ask_question(student, teacher, question, session_id, body.voice, {"photo_text": reading.question})
 
 
 def _active_faculty(institute: str, student_id: int):

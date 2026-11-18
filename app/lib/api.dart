@@ -22,6 +22,14 @@ class CommandException implements Exception {
   CommandException(this.command);
 }
 
+/// Phase C: Sir couldn't read a study question in the photo (a ready message: take it again / say which question).
+class PhotoUnclearException implements Exception {
+  final String message;
+  PhotoUnclearException(this.message);
+  @override
+  String toString() => message;
+}
+
 class Plan {
   final String id;
   final String name;
@@ -52,10 +60,12 @@ class Access {
   final List<ClassOption> classOptions;
   /// Multi-teacher: the teacher the student is with now (shown when the class screen opens).
   final Faculty? activeFaculty;
+  /// Said once, at the student's very first class: "Namaste! I'm Gupta Sir, your AI teacher…" (null after that).
+  final String? aiIntro;
   Access(this.state, this.demoLeft,
       {this.daysLeft, this.renewSoon = false, this.planEndedAt, this.graceLeft = 0,
       this.accountStatus = 'active', this.accountMessage, this.serviceMessage,
-      this.profileNeeded = false, this.consentNeeded = false, this.classOptions = const [], this.activeFaculty});
+      this.profileNeeded = false, this.consentNeeded = false, this.classOptions = const [], this.activeFaculty, this.aiIntro});
 
   /// Still something to do before the class can start.
   bool get setupNeeded => profileNeeded || consentNeeded;
@@ -64,7 +74,7 @@ class Access {
       daysLeft: daysLeft, renewSoon: renewSoon, planEndedAt: planEndedAt, graceLeft: graceLeft,
       accountStatus: accountStatus, accountMessage: accountMessage, serviceMessage: serviceMessage,
       profileNeeded: profileNeeded, consentNeeded: consentNeeded, classOptions: ClassOption.defaults,
-      activeFaculty: activeFaculty);
+      activeFaculty: activeFaculty, aiIntro: aiIntro);
 
   /// What the call screen shows above Sir (account first, then a platform pause).
   String? get notice => accountMessage ?? serviceMessage;
@@ -93,6 +103,7 @@ class Access {
           .map((o) => ClassOption((o as Map)['value'].toString(), o['label'].toString()))
           .toList(),
       activeFaculty: Faculty.fromJson(j['active_faculty']),
+      aiIntro: (j['ai_intro'] as Map?)?['hi'] as String? ?? (j['ai_intro'] as Map?)?['en'] as String?,
     );
   }
 }
@@ -164,8 +175,11 @@ class Answer {
   final String handover;
   /// Sir's mood for this reply (smile, encouraging, serious, …): sets the voice's tone in audio mode.
   final String emotion;
+  /// Phase C: the question Sir read from the student's photo ('' for a typed / spoken question).
+  final String photoText;
   Answer(this.qaId, this.answer, this.followUp, this.origin, this.sources, this.language, this.access,
-      {this.verifyCode = '', this.faculty, this.switched = false, this.handover = '', this.emotion = 'smile'});
+      {this.verifyCode = '', this.faculty, this.switched = false, this.handover = '', this.emotion = 'smile',
+      this.photoText = ''});
   factory Answer.fromJson(Map<String, dynamic> j) => Answer(
         (j['qa_id'] as num).toInt(),
         j['answer'] as String? ?? '',
@@ -179,6 +193,7 @@ class Answer {
         switched: j['switched'] == true,
         handover: j['handover'] as String? ?? '',
         emotion: j['emotion'] as String? ?? 'smile',
+        photoText: j['photo_text'] as String? ?? '',
       );
 }
 
@@ -376,6 +391,8 @@ abstract class Api {
   Future<Access> verifyParentOtp(String phone, String code);
   /// [voice]: the question was spoken (the phone turned speech into text, so a word may be misheard).
   Future<Answer> ask(String question, {bool voice = false});
+  /// Phase C: a photo of a question (JPEG), with an optional note ("Q3 samjhao").
+  Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false});
   Future<SavedNote> saveNote(int qaId); // older single-answer notes (kept for compatibility)
   /// Notes of the whole class so far, one PDF per class. [topics] null = all topics of the class.
   Future<SavedNote> saveClassNotes({List<String>? topics});
@@ -517,6 +534,15 @@ class HttpApi implements Api {
     if (j['type'] == 'test_offer') throw CommandException('test');
     if (j['type'] == 'delete_offer') throw CommandException('delete');
     if (j['type'] == 'profile') throw CommandException('profile');
+    if (j['type'] == 'photo') throw CommandException('photo');
+    return Answer.fromJson(j);
+  }
+
+  @override
+  Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false}) async {
+    final j = await _call('POST', '/class/ask-photo',
+        {'photo_base64': base64Encode(jpeg), 'caption': caption, 'voice': voice}) as Map<String, dynamic>;
+    if (j['type'] == 'photo_unclear') throw PhotoUnclearException(j['message'] as String? ?? '');
     return Answer.fromJson(j);
   }
 
@@ -725,6 +751,14 @@ class DemoApi implements Api {
 
   @override
   Future<Access> access() async => _now;
+
+  @override
+  Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false}) async {
+    const read = 'प्रकाश संश्लेषण क्या है?';
+    final a = await ask(read, voice: voice);
+    return Answer(a.qaId, a.answer, a.followUp, a.origin, a.sources, a.language, a.access,
+        faculty: a.faculty, switched: a.switched, handover: a.handover, photoText: read);
+  }
 
   @override
   Future<Answer> ask(String question, {bool voice = false}) async {

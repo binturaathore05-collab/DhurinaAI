@@ -57,6 +57,20 @@ PROFILE_PHRASES = [
 ]
 
 
+# Phase C: "photo se poochna hai" said or typed → the app opens the camera (same list in the app: live_screen.dart)
+PHOTO_PHRASES = [
+    "photo question", "ask with a photo", "take a photo", "send a photo", "photo se puchna", "photo se poochna",
+    "photo se puchna hai", "photo bhejna hai", "photo bhejta hu", "photo bhejti hu", "photo khicho", "camera kholo",
+    "camera open karo", "फोटो से पूछना", "फोटो से पूछना है", "फ़ोटो से पूछना है", "फोटो भेजना है", "फ़ोटो भेजना है",
+    "फोटो खींचो", "कैमरा खोलो", "ਫੋਟੋ ਭੇਜਣੀ ਹੈ", "ਫੋਟੋ ਨਾਲ ਪੁੱਛਣਾ", "ਕੈਮਰਾ ਖੋਲ੍ਹੋ",
+]
+
+
+def is_photo_command(text: str) -> bool:
+    low = _padded(text)
+    return any(f" {p} " in low for p in PHOTO_PHRASES)
+
+
 def is_profile_command(text: str) -> bool:
     low = _padded(text)
     return any(f" {p} " in low for p in PROFILE_PHRASES)

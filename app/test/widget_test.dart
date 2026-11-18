@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liveteach/api.dart';
@@ -179,5 +181,15 @@ void main() {
     expect(() => api.changePhoneVerify('9876500009', '000000'), throwsA(isA<ApiException>()));
     expect(await api.changePhoneVerify('9876500009', '123456'), '+919876500009');
     expect((await api.me()).phone, '+919876500009');
+  });
+
+  test('photo: saying it opens the camera; the demo reads a question from the photo', () async {
+    expect(isPhotoCommand('Sir photo se puchna hai'), true);
+    expect(isPhotoCommand('फोटो भेजना है'), true);
+    expect(isPhotoCommand('What is photosynthesis?'), false);
+    final api = DemoApi(cfg);
+    final a = await api.askPhoto(Uint8List(4), caption: 'Q1');
+    expect(a.photoText.isNotEmpty, true);
+    expect(a.answer.isNotEmpty, true);
   });
 }

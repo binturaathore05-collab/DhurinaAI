@@ -16,6 +16,7 @@ dependencies:
   printing: ^5.13.0   # shows saved notes PDFs inside the app (zoom, scroll)
   speech_to_text: ^7.0.0   # audio mode: the student speaks (the phone's own free recognition)
   flutter_tts: ^4.2.0      # audio mode: Sir speaks (the phone's own free voices)
+  image_picker: ^1.1.2     # Phase C: ask with a photo (camera or gallery)
 
 dev_dependencies:
   flutter_test:

@@ -344,7 +344,7 @@ weekly and raises an alert if a backup fails.
 
 ### Phase C — before launch for any voice / photo / video feature that ships
 - Voice: speech-to-text, then the same input check; output check before speaking; AI disclosure spoken at call start.
-- Photo questions: image safety check before reading the photo.
+- Photo questions: image safety check before reading the photo. **Done 18 Nov 2026** (photo not stored; 30/day; Emergency switch).
 - Teacher uploads (PDF / notes / YouTube): scan on upload. A flagged file needs admin approval.
 - Optional parent dashboard; recording verification page (paste a session id → see the genuine record).
 

@@ -98,6 +98,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi-Latn": "Main ise behtar tarike se samjhata hoon. Kripya apna sawaal thoda alag tarike se phir poochho.",
         "pa": "ਮੈਂ ਇਸ ਨੂੰ ਬਿਹਤਰ ਤਰੀਕੇ ਨਾਲ ਸਮਝਾਉਂਦਾ ਹਾਂ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਸਵਾਲ ਥੋੜ੍ਹਾ ਵੱਖਰੇ ਤਰੀਕੇ ਨਾਲ ਫਿਰ ਪੁੱਛੋ।",
     },
+    "limit_photo_day": {
+        "en": "You've sent today's photo questions. You can type or speak your question, or send photos again in {wait}.",
+        "hi": "आज के फ़ोटो वाले सवाल पूरे हो गए। सवाल लिखकर या बोलकर पूछिए, या {wait} बाद फिर फ़ोटो भेजिए।",
+        "pa": "ਅੱਜ ਦੇ ਫੋਟੋ ਵਾਲੇ ਸਵਾਲ ਪੂਰੇ ਹੋ ਗਏ। ਸਵਾਲ ਲਿਖ ਕੇ ਜਾਂ ਬੋਲ ਕੇ ਪੁੱਛੋ, ਜਾਂ {wait} ਬਾਅਦ ਫਿਰ ਫੋਟੋ ਭੇਜੋ।",
+    },
+    "photo_off": {
+        "en": "Photo questions are switched off for a while. Please type or speak your question.",
+        "hi": "फ़ोटो वाले सवाल अभी कुछ देर के लिए बंद हैं। कृपया सवाल लिखकर या बोलकर पूछिए।",
+        "pa": "ਫੋਟੋ ਵਾਲੇ ਸਵਾਲ ਹਾਲੇ ਕੁਝ ਦੇਰ ਲਈ ਬੰਦ ਹਨ। ਕਿਰਪਾ ਕਰਕੇ ਸਵਾਲ ਲਿਖ ਕੇ ਜਾਂ ਬੋਲ ਕੇ ਪੁੱਛੋ।",
+    },
+    "photo_unclear": {
+        "en": "I couldn't read a study question in this photo. Take it again close to the page, in good light — or tell me which question you want.",
+        "hi": "इस फ़ोटो में मुझे सवाल साफ़ नहीं दिखा। पेज के पास से, अच्छी रोशनी में फिर से फ़ोटो लीजिए — या बताइए कौन सा सवाल पूछना है।",
+        "pa": "ਇਸ ਫੋਟੋ ਵਿੱਚ ਮੈਨੂੰ ਸਵਾਲ ਸਾਫ਼ ਨਹੀਂ ਦਿਸਿਆ। ਪੰਨੇ ਦੇ ਨੇੜਿਓਂ, ਚੰਗੀ ਰੋਸ਼ਨੀ ਵਿੱਚ ਫਿਰ ਫੋਟੋ ਲਓ — ਜਾਂ ਦੱਸੋ ਕਿਹੜਾ ਸਵਾਲ ਪੁੱਛਣਾ ਹੈ।",
+    },
+    "ai_intro": {   # A7 / Phase C: said once, at the student's very first class (owner: tell it once, not everywhere)
+        "en": "Namaste! I'm {teacher}, your AI teacher. Ask me anything — in Hindi, English, Punjabi or any language. You can also send a photo of your question.",
+        "hi": "नमस्ते! मैं {teacher} हूँ, आपका AI टीचर। मुझसे कुछ भी पूछिए — हिंदी, English, पंजाबी या किसी भी भाषा में। सवाल की फ़ोटो भी भेज सकते हैं।",
+        "pa": "ਨਮਸਤੇ! ਮੈਂ {teacher} ਹਾਂ, ਤੁਹਾਡਾ AI ਟੀਚਰ। ਮੈਨੂੰ ਕੁਝ ਵੀ ਪੁੱਛੋ — ਹਿੰਦੀ, English, ਪੰਜਾਬੀ ਜਾਂ ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ। ਸਵਾਲ ਦੀ ਫੋਟੋ ਵੀ ਭੇਜ ਸਕਦੇ ਹੋ।",
+    },
     "safety_retry": {
         "en": "Sir will answer in a moment. Please try again.",
         "hi": "सर थोड़ी देर में जवाब देंगे। कृपया फिर से कोशिश करें।",

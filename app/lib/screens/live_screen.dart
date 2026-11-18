@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
 import '../config.dart';
@@ -49,6 +50,19 @@ bool isTestCommand(String text) {
   return _testPhrases.any((p) => low.contains(' $p '));
 }
 
+/// Phase C: "photo se poochna hai" said or typed → the camera opens (same list as the server: tutor.py PHOTO_PHRASES).
+const _photoPhrases = [
+  'photo question', 'ask with a photo', 'take a photo', 'send a photo', 'photo se puchna', 'photo se poochna',
+  'photo se puchna hai', 'photo bhejna hai', 'photo bhejta hu', 'photo bhejti hu', 'photo khicho', 'camera kholo',
+  'camera open karo', 'फोटो से पूछना', 'फोटो से पूछना है', 'फ़ोटो से पूछना है', 'फोटो भेजना है', 'फ़ोटो भेजना है',
+  'फोटो खींचो', 'कैमरा खोलो', 'ਫੋਟੋ ਭੇਜਣੀ ਹੈ', 'ਫੋਟੋ ਨਾਲ ਪੁੱਛਣਾ', 'ਕੈਮਰਾ ਖੋਲ੍ਹੋ',
+];
+
+bool isPhotoCommand(String text) {
+  final low = _padded(text);
+  return _photoPhrases.any((p) => low.contains(' $p '));
+}
+
 const _modeWords = {
   'mcq': ['mcq', 'objective', 'options', 'एमसीक्यू', 'ऑब्जेक्टिव'],
   'written': ['written', 'likhit', 'likh kar', 'likhkar', 'लिखित', 'लिखकर', 'लिख कर', 'ਲਿਖਤੀ'],
@@ -94,6 +108,7 @@ class _LiveScreenState extends State<LiveScreen> {
   bool _speaking = false;
   int _spoken = -1;          // index into _parts of the sentence being spoken
   List<String> _parts = [];  // the answer + Sir's question, sentence by sentence
+  bool _introSaid = false;   // the one-time "I'm your AI teacher" line (first class only)
 
   @override
   void initState() {
@@ -119,6 +134,11 @@ class _LiveScreenState extends State<LiveScreen> {
         _access = a;
         if (a.activeFaculty != null && _transfer == null) _teacher = a.activeFaculty;
       });
+      // A7 / Phase C: at the very first class Sir says once that he is an AI teacher (never again after that)
+      if (a.aiIntro != null && !_introSaid && _last == null) {
+        _introSaid = true;
+        _voice.speak([a.aiIntro!], language: 'hi', teacherKey: _teacher?.id ?? 0);
+      }
     } catch (_) {}
   }
 
@@ -195,30 +215,16 @@ class _LiveScreenState extends State<LiveScreen> {
       if (mounted) openProfile(context);
       return;
     }
+    if (isPhotoCommand(text)) { // "photo se poochna hai" → camera
+      await _askPhoto();
+      return;
+    }
     setState(() {
       _thinking = true;
       _lastQuestion = text;
     });
     try {
-      final a = await api.ask(text, voice: spoken != null);
-      if (!mounted) return;
-      if (a.switched && a.handover.isNotEmpty) {
-        // call transfer: the old teacher says one short line (in the old teacher's voice), then the new face
-        // and name come in
-        setState(() => _transfer = a.handover);
-        final shown = Future.delayed(const Duration(milliseconds: 1800));
-        await _voice.speak([a.handover], language: a.language, teacherKey: _teacher?.id ?? 0);
-        await shown;
-        if (!mounted) return;
-      }
-      setState(() {
-        _last = a;
-        _saved = false;
-        _access = a.access;
-        _transfer = null;
-        if (a.faculty != null) _teacher = a.faculty;
-      });
-      _speakAnswer(a);
+      await _showAnswer(await api.ask(text, voice: spoken != null));
     } on CommandException catch (c) {
       if (mounted) setState(() => _thinking = false);
       if (c.command == 'save') {
@@ -227,17 +233,120 @@ class _LiveScreenState extends State<LiveScreen> {
         if (mounted) await confirmDeleteMyData(context);
       } else if (c.command == 'profile') {
         if (mounted) openProfile(context);
+      } else if (c.command == 'photo') {
+        await _askPhoto();
       } else {
         await _offerTest(mode: testModeIn(text));
       }
     } on ApiException catch (e) {
-      if (e.demoOver) {
-        _toast(e.message);
-        _openPlans();
-      } else {
-        _toast(e.message);
-        if (e.status == 403 || e.status == 503 || e.status == 428) _refreshAccess(); // paused / setup missing
-      }
+      _apiError(e);
+    } catch (_) {
+      _toast('No internet connection. Please try again.');
+    } finally {
+      if (mounted) setState(() => _thinking = false);
+    }
+  }
+
+  void _apiError(ApiException e) {
+    _toast(e.message);
+    if (e.demoOver) {
+      _openPlans();
+    } else if (e.status == 403 || e.status == 503 || e.status == 428) {
+      _refreshAccess(); // paused / setup missing
+    }
+  }
+
+  /// Sir's answer on screen (and spoken). On a teacher switch the old teacher first says one short line.
+  Future<void> _showAnswer(Answer a) async {
+    if (!mounted) return;
+    if (a.switched && a.handover.isNotEmpty) {
+      // call transfer: the old teacher says one short line (in the old teacher's voice), then the new face
+      // and name come in
+      setState(() => _transfer = a.handover);
+      final shown = Future.delayed(const Duration(milliseconds: 1800));
+      await _voice.speak([a.handover], language: a.language, teacherKey: _teacher?.id ?? 0);
+      await shown;
+      if (!mounted) return;
+    }
+    setState(() {
+      _last = a;
+      _saved = false;
+      _access = a.access;
+      _transfer = null;
+      if (a.faculty != null) _teacher = a.faculty;
+      if (a.photoText.isNotEmpty) _lastQuestion = '📷 ${a.photoText}';
+    });
+    _speakAnswer(a);
+  }
+
+  /// Phase C: ask with a photo of the book / notebook. Camera or gallery → look at it, add a note if you like
+  /// ("Q3 samjhao") → Sir reads the question and answers. The photo is checked for safety on the server and not kept.
+  Future<void> _askPhoto() async {
+    if (_thinking) return;
+    _inputFocus.unfocus();
+    if (_listening) {
+      await _voice.cancelListening();
+      if (mounted) setState(() => _listening = false);
+    }
+    await _stopSpeaking();
+    if (!mounted) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: LT.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 2),
+            child: Text('Ask with a photo', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Take it close to the page, in good light.', style: TextStyle(fontSize: 13, color: LT.muted)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined, color: LT.accentText),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: LT.accentText),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+    XFile? file;
+    try {
+      file = await ImagePicker().pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 80);
+    } catch (_) {
+      _toast('Could not open the camera. Please allow camera access and try again.');
+      return;
+    }
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    final note = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: LT.surface,
+      builder: (ctx) => _PhotoSheet(bytes: bytes),
+    );
+    if (note == null || !mounted) return;
+    final api = AppScope.of(context).api;
+    setState(() {
+      _thinking = true;
+      _lastQuestion = note.isEmpty ? '📷 Photo' : '📷 $note';
+    });
+    try {
+      await _showAnswer(await api.askPhoto(bytes, caption: note));
+    } on PhotoUnclearException catch (e) {
+      _toast(e.message);
+      _voice.speak([e.message], language: 'hi', teacherKey: _teacher?.id ?? 0);
+    } on ApiException catch (e) {
+      _apiError(e);
     } catch (_) {
       _toast('No internet connection. Please try again.');
     } finally {
@@ -476,7 +585,7 @@ class _LiveScreenState extends State<LiveScreen> {
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                 RoundIconButton(icon: Icons.photo_camera_outlined, tooltip: 'Ask with a photo',
-                    onPressed: () => _toast('Photo questions are coming in the next update')),
+                    onPressed: () => _askPhoto()),
                 RoundIconButton(icon: Icons.keyboard_alt_outlined, tooltip: 'Type a question',
                     background: _typing ? LT.accentSoft : null,
                     onPressed: () {
@@ -603,7 +712,7 @@ class _LiveScreenState extends State<LiveScreen> {
   Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('SIR IS LISTENING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
         const SizedBox(height: 8),
-        Text('Namaste! Ask $teacher anything — in Hindi, English, Punjabi or any language.',
+        Text(_access?.aiIntro ?? 'Namaste! Ask $teacher anything — in Hindi, English, Punjabi or any language.',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
       ]);
 
@@ -878,4 +987,61 @@ class _ThinkingDots extends StatelessWidget {
           Text('$name is thinking…', style: const TextStyle(fontSize: 12, color: LT.text)),
         ]),
       );
+}
+
+
+/// Phase C: the photo the student took, an optional note ("Q3 samjhao") and "Send to Sir".
+/// Returns the note ('' = none) or null when the student cancels.
+class _PhotoSheet extends StatefulWidget {
+  const _PhotoSheet({required this.bytes});
+  final Uint8List bytes;
+  @override
+  State<_PhotoSheet> createState() => _PhotoSheetState();
+}
+
+class _PhotoSheetState extends State<_PhotoSheet> {
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppScope.of(context).cfg.accent;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 18, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.memory(widget.bytes, height: 240, fit: BoxFit.contain),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _note,
+          maxLength: 200,
+          textInputAction: TextInputAction.send,
+          onSubmitted: (_) => Navigator.pop(context, _note.text.trim()),
+          decoration: const InputDecoration(hintText: 'Which question? (optional) — e.g. Q3 samjhao', counterText: ''),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: LT.onAccent),
+              onPressed: () => Navigator.pop(context, _note.text.trim()),
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: const Text('Send to Sir', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
 }
