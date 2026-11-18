@@ -355,6 +355,10 @@ class Receipt {
 }
 
 /// What the screens need from the backend. [HttpApi] talks to the real server; [DemoApi] works offline.
+/// Called when the server no longer knows this login (e.g. the account was removed, or the demo server was reset):
+/// the app clears the login and goes back to the login screen instead of showing "Unknown student".
+void Function()? onSessionEnded;
+
 abstract class Api {
   /// Full address of a picture the server gives as a path (teacher photos); null in the offline demo.
   String? mediaUrl(String? path);
@@ -447,6 +451,11 @@ class HttpApi implements Api {
             ? await http.put(uri, headers: headers, body: jsonEncode(body ?? {}))
             : await http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
     final data = res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode == 401 && token != null && !path.startsWith('/auth/')) {
+      await logout();
+      onSessionEnded?.call();
+      throw ApiException(401, 'Please log in again.');
+    }
     if (res.statusCode >= 400) {
       final detail = data is Map && data['detail'] is String ? data['detail'] as String : 'Something went wrong';
       throw ApiException(res.statusCode, detail);

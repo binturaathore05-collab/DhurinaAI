@@ -10,7 +10,9 @@ import 'otp_screen.dart';
 
 /// Screen 1 · Login: teacher photo, headline, mobile number, "Start free demo call".
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Shown once on top, e.g. "Your login has ended. Please log in again."
+  final String? notice;
+  const LoginScreen({super.key, this.notice});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -19,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
   bool _busy = false;
   bool _slow = false; // the server is waking up: say so instead of looking stuck
-  String? _error;
+  late String? _error = widget.notice;
   Timer? _slowTimer;
 
   @override
