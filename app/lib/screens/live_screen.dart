@@ -200,7 +200,7 @@ class _LiveScreenState extends State<LiveScreen> {
       _lastQuestion = text;
     });
     try {
-      final a = await api.ask(text);
+      final a = await api.ask(text, voice: spoken != null);
       if (!mounted) return;
       if (a.switched && a.handover.isNotEmpty) {
         // call transfer: the old teacher says one short line (in the old teacher's voice), then the new face
@@ -427,8 +427,28 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
                 const SizedBox(width: 6),
-                RoundIconButton(icon: Icons.quiz_outlined, tooltip: 'Take a test', size: 40,
-                    background: LT.surface, onPressed: () => _offerTest()),
+                // a labelled "Test" button, so students see at once where tests / mocks are
+                Tooltip(
+                  message: 'Take a test (MCQ, written or oral)',
+                  child: Material(
+                    color: LT.surface,
+                    shape: const StadiumBorder(),
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: () => _offerTest(),
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: cfg.accent, width: 1.5))),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.assignment_turned_in_outlined, size: 18, color: LT.accentText),
+                          const SizedBox(width: 6),
+                          const Text('Test', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 6),
                 RoundIconButton(icon: Icons.share_outlined, tooltip: 'Share this app', size: 40,
                     background: LT.surface, onPressed: () => shareApp(context)),

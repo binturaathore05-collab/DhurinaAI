@@ -374,7 +374,8 @@ abstract class Api {
   Future<Access> setProfile(String classLevel, bool isAdult);
   Future<void> sendParentOtp(String phone);
   Future<Access> verifyParentOtp(String phone, String code);
-  Future<Answer> ask(String question);
+  /// [voice]: the question was spoken (the phone turned speech into text, so a word may be misheard).
+  Future<Answer> ask(String question, {bool voice = false});
   Future<SavedNote> saveNote(int qaId); // older single-answer notes (kept for compatibility)
   /// Notes of the whole class so far, one PDF per class. [topics] null = all topics of the class.
   Future<SavedNote> saveClassNotes({List<String>? topics});
@@ -509,8 +510,8 @@ class HttpApi implements Api {
       await _call('POST', '/me/parent/verify', {'phone': phone, 'code': code}) as Map<String, dynamic>);
 
   @override
-  Future<Answer> ask(String question) async {
-    final j = await _call('POST', '/class/ask', {'question': question}) as Map<String, dynamic>;
+  Future<Answer> ask(String question, {bool voice = false}) async {
+    final j = await _call('POST', '/class/ask', {'question': question, 'voice': voice}) as Map<String, dynamic>;
     // the app handles "save this" / "test lo" itself; if the server still sees one, ask the screen to do it
     if (j['type'] == 'note_saved') throw CommandException('save');
     if (j['type'] == 'test_offer') throw CommandException('test');
@@ -726,7 +727,7 @@ class DemoApi implements Api {
   Future<Access> access() async => _now;
 
   @override
-  Future<Answer> ask(String question) async {
+  Future<Answer> ask(String question, {bool voice = false}) async {
     await Future.delayed(const Duration(milliseconds: 900));
     final st = _access.state;
     if (st == 'expired') {

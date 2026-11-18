@@ -30,7 +30,7 @@ def client(tmp_path, monkeypatch):
 
     real_answer = main.tutor.answer
 
-    def fake_answer(sid, teacher, question, session_id=None):   # the AI's scope decision, scripted per test
+    def fake_answer(sid, teacher, question, session_id=None, spoken=False):   # the AI's scope decision, scripted per test
         if c.scope == "study":
             return real_answer(sid, teacher, question, session_id)
         return main.tutor._redirect(sid, question, "en", c.scope, "politics" if c.scope == "blocked" else "weapons",

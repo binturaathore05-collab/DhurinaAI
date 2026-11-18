@@ -503,6 +503,7 @@ def my_access(student=Depends(current_student)):
 
 class Ask(BaseModel):
     question: str
+    voice: bool = False             # spoken: the phone turned speech into text (a word may be misheard)
     last_qa_id: int | None = None  # the answer on screen, used when the student says "save this"
 
 
@@ -560,11 +561,11 @@ def _refund(student_id: int) -> None:
         db.execute("UPDATE students SET demo_questions_used = MAX(demo_questions_used - 1, 0) WHERE id = ?", (student_id,))
 
 
-def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, session_id):
+def _answer_safely(student_id: int, teacher: TeacherProfile, question: str, session_id, spoken: bool = False):
     """A2 stage 2 happens inside the model wrapper: an unsafe AI answer is never stored or shown."""
     audit.used_model.set("")
     try:
-        result = tutor.answer(student_id, teacher, question, session_id)
+        result = tutor.answer(student_id, teacher, question, session_id, spoken)
     except moderation.UnsafeOutput:
         lang = detect_language(question)
         result = tutor._redirect(student_id, question, lang, "stopped", None, style_mod.get_level(db, student_id),
@@ -604,7 +605,7 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     # keyword call the teacher makes anyway (no extra AI call); sticky; "Maths wale sir ko bulao"
     r = faculty_mod.route(db, teacher.id, student["id"], body.question, verdict.subject, tutor.subject_of)
     result = _answer_safely(student["id"], teacher.as_faculty(r.faculty, r.previous.name if r.switched else None),
-                            body.question, session_id)
+                            body.question, session_id, body.voice)
     _tag(result, r.faculty, session_id)
     result.switched, result.handover = r.switched, faculty_mod.handover_line(r, result.language)
     return {"type": "answer", **result.__dict__, **_access(student["id"])}
