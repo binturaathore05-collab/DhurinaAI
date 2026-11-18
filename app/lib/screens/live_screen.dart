@@ -427,20 +427,9 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
                 if (_statusPill(access) != null) _statusPill(access)!,
                 const SizedBox(width: 6),
-                // the test icon (owner: icon only, no word): a clipboard with a tick, ringed in the app's colour
-                Tooltip(
-                  message: 'Take a test (MCQ, written or oral)',
-                  child: Material(
-                    color: LT.surface,
-                    shape: CircleBorder(side: BorderSide(color: cfg.accent, width: 1.5)),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => _offerTest(),
-                      child: const SizedBox(width: 40, height: 40,
-                          child: Icon(Icons.assignment_turned_in_outlined, size: 20, color: LT.accentText)),
-                    ),
-                  ),
-                ),
+                // the test button: same plain round style as the others, clipboard-with-tick icon (owner)
+                RoundIconButton(icon: Icons.assignment_turned_in_outlined, tooltip: 'Take a test', size: 40,
+                    background: LT.surface, onPressed: () => _offerTest()),
                 const SizedBox(width: 6),
                 RoundIconButton(icon: Icons.share_outlined, tooltip: 'Share this app', size: 40,
                     background: LT.surface, onPressed: () => shareApp(context)),
