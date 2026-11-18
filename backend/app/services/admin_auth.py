@@ -12,6 +12,7 @@ import time
 import jwt
 
 from ..db import Database
+from . import security
 
 MAX_FAILS, LOCK_SECONDS, SESSION_HOURS = 5, 15 * 60, 12
 
@@ -55,32 +56,90 @@ def ensure_first_admin(db: Database, email: str | None, password: str | None) ->
         create_admin(db, email, password, "Owner", "owner")
 
 
-def login(db: Database, email: str, password: str, secret: str, ip: str = "") -> dict:
+def _fail(db: Database, user, now: float) -> None:
+    fails = user["failed_attempts"] + 1
+    locked = now + LOCK_SECONDS if fails >= MAX_FAILS else None
+    db.execute("UPDATE admin_users SET failed_attempts = ?, locked_until = ? WHERE id = ?",
+               (0 if locked else fails, locked, user["id"]))
+
+
+def _check_open(user, now: float) -> None:
+    if not user["active"]:
+        raise LoginError("This account has been switched off. Ask the Super Admin.")
+    if user["locked_until"] and user["locked_until"] > now:
+        mins = int((user["locked_until"] - now) // 60) + 1
+        raise LoginError(f"Too many wrong passwords or codes. Try again in {mins} minutes.")
+
+
+def login(db: Database, email: str, password: str, secret: str, ip: str = "", ua: str = "") -> dict:
+    """Step 1: email + password. With 2-step login on, this gives only a 5-minute ticket for step 2 (the code)."""
     email = (email or "").strip().lower()
     user = db.one("SELECT * FROM admin_users WHERE email = ?", (email,))
     now = time.time()
-    if user and not user["active"]:
-        db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 0)", (email, ip))
-        raise LoginError("This account has been switched off. Ask the Super Admin.")
-    if user and user["locked_until"] and user["locked_until"] > now:
-        mins = int((user["locked_until"] - now) // 60) + 1
-        raise LoginError(f"Too many wrong passwords. Try again in {mins} minutes.")
+    if user:
+        try:
+            _check_open(user, now)
+        except LoginError:
+            db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 0)", (email, ip))
+            raise
     ok = bool(user) and check_password(password or "", user["password_hash"])
-    db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, ?)", (email, ip, int(ok)))
     if not ok:
+        db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 0)", (email, ip))
         if user:
-            fails = user["failed_attempts"] + 1
-            locked = now + LOCK_SECONDS if fails >= MAX_FAILS else None
-            db.execute("UPDATE admin_users SET failed_attempts = ?, locked_until = ? WHERE id = ?",
-                       (0 if locked else fails, locked, user["id"]))
+            _fail(db, user, now)
         raise LoginError("Wrong email or password")
+    if user["totp_on"]:
+        ticket = jwt.encode({"sub": str(user["id"]), "aud": "admin-2step", "iat": int(now), "exp": int(now + 300),
+                             "pv": user["password_hash"][-8:]}, secret, algorithm="HS256")
+        return {"need_code": True, "ticket": ticket}
+    return _issue(db, user, secret, ip, ua, now)
+
+
+def login_code(db: Database, ticket: str, code: str, secret: str, ip: str = "", ua: str = "") -> dict:
+    """Step 2: the 6-digit code from the authenticator app (or one backup code)."""
+    try:
+        data = jwt.decode(ticket or "", secret, algorithms=["HS256"], audience="admin-2step")
+    except jwt.PyJWTError:
+        raise LoginError("Too slow — log in again")
+    user = db.one("SELECT * FROM admin_users WHERE id = ?", (int(data["sub"]),))
+    now = time.time()
+    if user is None or user["password_hash"][-8:] != data.get("pv") or not user["totp_on"]:
+        raise LoginError("Log in again")
+    _check_open(user, now)
+    try:
+        used = security.check_2step(db, user, code)
+    except security.SecurityError:
+        db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 0)", (user["email"], ip))
+        _fail(db, user, now)
+        raise LoginError("Wrong code")
+    out = _issue(db, db.one("SELECT * FROM admin_users WHERE id = ?", (user["id"],)), secret, ip, ua, now)
+    if used == "backup":
+        out["backup_left"] = security.backup_left(db.one("SELECT backup_codes FROM admin_users WHERE id = ?", (user["id"],)))
+    return out
+
+
+def _issue(db: Database, user, secret: str, ip: str, ua: str, now: float) -> dict:
+    db.execute("INSERT INTO admin_logins (email, ip, success) VALUES (?, ?, 1)", (user["email"], ip))
     db.execute("UPDATE admin_users SET failed_attempts = 0, locked_until = NULL, last_login = CURRENT_TIMESTAMP "
                "WHERE id = ?", (user["id"],))
-    token = jwt.encode({"sub": str(user["id"]), "aud": "admin", "iat": int(now),
+    sid, new_place = security.start_session(db, user["id"], ip, ua, now)
+    if new_place:   # S3: a login from a new place → the team hears about it at once
+        from . import alerts
+        alerts.raise_alert(db, "new_login", "medium", f"Admin login from a new place: {user['email']}",
+                           f"IP {ip or '?'} · {(ua or '?')[:80]}. If this was not them: Security → end the session, "
+                           "then reset the password.", "#/security", f"new_login:{user['id']}:{ip}", now=now)
+    token = jwt.encode({"sub": str(user["id"]), "aud": "admin", "iat": int(now), "sid": sid,
                         "exp": int(now + SESSION_HOURS * 3600), "pv": user["password_hash"][-8:]},
                        secret, algorithm="HS256")
     return {"token": token, "name": user["name"], "email": user["email"], "role": user["role"],
             "must_change": bool(user["must_change"])}
+
+
+def session_id(token: str, secret: str) -> str | None:
+    try:
+        return jwt.decode(token, secret, algorithms=["HS256"], audience="admin").get("sid")
+    except jwt.PyJWTError:
+        return None
 
 
 def read_session(db: Database, token: str, secret: str):
@@ -91,6 +150,8 @@ def read_session(db: Database, token: str, secret: str):
     user = db.one("SELECT * FROM admin_users WHERE id = ?", (int(data["sub"]),))
     if user is None or user["password_hash"][-8:] != data.get("pv") or not user["active"]:
         raise LoginError("Please log in again")   # password changed or account switched off → old sessions end
+    if not security.session_ok(db, data.get("sid"), user["id"]):
+        raise LoginError("Please log in again")   # S3: this login was ended (log out other devices / by Super Admin)
     return user
 
 
@@ -116,7 +177,7 @@ def temp_password() -> str:
 
 
 def team(db: Database) -> list[dict]:
-    return [dict(r) for r in db.all("SELECT id, email, name, role, active, must_change, last_login, created_at, created_by "
+    return [dict(r) for r in db.all("SELECT id, email, name, role, active, must_change, last_login, created_at, created_by, totp_on "
                                     "FROM admin_users ORDER BY active DESC, role, email")]
 
 

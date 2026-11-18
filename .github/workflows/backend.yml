@@ -30,6 +30,10 @@ jobs:
           pip install -r requirements.txt httpx
       - name: Backend tests
         run: python -m pytest -q
+      - name: Security — known holes in the libraries we use (S3)
+        run: |
+          pip install -q pip-audit
+          pip-audit -r requirements.txt --progress-spinner off || echo "::warning::pip-audit found a library with a known security hole — update it (see the log above)."
       - name: Safety tests — phrase rules (no AI)
         run: python -m app.safety_lab --mode rules --gate --report rules-report.md
       - name: Safety tests — real AI model
@@ -63,3 +67,4 @@ jobs:
           docker logs srv
           curl -fsS -o /dev/null -w "admin %{http_code}\n" localhost:8000/admin
           curl -fsS -o /dev/null -w "teacher panel %{http_code}\n" localhost:8000/teacher-panel
+          curl -fsS -D - -o /dev/null localhost:8000/admin | grep -i "content-security-policy"   # S3: security headers are sent

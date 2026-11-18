@@ -45,8 +45,11 @@ def test_change_number_needs_the_code_from_the_new_number(setup):
     assert sent[-1][0] == "+919876500003"
     assert c.post("/me/phone/verify", json={"phone": "9876500003", "code": "000000"}, headers=h).status_code == 400
     code = re.search(r"\d{6}", sent[-1][1]).group()
-    assert c.post("/me/phone/verify", json={"phone": "9876500003", "code": code}, headers=h).json()["phone"] == "+919876500003"
-    assert c.get("/me", headers=h).json()["phone"] == "+919876500003"   # same account, same login
+    r = c.post("/me/phone/verify", json={"phone": "9876500003", "code": code}, headers=h).json()
+    assert r["phone"] == "+919876500003"
+    assert c.get("/me", headers=h).status_code == 401   # S3: a new number ends the old logins…
+    h = {"Authorization": "Bearer " + r["token"]}       # …and this phone gets a fresh one
+    assert c.get("/me", headers=h).json()["phone"] == "+919876500003"   # same account
     assert main.db.one("SELECT COUNT(*) AS n FROM students")["n"] == 2   # moved, not a new account
     assert not main.db.one("SELECT 1 FROM students WHERE phone = '+919876500001'")
 

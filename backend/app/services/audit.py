@@ -124,7 +124,7 @@ def find(db: Database, secret: str, query: str, limit: int = 20) -> dict:
 
 # ---------- admin / teacher audit log ----------
 
-SECRET_NAMES = {"code", "otp", "token", "pin"}
+SECRET_NAMES = {"code", "otp", "token", "pin", "ticket"}
 SECRET_PARTS = ("password", "secret", "api_key", "apikey", "private")
 
 

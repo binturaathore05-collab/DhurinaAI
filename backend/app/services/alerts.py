@@ -13,6 +13,9 @@ Alerts (level):
   spike           many more blocked questions / stopped AI answers than usual   high
   tests_failed    the safety tests failed                                  high
   backup_bad      the weekly restore test of the newest backup failed (B9)  high
+  otp_spike       unusually many login codes (OTP SMS) sent in an hour (S3: attack / SMS cost)  high
+  login_attack    many wrong admin passwords / codes in an hour (S3)        high
+  new_login       an admin logged in from a new place (S3)                  medium
 The same alert is not repeated within an hour (dedup key).
 """
 import json
@@ -24,7 +27,8 @@ from email.message import EmailMessage
 from ..db import Database
 
 LEVELS = ("critical", "high", "medium")
-DEFAULT_ALERTS = {"email_to": [], "email_level": "high", "spike_min": 10, "pending_hours": 2, "check_down_min": 5}
+DEFAULT_ALERTS = {"email_to": [], "email_level": "high", "spike_min": 10, "pending_hours": 2, "check_down_min": 5,
+                  "otp_hour": 100, "failed_logins_hour": 10}
 DEDUP_SECONDS = 3600
 
 # set by the API at start: how to send email (None = not configured) and the admin panel address
@@ -49,7 +53,7 @@ def validate(values: dict) -> dict:
     out["email_to"] = emails[:20]
     if out.get("email_level", "high") not in ("critical", "high", "all"):
         raise ValueError("Email level must be critical, high or all")
-    for k in ("spike_min", "pending_hours", "check_down_min"):
+    for k in ("spike_min", "pending_hours", "check_down_min", "otp_hour", "failed_logins_hour"):
         if k in out:
             try:
                 n = int(out[k])
@@ -149,6 +153,18 @@ def periodic(db: Database, admin_settings: dict, now: float | None = None) -> li
         made.append(raise_alert(db, "check_down", "critical", f"Safety check failed {down} times in 10 minutes",
                                 "Students are being asked to try again; nothing unchecked is sent. Check the AI provider "
                                 "or switch to the backup model in Emergency.", "#/emergency", "check_down", now=now))
+    # S3: OTP flooding (SMS cost) and password guessing on the admin panel
+    otp = db.one("SELECT COUNT(*) AS n FROM rate_events WHERE key LIKE 'otp:phone:%' AND at > ?", (now - 3600,))["n"]
+    if otp >= s["otp_hour"]:
+        made.append(raise_alert(db, "otp_spike", "high", f"{otp} login codes (SMS) sent in the last hour",
+                                "Could be an attack that runs up the SMS bill. Look at Security → recent activity and "
+                                "block the numbers or IP addresses behind it.", "#/security", "otp_spike", now=now))
+    bad = db.one("SELECT COUNT(*) AS n FROM admin_logins WHERE success = 0 AND at > datetime(?, 'unixepoch')",
+                 (now - 3600,))["n"]
+    if bad >= s["failed_logins_hour"]:
+        made.append(raise_alert(db, "login_attack", "high", f"{bad} wrong admin logins in the last hour",
+                                "Someone may be guessing passwords. Check Security → failed logins; turn on 2-step login "
+                                "for everyone.", "#/security", "login_attack", now=now))
     return [a for a in made if a]
 
 

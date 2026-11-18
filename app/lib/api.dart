@@ -410,6 +410,8 @@ abstract class Api {
   Future<Checkout> checkout(String planId);
   Future<Receipt> confirmPayment(String orderId, String paymentId, String signature);
   Future<void> logout();
+  /// S3: log out every other phone (this phone stays logged in with a fresh login).
+  Future<void> logoutOthers();
   /// B6: deletes the account and learning data on the server (can't be undone), then logs out.
   Future<void> deleteMyData();
   /// Profile: the account, "What should Sir call you?", and changing the mobile number (code on the new number).
@@ -637,8 +639,22 @@ class HttpApi implements Api {
   Future<void> changePhoneOtp(String phone) async => _call('POST', '/me/phone/otp', {'phone': phone});
 
   @override
-  Future<String> changePhoneVerify(String phone, String code) async =>
-      ((await _call('POST', '/me/phone/verify', {'phone': phone, 'code': code}) as Map)['phone']).toString();
+  Future<String> changePhoneVerify(String phone, String code) async {
+    final j = await _call('POST', '/me/phone/verify', {'phone': phone, 'code': code}) as Map;
+    if (j['token'] is String) await _keep(j['token'] as String); // a new number ends the other phones' logins
+    return j['phone'].toString();
+  }
+
+  Future<void> _keep(String token) async {
+    _token = token;
+    await (await SharedPreferences.getInstance()).setString('token', token);
+  }
+
+  @override
+  Future<void> logoutOthers() async {
+    final j = await _call('POST', '/me/logout-all') as Map;
+    await _keep(j['token'] as String);
+  }
 
   @override
   Future<void> logout() async {
@@ -924,6 +940,9 @@ class DemoApi implements Api {
   Future<void> logout() async {
     _loggedIn = false;
   }
+
+  @override
+  Future<void> logoutOthers() async {}
 
   @override
   Future<void> deleteMyData() async {
