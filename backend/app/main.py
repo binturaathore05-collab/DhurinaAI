@@ -38,7 +38,7 @@ from .services import alerts
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
-from .services.tutor import is_delete_command
+from .services.tutor import is_delete_command, is_profile_command
 from .services import faculty as faculty_mod, library
 import threading
 import hashlib
@@ -402,6 +402,77 @@ def set_my_name(body: StudentName, student=Depends(current_student)):
     return {"name": name}
 
 
+# ---------- the student's profile (app → My Library → Profile) ----------
+
+@app.get("/me")
+def my_profile(student=Depends(current_student)):
+    """Name, number, class, plan and the app's legal links, for the Profile screen."""
+    row = db.one("SELECT name, phone, class_level, is_adult, created_at FROM students WHERE id = ?", (student["id"],))
+    legal = admin.get_settings(db).get("legal", {})
+    return {"name": row["name"] or "", "phone": row["phone"], "class_level": row["class_level"],
+            "is_adult": None if row["is_adult"] is None else bool(row["is_adult"]),
+            "joined": row["created_at"], "consent": consent.state(db, student["id"])["consent"],
+            "plan": accounts.plan_summary(db, student["id"]),
+            "privacy_url": legal.get("privacy_url", ""), "terms_url": legal.get("terms_url", ""),
+            **_access(student["id"])}
+
+
+class NewPhone(BaseModel):
+    phone: str
+
+
+class NewPhoneCode(BaseModel):
+    phone: str
+    code: str
+
+
+def _new_phone(student: dict, phone: str) -> str:
+    phone = accounts.normalize_phone(phone)
+    if phone == db.one("SELECT phone FROM students WHERE id = ?", (student["id"],))["phone"]:
+        raise ValueError("This is already your number")
+    if db.one("SELECT 1 FROM students WHERE teacher_id = ? AND phone = ?", (student["teacher_id"], phone)):
+        raise ValueError("This number already has an account in this app")
+    return phone
+
+
+@app.post("/me/phone/otp")
+def change_phone_otp(body: NewPhone, request: Request, student=Depends(current_student), x_device_id: str = Header("")):
+    """Change my number, step 1: a code is sent to the NEW number (it must belong to the student)."""
+    try:
+        phone = _new_phone(student, body.phone)
+        lim = _limit_settings()
+        limits.check_and_record(db, [limits.wrong_code_rule(student["teacher_id"], phone, lim)], record=False)
+        limits.check_and_record(db, limits.otp_send_rules(student["teacher_id"], phone, x_device_id.strip(),
+                                                          _client_ip(request), lim))
+        t = db.one("SELECT name FROM teachers WHERE id = ?", (student["teacher_id"],))
+        otp.send(student["teacher_id"], t["name"] if t else "", phone)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    return {"sent": True}
+
+
+@app.post("/me/phone/verify")
+def change_phone_verify(body: NewPhoneCode, student=Depends(current_student)):
+    """Change my number, step 2: the code from the new number. Classes, notes and plan stay with the account."""
+    try:
+        phone = _new_phone(student, body.phone)
+        wrong = limits.wrong_code_rule(student["teacher_id"], phone, _limit_settings())
+        limits.check_and_record(db, [wrong], record=False)
+        try:
+            phone = otp.verify(student["teacher_id"], phone, body.code)
+        except accounts.WrongCode:
+            limits.record(db, wrong.key)
+            raise
+        db.execute("UPDATE students SET phone = ? WHERE id = ?", (phone, student["id"]))
+    except (ValueError, accounts.AuthError) as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    return {"phone": phone}
+
+
 @app.get("/me/access")
 def my_access(student=Depends(current_student)):
     """Plan / safety state, plus the teacher the student is with now (the app shows that face and name on open)."""
@@ -496,6 +567,8 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
     session_id = classroom.current_session(db, student["id"], teacher.id)
     if is_delete_command(body.question):   # B6: "delete my data" → the app asks to confirm; nothing is deleted yet
         return {"type": "delete_offer", **_access(student["id"])}
+    if is_profile_command(body.question):   # "mera profile", "logout", "number badlo" → the app opens Profile
+        return {"type": "profile", **_access(student["id"])}
     if is_save_command(body.question):   # "Sir, save this" = notes of the whole class so far
         return {"type": "note_saved", "note": _class_notes(student["id"], teacher, session_id, None)}
     if quiz.is_test_command(body.question):   # "Sir, test lo" → the app asks MCQ / written / oral

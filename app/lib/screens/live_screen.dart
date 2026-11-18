@@ -12,6 +12,7 @@ import 'library_screen.dart';
 import 'pay_screen.dart';
 import 'setup_screen.dart';
 import 'delete_data.dart';
+import 'profile_screen.dart';
 import 'test_screen.dart';
 
 /// "Sir, save this" in any language saves the notes of the whole class so far as one PDF.
@@ -189,6 +190,11 @@ class _LiveScreenState extends State<LiveScreen> {
       if (mounted) await confirmDeleteMyData(context);
       return;
     }
+    if (isProfileCommand(text)) { // "mera profile", "logout", "number badlo" → Profile
+      await _voice.stopSpeaking();
+      if (mounted) openProfile(context);
+      return;
+    }
     setState(() {
       _thinking = true;
       _lastQuestion = text;
@@ -219,6 +225,8 @@ class _LiveScreenState extends State<LiveScreen> {
         await _save();
       } else if (c.command == 'delete') {
         if (mounted) await confirmDeleteMyData(context);
+      } else if (c.command == 'profile') {
+        if (mounted) openProfile(context);
       } else {
         await _offerTest(mode: testModeIn(text));
       }

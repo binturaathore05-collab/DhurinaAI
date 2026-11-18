@@ -128,6 +128,25 @@ class Faculty {
   }
 }
 
+/// The student's own account (Profile screen).
+class Me {
+  final String name;
+  final String phone;
+  final String? classLevel;
+  final String consent; // not_needed | needed | given | withdrawn
+  final bool freePlan;  // a plan given by the institute / Dhurina without payment
+  final Access access;
+  const Me(this.name, this.phone, this.classLevel, this.consent, this.freePlan, this.access);
+  factory Me.fromJson(Map<String, dynamic> j) => Me(
+        j['name'] as String? ?? '',
+        j['phone'] as String? ?? '',
+        j['class_level'] as String?,
+        j['consent'] as String? ?? 'needed',
+        (j['plan'] as Map?)?['free_until'] != null,
+        Access.fromJson(j),
+      );
+}
+
 class Answer {
   final int qaId;
   final String answer;
@@ -371,6 +390,11 @@ abstract class Api {
   Future<void> logout();
   /// B6: deletes the account and learning data on the server (can't be undone), then logs out.
   Future<void> deleteMyData();
+  /// Profile: the account, "What should Sir call you?", and changing the mobile number (code on the new number).
+  Future<Me> me();
+  Future<void> setName(String name);
+  Future<void> changePhoneOtp(String phone);
+  Future<String> changePhoneVerify(String phone, String code);
 
   static Api create(TeacherConfig cfg) => apiBaseUrl.isEmpty ? DemoApi(cfg) : HttpApi(apiBaseUrl, cfg.teacherId);
 }
@@ -482,6 +506,7 @@ class HttpApi implements Api {
     if (j['type'] == 'note_saved') throw CommandException('save');
     if (j['type'] == 'test_offer') throw CommandException('test');
     if (j['type'] == 'delete_offer') throw CommandException('delete');
+    if (j['type'] == 'profile') throw CommandException('profile');
     return Answer.fromJson(j);
   }
 
@@ -565,6 +590,19 @@ class HttpApi implements Api {
         'razorpay_payment_id': paymentId,
         'razorpay_signature': signature,
       }) as Map<String, dynamic>);
+
+  @override
+  Future<Me> me() async => Me.fromJson(await _call('GET', '/me') as Map<String, dynamic>);
+
+  @override
+  Future<void> setName(String name) async => _call('PUT', '/me/name', {'name': name});
+
+  @override
+  Future<void> changePhoneOtp(String phone) async => _call('POST', '/me/phone/otp', {'phone': phone});
+
+  @override
+  Future<String> changePhoneVerify(String phone, String code) async =>
+      ((await _call('POST', '/me/phone/verify', {'phone': phone, 'code': code}) as Map)['phone']).toString();
 
   @override
   Future<void> logout() async {
@@ -815,6 +853,27 @@ class DemoApi implements Api {
     _subscribed = true;
     _simulated = null;
     return Receipt('Yearly', 0, DateTime.now().add(const Duration(days: 365)), paymentId);
+  }
+
+  String _name = '';
+  String _phone = '+919876543210';
+
+  @override
+  Future<Me> me() async => Me(_name, _phone, '10', 'given', false, _access);
+
+  @override
+  Future<void> setName(String name) async => _name = name.trim();
+
+  @override
+  Future<void> changePhoneOtp(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 10) throw ApiException(400, 'Enter a valid 10-digit mobile number');
+  }
+
+  @override
+  Future<String> changePhoneVerify(String phone, String code) async {
+    if (code.trim() != '123456') throw ApiException(400, 'Wrong code. In the demo the code is 123456.');
+    return _phone = '+91${phone.replaceAll(RegExp(r'\D'), '')}';
   }
 
   @override

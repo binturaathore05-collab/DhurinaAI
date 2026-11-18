@@ -6,6 +6,7 @@ import 'package:liveteach/main.dart';
 import 'package:liveteach/screens/live_screen.dart';
 import 'package:liveteach/theme.dart';
 import 'package:liveteach/voice.dart';
+import 'package:liveteach/screens/profile_screen.dart';
 
 void main() {
   const cfg = TeacherConfig(
@@ -164,5 +165,19 @@ void main() {
     expect(Voice.ttsLanguage('hi-Latn'), 'en-IN');
     expect(Voice.ttsLanguage('en'), 'en-IN');
     expect(Voice.ttsLanguage('pa'), 'pa-IN');
+  });
+
+  test('profile: saying it opens it; the number changes with the code from the new number', () async {
+    expect(isProfileCommand('Sir mera profile kholo'), true);
+    expect(isProfileCommand('मेरा नंबर बदलो'), true);
+    expect(isProfileCommand('What is a profile in maths?'), false);
+    final api = DemoApi(cfg);
+    await api.verifyOtp('9876543210', '123456');
+    await api.setName('Ravi');
+    expect((await api.me()).name, 'Ravi');
+    await api.changePhoneOtp('9876500009');
+    expect(() => api.changePhoneVerify('9876500009', '000000'), throwsA(isA<ApiException>()));
+    expect(await api.changePhoneVerify('9876500009', '123456'), '+919876500009');
+    expect((await api.me()).phone, '+919876500009');
   });
 }
