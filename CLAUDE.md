@@ -10,6 +10,10 @@
 
 ## Owner's permanent rules for every feature (18 Nov 2026)
 
+**When they apply (owner, 19 Nov 2026 — to keep usage low):** rules 1–4 and 7 apply now, to every feature.
+Rules 5 (break-it review) and 6 (load testing) are done ONCE for the whole app when all features are ready, before
+launch — not after each feature. Don't start them before the owner says the app is ready.
+
 ### 1. Test-driven development (mandatory)
 - Before writing any feature code, write the tests first.
 - Run them and show the owner they FAIL. Then write the code to make them pass.
@@ -28,9 +32,9 @@
 - All tests pass, and the owner is shown the actual test run output.
 - Never say a feature is complete without that output.
 
-### 5. Break-it review (after every feature)
-Once a feature is done, switch roles: you are now a security tester and penetration tester. Your job is to BREAK
-this feature.
+### 5. Break-it review (once, when the app is ready — see "When they apply")
+Once the app is done, switch roles: you are now a security tester and penetration tester. Your job is to BREAK
+the app.
 - Give the owner ONLY a numbered list of problems. DO NOT FIX ANYTHING.
 - For each point: what breaks, how to reproduce it, severity (Critical / High / Medium / Low).
 - For this AI Tutor app, check especially:
@@ -45,7 +49,7 @@ this feature.
   - Payments: can premium features be unlocked without paying?
 - Then wait. The owner discusses the points one by one and decides the fix order.
 
-### 6. Load testing
+### 6. Load testing (once, when the app is ready)
 - Don't just "imagine" thousands of users. Write a real load-test script (k6 or Locust) that simulates 100, then
   1,000, then 5,000 concurrent students using the main flows.
 - Run it and report: response times, error rate, what broke first, and the estimated AI API cost per 1,000 users.
@@ -81,5 +85,4 @@ this feature.
 ## Finishing
 - When tests pass (and the output was shown): commit, push a branch and open a PR yourself (standing permission
   from the owner) — use the REST API (`gh api repos/.../pulls`), GraphQL is blocked. Never push to `main` directly.
-- Then the break-it review (rule 5): the numbered list only, and wait for the owner.
 - Record new owner decisions in `docs/decisions.md` (one short section, dated).

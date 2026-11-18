@@ -236,3 +236,5 @@ Saved in `CLAUDE.md`: tests first and shown failing, then code; never change a t
 test output shown; after every feature a break-it review (numbered problems only, no fixes, then wait for the owner);
 real load tests (100 / 1,000 / 5,000 students) with response times, errors and AI cost per 1,000 users; explain why;
 if unsure, ask — don't guess. Also decided: WhatsApp alerts later.
+**When (owner, 19 Nov 2026, to keep usage low):** tests-first, shown output, explain why and ask-when-unsure apply
+now; the break-it review and the load tests are done once for the whole app when it is ready, before launch.
