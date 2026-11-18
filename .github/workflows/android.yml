@@ -89,9 +89,12 @@ jobs:
                    '        <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>\n    </queries>\n')
               m = m.replace('</manifest>', '    ' + q + '</manifest>', 1) if '<queries>' not in m else \
                   m.replace('<queries>', q.rstrip('\n').replace('</queries>', ''), 1)
+          # Phase C: ask with a photo — (Android 11+) permission to find the phone's camera app
+          if 'android.media.action.IMAGE_CAPTURE' not in m:
+              m = m.replace('<queries>', '<queries>\n        <intent><action android:name="android.media.action.IMAGE_CAPTURE"/></intent>', 1)
           open(path, 'w').write(m)
           PY
-          grep -n "RECORD_AUDIO\|RecognitionService\|TTS_SERVICE" "$MANIFEST"
+          grep -n "RECORD_AUDIO\|RecognitionService\|TTS_SERVICE\|IMAGE_CAPTURE" "$MANIFEST"
 
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings

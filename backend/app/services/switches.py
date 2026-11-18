@@ -5,7 +5,7 @@ Switches (key → what stops while it is off):
   all_ai            AI chat for every teacher (questions, class notes, tests). Notes, library, payments keep working.
   teacher:<id>      the AI of one teacher's app
   model:<name>      one AI model; jobs move to the next model in line (main → backup), or AI chat pauses if none
-  voice / photo     voice and photo questions (switch ready now, used when those features ship)
+  voice / photo     voice questions, and photo questions (Phase C: /class/ask-photo refuses while it is off)
 """
 import time
 

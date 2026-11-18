@@ -9,3 +9,4 @@ playwright>=1.45   # PDF notes; then run: playwright install chromium
 pytest>=8
 pypdf>=4.0            # multi-teacher content library: text from uploaded PDFs
 pypdfium2>=4.0        # content library: second PDF reader (keeps every Hindi letter when pdftotext is missing)
+Pillow>=10.0          # Phase C: photo questions (check, make smaller, remove location data)

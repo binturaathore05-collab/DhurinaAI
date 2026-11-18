@@ -14,6 +14,7 @@ MINUTE, HOUR, DAY = 60, 3600, 86400
 DEFAULT_LIMITS = {
     "questions_per_minute": 8,      # a real student rarely asks more than this in a minute
     "questions_per_day": 500,       # paid plans are "unlimited", but this caps runaway AI cost per student
+    "photos_per_day": 30,           # Phase C: a photo question costs more AI than a typed one
     "otp_per_phone_10min": 3,
     "otp_per_phone_day": 10,
     "otp_gap_seconds": 30,          # same as the app's "Resend in 0:30" timer
@@ -83,6 +84,10 @@ def question_rules(student_id: int, lim: dict) -> list[Rule]:
     key = f"ask:student:{student_id}"
     return [Rule(key, lim["questions_per_minute"], MINUTE, "limit_ask_minute"),
             Rule(key, lim["questions_per_day"], DAY, "limit_ask_day")]
+
+
+def photo_rules(student_id: int, lim: dict) -> list[Rule]:
+    return [Rule(f"photo:student:{student_id}", lim["photos_per_day"], DAY, "limit_photo_day")]
 
 
 def otp_send_rules(teacher_id: str, phone: str, device: str, ip: str, lim: dict) -> list[Rule]:

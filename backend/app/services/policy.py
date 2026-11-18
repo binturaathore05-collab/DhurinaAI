@@ -20,7 +20,7 @@ LABELS = {
     "safety.auto_block": "Auto-block", "safety.minor_warn": "Blocked topics in 7 days → warning",
     "safety.minor_suspend": "Blocked topics in 7 days → suspension", "safety.serious_suspend": "Serious requests → suspension",
     "safety.serious_review": "Serious requests → stopped for review", "safety.suspend_hours": "Suspension length (hours)",
-    "limits.questions_per_minute": "Questions per minute", "limits.questions_per_day": "Questions per day",
+    "limits.questions_per_minute": "Questions per minute", "limits.questions_per_day": "Questions per day", "limits.photos_per_day": "Photo questions per day",
     "limits.otp_per_phone_10min": "Codes per number in 10 min", "limits.otp_per_phone_day": "Codes per number per day",
     "limits.otp_gap_seconds": "Seconds between two codes", "limits.otp_per_device_day": "Codes per device per day",
     "limits.otp_per_ip_hour": "Codes per internet address per hour",

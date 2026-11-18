@@ -194,3 +194,14 @@ and resets it on the institute's page (admin → Institutes / Apps → the insti
 one-time password is shown once and must be changed at the first login. The institute sees only its own students
 (numbers hidden), its own share of the money, and its own flagged students (read-only; every look is in the audit log).
 
+
+## Photo questions and the one-time AI line — Phase C (Claude, 18 Nov 2026 — owner can change)
+Owner asked to start Phase C. **Photo questions:** the camera button (or saying "photo se poochna hai") → camera or
+gallery → optional note ("Q3 samjhao") → Sir answers. On the server: only a real photo, made smaller and saved again
+without location data; a safety check of the photo (OpenAI's free image check; our own AI's check otherwise) before
+anything reads it; then one AI call copies the question from the photo (it never answers), and that question goes
+the normal way (text check → right teacher → answer check). An unsafe photo counts like an unsafe message (A3).
+**The photo is never stored**, only the question read from it. Limit: 30 photos per student per day (admin →
+Settings → Limits); admin → Emergency → "Photo questions" switches it off. Cost: about ₹0.3 per photo with gpt-4o-mini.
+**AI line:** following A7 (tell once, no labels everywhere), Sir says "Namaste! I'm …, your AI teacher" only at the
+student's very first class (on screen and spoken), never again.
