@@ -6,10 +6,22 @@ import 'screens/live_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme.dart';
 
+/// Lets the app go back to the login screen from anywhere (when the login has ended).
+final navigatorKey = GlobalKey<NavigatorState>();
+bool _sendingToLogin = false;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final cfg = await TeacherConfig.load();
   final api = Api.create(cfg);
+  onSessionEnded = () {
+    if (_sendingToLogin) return;
+    _sendingToLogin = true;
+    navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen(notice: 'Your login has ended. Please log in again with your number.')),
+        (_) => false);
+    Future.delayed(const Duration(seconds: 2), () => _sendingToLogin = false);
+  };
   final loggedIn = await api.hasSession();
   runApp(LiveTeachApp(cfg: cfg, api: api, loggedIn: loggedIn));
 }
@@ -39,6 +51,7 @@ class LiveTeachApp extends StatelessWidget {
       api: api,
       child: MaterialApp(
         title: cfg.appName,
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: buildTheme(cfg.accent),
         home: loggedIn ? const LiveScreen() : const LoginScreen(),
