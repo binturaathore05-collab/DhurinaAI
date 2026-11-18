@@ -54,6 +54,7 @@ PROFILE_PHRASES = [
     "log out", "number change", "number badalna", "number badlo", "mera number badlo", "mera naam badlo",
     "मेरा प्रोफाइल", "प्रोफाइल खोलो", "प्रोफाइल दिखाओ", "लॉग आउट", "नंबर बदलो", "मेरा नंबर बदलो", "मेरा नाम बदलो",
     "ਮੇਰਾ ਪ੍ਰੋਫਾਈਲ", "ਪ੍ਰੋਫਾਈਲ ਖੋਲ੍ਹੋ", "ਲੌਗ ਆਊਟ", "ਨੰਬਰ ਬਦਲੋ",
+    "parent dashboard", "पेरेंट डैशबोर्ड", "अभिभावक डैशबोर्ड",
 ]
 
 

@@ -119,7 +119,7 @@ If a Common Library user should pay Dhurina more, use the existing per-teacher s
 2. S3 hacking protection. **First part done 18 Nov 2026.**
 3. Pausing or blocking a teacher or institute. **Done 18 Nov 2026** (a teacher: switch off in Teachers; an institute: Admin → the institute → Institute status).
 4. Phase C: photo and voice safety. **Done 18 Nov 2026.**
-5. Parent dashboard.
+5. Parent dashboard. **Done 18 Nov 2026** (`/parent`).
 6. WhatsApp alerts (last).
 
 Owner items: AI key on Render, SMS provider, SMTP, paid server with a lasting disk, lawyer's DPDP check.

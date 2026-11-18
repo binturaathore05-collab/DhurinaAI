@@ -138,6 +138,12 @@ CREATE TABLE IF NOT EXISTS institute_status_log (   -- every pause / block / bac
     by_who TEXT,
     at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS parent_events (   -- parent dashboard: logins and actions (number masked)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    phone TEXT,
+    action TEXT
+);
 CREATE TABLE IF NOT EXISTS admin_sessions (   -- S3: every admin login; can be seen and ended
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

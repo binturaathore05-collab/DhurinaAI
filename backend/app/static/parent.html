@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="only light">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveTeach · Parent dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#F6F7F9; --panel:#FFFFFF; --surf:#F1F3F6; --border:#E3E6EB; --text:#111827; --muted:#5B6472;
+          --acc:#0F766E; --accHover:#115E59; --accSoft:#E6F4F1; --warn:#B45309; --warnSoft:#FEF3C7; --ok:#15803D; --bad:#B91C1C; color-scheme: only light; }
+  * { box-sizing: border-box; }
+  button, input { color: var(--text); font: inherit; }
+  input { background-color: #fff; -webkit-text-fill-color: var(--text); }
+  input::placeholder { color: #8A93A3; -webkit-text-fill-color: #8A93A3; opacity: 1; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 18px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+  header { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 42px; height: 42px; border-radius: 12px; background: var(--acc); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 18px; flex: none; }
+  h1 { margin: 0; font-size: 20px; font-weight: 800; } h2 { margin: 0; font-size: 17px; font-weight: 800; } h3 { margin: 0; font-size: 15px; font-weight: 800; }
+  .sub, .muted { color: var(--muted); font-size: 13px; }
+  .lang { margin-left: auto; display: flex; border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; flex: none; }
+  .lang button { border: 0; background: #fff; padding: 6px 10px; font-weight: 700; cursor: pointer; }
+  .lang button.on { background: var(--acc); color: #fff; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border-radius: 12px; font-weight: 800; border: 0; cursor: pointer; }
+  .btn.primary { background: var(--acc); color: #fff; } .btn.primary:hover { background: var(--accHover); }
+  .btn.ghost { background: #fff; border: 1.5px solid var(--border); }
+  .btn.danger { background: #fff; color: var(--bad); border: 1.5px solid #F3C4C4; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
+  label.f input { height: 50px; border: 1.5px solid var(--border); border-radius: 12px; padding: 0 14px; font-size: 18px; }
+  label.f input:focus { outline: 2px solid var(--acc); border-color: var(--acc); }
+  .err { color: var(--bad); font-size: 14px; min-height: 1em; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .stat { background: var(--surf); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .stat b { font-size: 24px; } .stat span { color: var(--muted); font-size: 12px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 90px; }
+  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; }
+  .bars i { display: block; width: 100%; background: var(--acc); border-radius: 4px 4px 0 0; min-height: 2px; }
+  .bars i.zero { background: var(--border); }
+  .bars small { font-size: 10px; color: var(--muted); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: var(--surf); }
+  .pill.ok { background: #E8F5EC; color: var(--ok); } .pill.warn { background: var(--warnSoft); color: var(--warn); } .pill.bad { background: #FDECEC; color: var(--bad); }
+  ul.list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+  ul.list li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+  ul.list li:first-child { border-top: 0; }
+  .note { background: var(--accSoft); border-radius: 12px; padding: 12px 14px; font-size: 13px; }
+  .confirm { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: grid; place-items: center; padding: 16px; z-index: 10; }
+  .confirm .box { background: #fff; border-radius: 16px; padding: 20px; max-width: 420px; width: 100%; display: flex; flex-direction: column; gap: 12px; }
+  .acts { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app" aria-live="polite"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const T = {
+  hi: { title: 'अभिभावक डैशबोर्ड', sub: 'देखिए आपका बच्चा LiveTeach पर क्या पढ़ रहा है', phone: 'आपका मोबाइल नंबर', phoneHint: 'वही नंबर जिस पर बच्चे की अनुमति का कोड आया था',
+    send: 'कोड भेजें', code: 'SMS में आया 6 अंकों का कोड', open: 'डैशबोर्ड खोलें', again: 'नंबर बदलें', sent: 'अगर यह नंबर किसी बच्चे के अभिभावक का है, तो कोड भेज दिया गया है।',
+    logout: 'लॉग आउट', none: 'इस नंबर से कोई बच्चा नहीं जुड़ा है।', child: 'आपका बच्चा', cls: 'कक्षा', college: 'कॉलेज / परीक्षा तैयारी',
+    week: 'इस हफ़्ते', questions: 'सवाल पूछे', days: 'दिन पढ़ाई की', streak: 'लगातार दिन', last14: 'पिछले 14 दिन — रोज़ के सवाल',
+    topics: 'क्या पढ़ा', noTopics: 'अभी कोई विषय नहीं।', tests: 'टेस्ट', noTests: 'अभी कोई टेस्ट नहीं दिया।', mcq: 'MCQ', written: 'लिखित', oral: 'मौखिक',
+    plan: 'प्लान', planOn: 'चालू · ख़त्म होगा', planOff: 'कोई प्लान नहीं (फ़्री डेमो)', consent: 'आपकी अनुमति', given: 'दी गई', withdrawn: 'वापस ली गई — बच्चा ऐप में फिर से माँग सकता है', pending: 'अभी नहीं दी',
+    status: 'खाता', ok: 'ठीक है', warning: 'चेतावनी मिली है — कृपया बच्चे से बात करें', paused: 'सुरक्षा टीम ने कुछ समय के लिए क्लास रोकी है — कृपया बच्चे से बात करें',
+    privacy: 'आप देखते हैं कि बच्चे ने क्या पढ़ा — उसके संदेश या बातचीत नहीं। इससे बच्चे की निजता भी बनी रहती है।',
+    controls: 'आपके अधिकार', withdraw: 'अनुमति वापस लें', withdrawText: 'Sir (AI teacher) बच्चे के लिए तुरंत रुक जाएँगे, जब तक आप फिर से अनुमति न दें। नोट्स खुले रहेंगे।',
+    del: 'बच्चे का डेटा मिटाएँ', delText: 'बच्चे की सारी पढ़ाई, नोट्स और टेस्ट हमेशा के लिए मिट जाएँगे और खाता बंद हो जाएगा। यह वापस नहीं होगा।', typeDel: 'पक्का करने के लिए DELETE लिखें',
+    cancel: 'रहने दें', yes: 'हाँ, करें', done: 'हो गया', help: 'मदद चाहिए? अपने संस्थान या Dhurina support से संपर्क करें।', of: 'में से' },
+  en: { title: 'Parent dashboard', sub: 'See what your child is studying on LiveTeach', phone: 'Your mobile number', phoneHint: 'The number that got your child’s consent code',
+    send: 'Send code', code: '6-digit code from the SMS', open: 'Open dashboard', again: 'Change number', sent: 'If this is a parent’s number, the code has been sent.',
+    logout: 'Log out', none: 'No child is linked to this number.', child: 'Your child', cls: 'Class', college: 'College / exam preparation',
+    week: 'This week', questions: 'questions asked', days: 'days studied', streak: 'day streak', last14: 'Last 14 days — questions per day',
+    topics: 'What was studied', noTopics: 'No topics yet.', tests: 'Tests', noTests: 'No tests taken yet.', mcq: 'MCQ', written: 'Written', oral: 'Oral',
+    plan: 'Plan', planOn: 'Active · ends', planOff: 'No plan (free demo)', consent: 'Your consent', given: 'Given', withdrawn: 'Withdrawn — your child can ask again in the app', pending: 'Not given yet',
+    status: 'Account', ok: 'All fine', warning: 'Has a warning — please talk to your child', paused: 'The safety team paused classes for a while — please talk to your child',
+    privacy: 'You see what your child studied — not their messages or conversations. This keeps your child’s privacy too.',
+    controls: 'Your rights', withdraw: 'Withdraw consent', withdrawText: 'Sir (the AI teacher) stops for your child at once, until you agree again. Notes stay open.',
+    del: 'Delete my child’s data', delText: 'All of your child’s study history, notes and tests are deleted for ever and the account is closed. This can’t be undone.', typeDel: 'Type DELETE to confirm',
+    cancel: 'Cancel', yes: 'Yes, do it', done: 'Done', help: 'Need help? Contact your institute or Dhurina support.', of: 'of' },
+};
+let LANG = (() => { try { return localStorage.getItem('lt_parent_lang') || 'hi'; } catch { return 'hi'; } })();
+let TOKEN = (() => { try { return sessionStorage.getItem('lt_parent') || ''; } catch { return ''; } })();
+let STEP = { phone: '', sent: false };
+const L = (k) => T[LANG][k] || T.en[k] || k;
+
+async function api(method, path, body) {
+  const res = await fetch('/parent/api' + path, { method, headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  let d = {}; try { d = await res.json(); } catch {}
+  if (res.status === 401 && TOKEN) { TOKEN = ''; try { sessionStorage.removeItem('lt_parent'); } catch {} render(); }
+  if (!res.ok) throw new Error(d.detail || 'Something went wrong. Please try again.');
+  return d;
+}
+const date = (ts) => { const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(String(ts).replace(' ', 'T') + 'Z');
+  return d.toLocaleDateString(LANG === 'hi' ? 'hi-IN' : 'en-IN', { day: 'numeric', month: 'short' }); };
+const topBar = () => `<header><span class="logo">L</span><div><h1>${L('title')}</h1><span class="sub">${L('sub')}</span></div>
+  <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="hi" class="${LANG === 'hi' ? 'on' : ''}">हिं</button><button type="button" data-lang="en" class="${LANG === 'en' ? 'on' : ''}">EN</button></div></header>`;
+
+function loginView() {
+  return `${topBar()}<form class="card" id="lf">
+    ${STEP.sent ? `<span class="note">${L('sent')}</span>
+      <label class="f">${L('code')}<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>
+      <button class="btn primary" type="submit">${L('open')}</button><button class="btn ghost" type="button" id="back">${L('again')}</button>`
+    : `<label class="f">${L('phone')}<input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" value="${esc(STEP.phone)}" required></label>
+      <span class="muted">${L('phoneHint')}</span><button class="btn primary" type="submit">${L('send')}</button>`}
+    <span class="err" id="err" role="alert"></span></form><span class="muted" style="text-align:center">${L('help')}</span>`;
+}
+
+function childView(c) {
+  const max = Math.max(1, ...c.days.map((d) => d.questions));
+  const bars = c.days.map((d) => `<div title="${esc(d.date)}: ${d.questions}"><i class="${d.questions ? '' : 'zero'}" style="height:${Math.round(d.questions / max * 70) + 2}px"></i><small>${+d.date.slice(8)}</small></div>`).join('');
+  const cls = c.class_level ? (c.class_level === 'college' ? L('college') : `${L('cls')} ${esc(c.class_level)}`) : '';
+  const consent = c.consent === 'given' ? `<span class="pill ok">${L('given')}</span>` : c.consent === 'withdrawn' ? `<span class="pill warn">${L('withdrawn')}</span>` : `<span class="pill">${L('pending')}</span>`;
+  const status = c.status === 'ok' ? `<span class="pill ok">${L('ok')}</span>` : c.status === 'warning' ? `<span class="pill warn">${L('warning')}</span>` : `<span class="pill bad">${L('paused')}</span>`;
+  const plan = c.plan && c.plan.active ? `<span class="pill ok">${L('planOn')} ${date(c.plan.ends_at)}</span>` : `<span class="pill">${L('planOff')}</span>`;
+  return `<section class="card">
+    <div class="row"><div><h2>${esc(c.name || L('child'))}</h2><span class="sub">${[cls, esc(c.institute)].filter(Boolean).join(' · ')}</span></div></div>
+    <ul class="list"><li><span>${L('status')}</span>${status}</li><li><span>${L('plan')}</span>${plan}</li><li><span>${L('consent')}</span>${consent}</li></ul>
+    <h3>${L('week')}</h3>
+    <div class="stats"><div class="stat"><b>${c.week.questions}</b><span>${L('questions')}</span></div><div class="stat"><b>${c.week.study_days}/7</b><span>${L('days')}</span></div><div class="stat"><b>${c.streak}</b><span>${L('streak')}</span></div></div>
+    <span class="muted">${L('last14')}</span><div class="bars" aria-hidden="true">${bars}</div>
+    <h3>${L('topics')}</h3>${c.topics.length ? `<ul class="list">${c.topics.map((x) => `<li><span>${esc(x.topic)}</span><span class="muted">${date(x.last)}</span></li>`).join('')}</ul>` : `<span class="muted">${L('noTopics')}</span>`}
+    <h3>${L('tests')}</h3>${c.tests.length ? `<ul class="list">${c.tests.map((x) => `<li><span>${L(x.mode)} · ${esc((x.topics || []).join(', ') || '—')}<br><span class="muted">${date(x.at)}</span></span><b style="color:${x.percent >= 70 ? 'var(--ok)' : x.percent >= 40 ? 'var(--warn)' : 'var(--bad)'}">${x.percent == null ? '—' : Math.round(x.percent) + '%'}</b></li>`).join('')}</ul>` : `<span class="muted">${L('noTests')}</span>`}
+    <span class="note">${L('privacy')}</span>
+    <details><summary style="cursor:pointer;font-weight:700">${L('controls')}</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      ${c.consent === 'given' ? `<span class="muted">${L('withdrawText')}</span><button class="btn ghost" data-withdraw="${c.id}">${L('withdraw')}</button>` : ''}
+      <span class="muted">${L('delText')}</span><button class="btn danger" data-delete="${c.id}">${L('del')}</button></div></details>
+  </section>`;
+}
+
+function confirmBox(title, text, typed) {
+  return new Promise((done) => {
+    const m = document.createElement('div'); m.className = 'confirm'; m.setAttribute('role', 'alertdialog'); m.setAttribute('aria-modal', 'true');
+    m.innerHTML = `<div class="box"><h2>${esc(title)}</h2><p style="margin:0">${esc(text)}</p>${typed ? `<label class="f">${L('typeDel')}<input id="typed" autocomplete="off"></label>` : ''}
+      <div class="acts"><button class="btn ghost" data-c="0">${L('cancel')}</button><button class="btn ${typed ? 'danger' : 'primary'}" data-c="1">${L('yes')}</button></div></div>`;
+    const close = (v) => { m.remove(); done(v); };
+    m.onclick = (e) => { if (e.target === m) return close(null); const b = e.target.closest('[data-c]'); if (b) close(b.dataset.c === '1' ? (typed ? m.querySelector('#typed').value : true) : null); };
+    document.body.append(m); m.querySelector(typed ? '#typed' : '[data-c="0"]').focus();
+  });
+}
+
+async function render() {
+  const app = $('#app');
+  document.documentElement.lang = LANG;
+  if (!TOKEN) {
+    app.innerHTML = loginView();
+    const f = $('#lf');
+    if ($('#back')) $('#back').onclick = () => { STEP.sent = false; render(); };
+    f.onsubmit = async (e) => { e.preventDefault(); const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+      try {
+        if (!STEP.sent) { STEP.phone = $('#phone').value; await api('POST', '/otp', { phone: STEP.phone }); STEP.sent = true; render(); $('#code') && $('#code').focus(); }
+        else { const r = await api('POST', '/verify', { phone: STEP.phone, code: $('#code').value }); TOKEN = r.token; try { sessionStorage.setItem('lt_parent', TOKEN); } catch {} STEP = { phone: '', sent: false }; render(); }
+      } catch (err) { $('#err').textContent = err.message; btn.disabled = false; } };
+    bindLang(); return;
+  }
+  let d;
+  try { d = await api('GET', '/children'); } catch (e) { if (TOKEN) app.innerHTML = `${topBar()}<p class="err">${esc(e.message)}</p>`; bindLang(); return; }
+  app.innerHTML = `${topBar()}${d.children.length ? d.children.map(childView).join('') : `<section class="card"><span>${L('none')}</span></section>`}
+    <button class="btn ghost" id="out">${L('logout')}</button><span class="muted" style="text-align:center">${L('help')}</span>`;
+  bindLang();
+  $('#out').onclick = () => { TOKEN = ''; try { sessionStorage.removeItem('lt_parent'); } catch {} render(); };
+  document.querySelectorAll('[data-withdraw]').forEach((b) => b.onclick = async () => {
+    if (!(await confirmBox(L('withdraw'), L('withdrawText')))) return;
+    try { await api('POST', `/children/${b.dataset.withdraw}/withdraw`); render(); } catch (e) { alertMsg(e.message); } });
+  document.querySelectorAll('[data-delete]').forEach((b) => b.onclick = async () => {
+    const typed = await confirmBox(L('del'), L('delText'), true); if (typed == null) return;
+    try { await api('POST', `/children/${b.dataset.delete}/delete`, { confirm: typed }); render(); } catch (e) { alertMsg(e.message); } });
+}
+function alertMsg(text) { confirmBox(L('title'), text).then(() => {}); }
+function bindLang() { document.querySelectorAll('[data-lang]').forEach((b) => b.onclick = () => { LANG = b.dataset.lang; try { localStorage.setItem('lt_parent_lang', LANG); } catch {} render(); }); }
+render();
+</script>
+</body>
+</html>

@@ -128,6 +128,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "{teacher} की क्लास बंद कर दी गई है। आपके नोट्स और लाइब्रेरी खुले हैं। मदद के लिए Dhurina support से संपर्क करें।",
         "pa": "{teacher} ਦੀਆਂ ਕਲਾਸਾਂ ਬੰਦ ਕਰ ਦਿੱਤੀਆਂ ਗਈਆਂ ਹਨ। ਤੁਹਾਡੇ ਨੋਟਸ ਅਤੇ ਲਾਇਬ੍ਰੇਰੀ ਖੁੱਲ੍ਹੇ ਹਨ। ਮਦਦ ਲਈ Dhurina support ਨਾਲ ਸੰਪਰਕ ਕਰੋ।",
     },
+    "parent_login_sms": {
+        "en": "{code} is your code to open the LiveTeach parent dashboard. Valid 5 minutes. Don't share it.",
+        "hi": "{code} LiveTeach पेरेंट डैशबोर्ड खोलने का आपका कोड है। 5 मिनट तक मान्य। किसी को न बताएँ।",
+    },
     "safety_retry": {
         "en": "Sir will answer in a moment. Please try again.",
         "hi": "सर थोड़ी देर में जवाब देंगे। कृपया फिर से कोशिश करें।",

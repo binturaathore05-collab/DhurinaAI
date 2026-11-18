@@ -38,6 +38,7 @@ from .services import alerts
 from .services import photo as photo_mod
 from .services import security
 from .services import institute_status
+from .services import parents
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
@@ -514,7 +515,7 @@ def set_my_name(body: StudentName, student=Depends(current_student)):
 # ---------- the student's profile (app → My Library → Profile) ----------
 
 @app.get("/me")
-def my_profile(student=Depends(current_student)):
+def my_profile(request: Request, student=Depends(current_student)):
     """Name, number, class, plan and the app's legal links, for the Profile screen."""
     row = db.one("SELECT name, phone, class_level, is_adult, created_at FROM students WHERE id = ?", (student["id"],))
     legal = admin.get_settings(db).get("legal", {})
@@ -523,7 +524,12 @@ def my_profile(student=Depends(current_student)):
             "joined": row["created_at"], "consent": consent.state(db, student["id"])["consent"],
             "plan": accounts.plan_summary(db, student["id"]),
             "privacy_url": legal.get("privacy_url", ""), "terms_url": legal.get("terms_url", ""),
+            "parent_url": _parent_url(request) if not row["is_adult"] else "",
             **_access(student["id"])}
+
+
+def _parent_url(request: Request) -> str:
+    return (settings.public_base_url or str(request.base_url)).rstrip("/") + "/parent"
 
 
 class NewPhone(BaseModel):
@@ -1593,6 +1599,103 @@ def admin_password(body: PasswordChange, user=Depends(require_admin)):
 
 def _default_pct() -> float:
     return float(admin.get_settings(db)["defaults"]["platform_percent"])
+
+
+# ---------- parent dashboard (brief §14) ----------
+
+@app.get("/parent", response_class=HTMLResponse)
+def parent_page():
+    """Parents open this on any phone browser: their number + SMS code → their child's progress."""
+    with open(os.path.join(STATIC_DIR, "parent.html"), encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
+class ParentPhone(BaseModel):
+    phone: str
+
+
+class ParentCode(BaseModel):
+    phone: str
+    code: str
+
+
+class ParentDelete(BaseModel):
+    confirm: str
+
+
+def current_parent(authorization: str = Header("")) -> str:
+    try:
+        return parents.read(authorization.removeprefix("Bearer ").strip(), settings.jwt_secret)
+    except parents.ParentError as exc:
+        raise HTTPException(401, str(exc))
+
+
+@app.post("/parent/api/otp")
+def parent_otp(body: ParentPhone, request: Request, x_device_id: str = Header("")):
+    try:
+        phone = accounts.normalize_phone(body.phone)
+        _not_blocked_phone(phone)
+        lim = _limit_settings()
+        limits.check_and_record(db, [limits.wrong_code_rule(parents.OTP_NAMESPACE, phone, lim)], record=False)
+        limits.check_and_record(db, limits.otp_send_rules(parents.OTP_NAMESPACE, phone, x_device_id.strip(),
+                                                          _client_ip(request), lim))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    if parents.is_parent(db, phone):   # no SMS (and no cost) for numbers that aren't a parent's; same reply either way
+        otp.send(parents.OTP_NAMESPACE, "LiveTeach", phone, "parent_login_sms")
+    return {"sent": True}
+
+
+@app.post("/parent/api/verify")
+def parent_verify(body: ParentCode):
+    try:
+        phone = accounts.normalize_phone(body.phone)
+        wrong = limits.wrong_code_rule(parents.OTP_NAMESPACE, phone, _limit_settings())
+        limits.check_and_record(db, [wrong], record=False)
+        try:
+            phone = otp.verify(parents.OTP_NAMESPACE, phone, body.code)
+        except accounts.WrongCode:
+            limits.record(db, wrong.key)
+            raise
+    except (ValueError, accounts.AuthError) as exc:
+        raise HTTPException(400, str(exc))
+    except limits.Limited as exc:
+        raise _too_many(exc)
+    if not parents.is_parent(db, phone):
+        raise HTTPException(400, "This number is not a parent's number in LiveTeach")
+    parents.log(db, phone, "login")
+    return {"token": parents.token(phone, settings.jwt_secret)}
+
+
+@app.get("/parent/api/children")
+def parent_children(phone: str = Depends(current_parent)):
+    return {"children": parents.children(db, phone)}
+
+
+@app.post("/parent/api/children/{sid}/withdraw")
+def parent_withdraw(sid: int, phone: str = Depends(current_parent)):
+    try:
+        parents.withdraw(db, phone, sid)
+    except KeyError:
+        raise HTTPException(404, "Not found")
+    except parents.ParentError as exc:
+        raise HTTPException(400, str(exc))
+    parents.log(db, phone, f"withdrew consent for student {sid}")
+    return {"children": parents.children(db, phone)}
+
+
+@app.post("/parent/api/children/{sid}/delete")
+def parent_delete(sid: int, body: ParentDelete, phone: str = Depends(current_parent)):
+    try:
+        parents.delete(db, phone, sid, body.confirm, settings.notes_dir)
+    except KeyError:
+        raise HTTPException(404, "Not found")
+    except parents.ParentError as exc:
+        raise HTTPException(400, str(exc))
+    parents.log(db, phone, f"deleted the data of student {sid}")
+    return {"children": parents.children(db, phone)}
 
 
 @app.get("/teacher-panel", response_class=HTMLResponse)
