@@ -1,6 +1,4 @@
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -598,7 +596,7 @@ class _LiveScreenState extends State<LiveScreen> {
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                 RoundIconButton(icon: Icons.photo_camera_outlined, tooltip: 'Ask with a photo',
-                    onPressed: _thinking ? null : () => _askPhoto()),
+                    onPressed: () => _askPhoto()),
                 RoundIconButton(icon: Icons.keyboard_alt_outlined, tooltip: 'Type a question',
                     background: _typing ? LT.accentSoft : null,
                     onPressed: () {
