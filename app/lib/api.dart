@@ -147,7 +147,9 @@ class Me {
   final String consent; // not_needed | needed | given | withdrawn
   final bool freePlan;  // a plan given by the institute / Dhurina without payment
   final Access access;
-  const Me(this.name, this.phone, this.classLevel, this.consent, this.freePlan, this.access);
+  /// The parent dashboard link (students under 18): the parent opens it in any browser.
+  final String parentUrl;
+  const Me(this.name, this.phone, this.classLevel, this.consent, this.freePlan, this.access, {this.parentUrl = ''});
   factory Me.fromJson(Map<String, dynamic> j) => Me(
         j['name'] as String? ?? '',
         j['phone'] as String? ?? '',
@@ -155,6 +157,7 @@ class Me {
         j['consent'] as String? ?? 'needed',
         (j['plan'] as Map?)?['free_until'] != null,
         Access.fromJson(j),
+        parentUrl: j['parent_url'] as String? ?? '',
       );
 }
 
@@ -919,7 +922,7 @@ class DemoApi implements Api {
   String _phone = '+919876543210';
 
   @override
-  Future<Me> me() async => Me(_name, _phone, '10', 'given', false, _access);
+  Future<Me> me() async => Me(_name, _phone, '10', 'given', false, _access, parentUrl: 'https://example.com/parent');
 
   @override
   Future<void> setName(String name) async => _name = name.trim();

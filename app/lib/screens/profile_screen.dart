@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api.dart';
 import '../main.dart';
@@ -14,6 +15,7 @@ const _profilePhrases = [
   'log out', 'number change', 'number badalna', 'number badlo', 'mera number badlo', 'mera naam badlo',
   'मेरा प्रोफाइल', 'प्रोफाइल खोलो', 'प्रोफाइल दिखाओ', 'लॉग आउट', 'नंबर बदलो', 'मेरा नंबर बदलो', 'मेरा नाम बदलो',
   'ਮੇਰਾ ਪ੍ਰੋਫਾਈਲ', 'ਪ੍ਰੋਫਾਈਲ ਖੋਲ੍ਹੋ', 'ਲੌਗ ਆਊਟ', 'ਨੰਬਰ ਬਦਲੋ',
+    'parent dashboard', 'पेरेंट डैशबोर्ड', 'अभिभावक डैशबोर्ड',
 ];
 
 bool isProfileCommand(String text) {
@@ -181,6 +183,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Parent dashboard: the parent opens the link, types their own number (the one that gave consent) and the code.
+  Future<void> _shareParent(String url) => Share.share(
+      'LiveTeach – अभिभावक डैशबोर्ड / Parent dashboard: $url\n'
+      'अपना मोबाइल नंबर डालें (वही जिस पर अनुमति का कोड आया था) और SMS कोड से खोलें। '
+      'Open it, type your mobile number (the one that gave consent) and the SMS code.',
+      subject: 'LiveTeach parent dashboard');
+
   /// S3: e.g. an old phone was lost or someone else knows the login — every other phone is logged out.
   Future<void> _logoutOthers() async {
     final ok = await confirmAction(context,
@@ -269,6 +278,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _card(children: [
                     _tile(Icons.phone_iphone_rounded, 'Change mobile number', _changeNumber),
                     const Divider(color: LT.border, height: 1),
+                    if (m.parentUrl.isNotEmpty) ...[
+                      _tile(Icons.family_restroom_rounded, 'Send the parent dashboard to my parent', () => _shareParent(m.parentUrl)),
+                      const Divider(color: LT.border, height: 1),
+                    ],
                     _tile(Icons.devices_other_rounded, 'Log out on other phones', _logoutOthers),
                     const Divider(color: LT.border, height: 1),
                     _tile(Icons.logout_rounded, 'Log out', _logout),

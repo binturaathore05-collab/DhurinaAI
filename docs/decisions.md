@@ -221,3 +221,11 @@ students and no new plans can be bought; notes, library, sign-ups and the instit
 reason). **Block** (serious problem): as pause, plus no new students, the institute panel is closed and no new app
 builds. Nothing is ever deleted; "Make active again" brings everything back. Every change is in a history, the audit
 log and raises an alert. One AI teacher inside an institute is still switched off in the Teachers list.
+
+## Parent dashboard (Claude, 18 Nov 2026 — owner can change)
+A web page, no app needed: `<server>/parent`. The parent types the mobile number that gave consent and the SMS code
+(sent only to numbers that are a parent's on record, so no SMS cost for others) and sees each child: study this week,
+questions per day (14 days), topics learnt, test results, plan, consent and account status — **never the child's own
+words or Sir's answers** (same rule as the parent SMS). Hindi first, English switch. DPDP rights on the page: withdraw
+consent (Sir stops for the child) and delete the child's data (type DELETE). The student can send the link from
+Profile → "Send the parent dashboard to my parent" (or say "parent dashboard" to Sir). Parent logins and actions are kept.
