@@ -37,7 +37,8 @@ Read `CLAUDE.md` first (owner's permanent rules), then this file.
 OpenAI free moderation · gpt-4o-mini, $5 prepaid, auto-reload off, `SAFETY_LAB_AUTORUN=0` · audio first, no video
 avatar now · WhatsApp later · one plan per institute, money to the institute's Razorpay with Dhurina's split ·
 resume: 30-minute rule, gap talk after one whole missed day, AI greeting each time with a safe fallback.
-Suggested for launch: Render Starter + 5–10 GB disk, region Singapore.
+Server: **stay on Render** (owner, 21 Nov 2026; Cloudflare Workers ruled out, Cloudflare only in front). Launch:
+Render Starter + 5–10 GB disk, region Singapore; Standard (2 GB) if PDF notes need more memory.
 
 ## Owner's launch to-dos (not code)
 Paid server with a disk · run the safety lab with the real AI (admin → Safety tests) and add the AI key to GitHub ·
