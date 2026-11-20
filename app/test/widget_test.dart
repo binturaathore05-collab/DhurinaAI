@@ -192,4 +192,49 @@ void main() {
     expect(a.photoText.isNotEmpty, true);
     expect(a.answer.isNotEmpty, true);
   });
+
+  // ---- resume the class where the student left it (owner, 20 Nov 2026) ----
+  test('resume: nothing to resume, the last answer again, or Sir\'s welcome back', () {
+    final none = ResumeInfo.fromJson({'type': 'none'});
+    expect(none.type, 'none');
+    expect(none.last, isNull);
+
+    final recent = ResumeInfo.fromJson({
+      'type': 'recent', 'topic': 'थार मरुस्थल', 'language': 'hi', 'demo_questions_left': 2,
+      'faculty': {'id': 1, 'name': 'Gupta Sir'},
+      'last': {'qa_id': 7, 'question': 'थार मरुस्थल कहाँ है?', 'answer': 'राजस्थान के पश्चिम में।', 'follow_up': 'कौन सा राज्य?', 'language': 'hi'},
+    });
+    expect(recent.type, 'recent');
+    expect(recent.lastQuestion, 'थार मरुस्थल कहाँ है?');
+    expect(recent.last!.answer, 'राजस्थान के पश्चिम में।');
+    expect(recent.last!.followUp, 'कौन सा राज्य?');
+    expect(recent.faculty!.name, 'Gupta Sir');
+
+    final back = ResumeInfo.fromJson({
+      'type': 'resume', 'greeting': 'नमस्ते Riya! 3 दिन बाद आए हो… आगे बढ़ाएँ या नया सवाल? 😀 "quote"',
+      'topic': 'थार मरुस्थल', 'days_missed': 3, 'language': 'hi', 'source': 'ai',
+    });
+    expect(back.type, 'resume');
+    expect(back.greeting, contains('आगे बढ़ाएँ'));
+    expect(back.daysMissed, 3);
+    expect(back.language, 'hi');
+    expect(back.faculty, isNull);
+  });
+
+  test('resume: odd or missing fields never break the class screen', () {
+    final odd = ResumeInfo.fromJson({'type': 'resume', 'greeting': null, 'days_missed': 'x'});
+    expect(odd.greeting, '');
+    expect(odd.daysMissed, 0);
+    final unknown = ResumeInfo.fromJson({'type': 'something-new'});
+    expect(unknown.type, 'none');   // an unknown kind from a newer server = nothing to show
+    final long = ResumeInfo.fromJson({'type': 'resume', 'greeting': 'क' * 5000});
+    expect(long.greeting.length, 5000);
+  });
+
+  test('resume: the demo has nothing to resume; "new question" carries Sir\'s line', () async {
+    expect((await DemoApi(cfg).resume()).type, 'none');
+    final c = CommandException('new_question', message: 'ज़रूर — अपना नया सवाल पूछिए।');
+    expect(c.message, contains('नया सवाल'));
+    expect(CommandException('save').message, '');
+  });
 }

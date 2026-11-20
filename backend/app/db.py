@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS parent_events (   -- parent dashboard: logins and act
     phone TEXT,
     action TEXT
 );
+CREATE TABLE IF NOT EXISTS resume_greetings (   -- Sir's "welcome back" for one return (so repeats cost nothing)
+    student_id INTEGER NOT NULL,
+    qa_id INTEGER NOT NULL,
+    days INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    source TEXT NOT NULL,                     -- ai | template
+    created REAL,
+    PRIMARY KEY (student_id, qa_id, days)
+);
 CREATE TABLE IF NOT EXISTS admin_sessions (   -- S3: every admin login; can be seen and ended
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
