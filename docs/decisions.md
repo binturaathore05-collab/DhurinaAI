@@ -247,3 +247,11 @@ kindly about the gap in the same message: studying from the book is fine, but da
 Sir's words are made by the **AI each time** (owner choice), checked like every AI text; when the AI or the check is
 not available, or the institute is paused, a fixed safe sentence (admin-editable) is used. One greeting per return
 is kept, so reopening costs nothing more (about ₹0.01 per greeting with gpt-4o-mini).
+
+## Server: stay on Render (owner, 21 Nov 2026)
+Owner asked about Cloudflare Workers and other servers. Workers can't run our server as built (no permanent disk for
+the encrypted database, no browser for PDF notes, no background threads), so it would be a big rewrite. Compared
+Render, DigitalOcean (Bangalore) and AWS Lightsail (Mumbai); owner chose **Render** (least work, no code change,
+auto-deploy from GitHub). Launch plan: Render Starter + 5–10 GB disk, region Singapore; move up to Standard (2 GB)
+if PDF notes need more memory. DigitalOcean Bangalore 2 GB stays the fallback if cost or speed in India becomes a
+problem. Cloudflare goes **in front of** Render for protection, not as the server.
