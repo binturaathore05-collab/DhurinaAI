@@ -70,6 +70,8 @@ the app.
   worked out from the token counts and the model's price, and shown as an estimate.
 
 ## Before starting a task
+- New chat? Read `docs/handoff.md` for where the work stands and what comes next (keep it updated at the end of
+  each chat).
 - Product rules and past decisions: `docs/decisions.md` (the "Rules for everything we build" at the top always apply:
   simple first · security tight · low AI cost without losing features · everything can be done on the call).
 - Safety work and its order: `docs/safety-gap-analysis.md` (Phase A order: A1 → A6 → A3 → A2 → A4 → A5 → A7 → A8,
