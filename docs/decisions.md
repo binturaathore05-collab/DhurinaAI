@@ -238,3 +238,12 @@ real load tests (100 / 1,000 / 5,000 students) with response times, errors and A
 if unsure, ask — don't guess. Also decided: WhatsApp alerts later.
 **When (owner, 19 Nov 2026, to keep usage low):** tests-first, shown output, explain why and ask-when-unsure apply
 now; the break-it review and the load tests are done once for the whole app when it is ready, before launch.
+
+## Resume the class where the student left it (owner, 20 Nov 2026)
+When the class opens: back within **30 minutes** → the last question and answer are on the screen again, no greeting.
+Later → Sir says what they were studying (and Sir's open question, if any) and asks "continue, or a new question?"
+(buttons, or say "aage badhao" / "naya sawal"). After **one whole day (India time) without study** Sir also talks
+kindly about the gap in the same message: studying from the book is fine, but daily study matters (no back-and-forth).
+Sir's words are made by the **AI each time** (owner choice), checked like every AI text; when the AI or the check is
+not available, or the institute is paused, a fixed safe sentence (admin-editable) is used. One greeting per return
+is kept, so reopening costs nothing more (about ₹0.01 per greeting with gpt-4o-mini).

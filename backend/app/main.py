@@ -39,6 +39,7 @@ from .services import photo as photo_mod
 from .services import security
 from .services import institute_status
 from .services import parents
+from .services import resume
 from .services import age_policy, content_filters, parent_notify
 from . import i18n
 from .services import policy
@@ -702,7 +703,42 @@ def ask(body: Ask, student=Depends(current_student), teacher: TeacherProfile = D
             db, student["id"], classroom.latest_session_with_content(db, student["id"], session_id))}
     if is_photo_command(body.question):   # "photo se poochna hai" → the app opens the camera
         return {"type": "photo", **_access(student["id"])}
+    if resume.is_new(body.question):   # "naya sawal" → Sir says "ask your new question"
+        return {"type": "new_question", "message": t("resume_new", detect_language(body.question)),
+                **_access(student["id"])}
+    if resume.is_continue(body.question):   # "aage badhao" → the last topic, from where it stopped
+        last = resume.look(db, student["id"])
+        if last["type"] != "none":
+            question = resume.continue_question(last["language"], last["topic"], last["question"])
+            return _ask_question(student, teacher, question, session_id, body.voice)
     return _ask_question(student, teacher, body.question, session_id, body.voice)
+
+
+@app.get("/class/resume")
+def class_resume(student=Depends(current_student), teacher: TeacherProfile = Depends(teacher_from_header)):
+    """When the class opens: the last answer again (back within 30 minutes), or Sir's "welcome back — continue or a
+    new question?" (later; with a kind word about the gap after a whole day without study)."""
+    try:
+        info = resume.look(db, student["id"])
+    except Exception:   # never block opening the class
+        return {"type": "none"}
+    if info["type"] == "none":
+        return info
+    f = faculty_mod.get(db, teacher.id, info["faculty_id"]) if info.get("faculty_id") else None
+    f = f or _active_faculty(teacher.id, student["id"])
+    info["faculty"] = f.public() if f else None
+    if info["type"] == "recent":
+        return {**info, **_access(student["id"])}
+    row = db.one("SELECT name FROM students WHERE id = ?", (student["id"],))
+    use_ai = (institute_status.state(db, teacher.id) == "active" and not switches.ai_paused_for(db, teacher.id)
+              and raw_llm.available())   # no AI money while the institute is stopped or the AI is paused
+    try:
+        g = resume.greeting(db, raw_llm, moderator, student_id=student["id"], name=(row["name"] or "") if row else "",
+                            teacher=f.name if f else teacher.name, info=info, use_ai=use_ai)
+    except Exception:
+        g = {"text": resume.template(info["language"], teacher=teacher.name, name="", topic=info["topic"],
+                                     follow_up=info["follow_up"], days=info["days_missed"]), "source": "template"}
+    return {**info, "greeting": g["text"], "source": g["source"], **_access(student["id"])}
 
 
 def _ask_question(student, teacher: TeacherProfile, question: str, session_id, voice: bool = False,
