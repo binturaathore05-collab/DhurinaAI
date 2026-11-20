@@ -18,8 +18,49 @@ class ApiException implements Exception {
 
 /// The server recognised a class command ("Sir, save this" / "Sir, test lo") instead of a question.
 class CommandException implements Exception {
-  final String command; // save | test | delete
-  CommandException(this.command);
+  final String command; // save | test | delete | profile | photo | new_question
+  final String message; // what Sir says with it ("Sure — ask your new question."), '' when none
+  CommandException(this.command, {this.message = ''});
+}
+
+/// Resume the class where the student left it (owner, 20 Nov 2026):
+/// none = nothing to resume · recent = back within 30 minutes, the last answer is shown again ·
+/// resume = later: Sir's welcome back ("we were studying X — continue, or a new question?").
+class ResumeInfo {
+  final String type;
+  final String greeting;
+  final String topic;
+  final String language;
+  final int daysMissed;
+  final Faculty? faculty;
+  final String lastQuestion;
+  final Answer? last;
+  const ResumeInfo(this.type,
+      {this.greeting = '', this.topic = '', this.language = 'hi', this.daysMissed = 0, this.faculty,
+      this.lastQuestion = '', this.last});
+
+  factory ResumeInfo.fromJson(Map<String, dynamic> j) {
+    final type = j['type'];
+    if (type != 'recent' && type != 'resume') return const ResumeInfo('none');
+    final l = j['last'];
+    Answer? last;
+    var lastQuestion = '';
+    if (type == 'recent' && l is Map) {
+      lastQuestion = l['question'] as String? ?? '';
+      last = Answer((l['qa_id'] as num? ?? 0).toInt(), l['answer'] as String? ?? '', l['follow_up'] as String? ?? '',
+          'general_ai', const [], l['language'] as String? ?? 'hi', Access.fromJson(j),
+          faculty: Faculty.fromJson(j['faculty']));
+    }
+    final days = j['days_missed'];
+    return ResumeInfo(type as String,
+        greeting: j['greeting'] is String ? j['greeting'] as String : '',
+        topic: j['topic'] is String ? j['topic'] as String : '',
+        language: j['language'] is String ? j['language'] as String : 'hi',
+        daysMissed: days is num ? days.toInt() : 0,
+        faculty: Faculty.fromJson(j['faculty']),
+        lastQuestion: lastQuestion,
+        last: last);
+  }
 }
 
 /// Phase C: Sir couldn't read a study question in the photo (a ready message: take it again / say which question).
@@ -394,6 +435,8 @@ abstract class Api {
   Future<Access> verifyParentOtp(String phone, String code);
   /// [voice]: the question was spoken (the phone turned speech into text, so a word may be misheard).
   Future<Answer> ask(String question, {bool voice = false});
+  /// When the class opens: what to resume (see ResumeInfo).
+  Future<ResumeInfo> resume();
   /// Phase C: a photo of a question (JPEG), with an optional note ("Q3 samjhao").
   Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false});
   Future<SavedNote> saveNote(int qaId); // older single-answer notes (kept for compatibility)
@@ -540,8 +583,13 @@ class HttpApi implements Api {
     if (j['type'] == 'delete_offer') throw CommandException('delete');
     if (j['type'] == 'profile') throw CommandException('profile');
     if (j['type'] == 'photo') throw CommandException('photo');
+    if (j['type'] == 'new_question') throw CommandException('new_question', message: j['message'] as String? ?? '');
     return Answer.fromJson(j);
   }
+
+  @override
+  Future<ResumeInfo> resume() async =>
+      ResumeInfo.fromJson((await _call('GET', '/class/resume')) as Map<String, dynamic>);
 
   @override
   Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false}) async {
@@ -770,6 +818,9 @@ class DemoApi implements Api {
 
   @override
   Future<Access> access() async => _now;
+
+  @override
+  Future<ResumeInfo> resume() async => const ResumeInfo('none');
 
   @override
   Future<Answer> askPhoto(Uint8List jpeg, {String caption = '', bool voice = false}) async {

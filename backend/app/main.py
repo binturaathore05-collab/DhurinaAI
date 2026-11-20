@@ -728,7 +728,7 @@ def class_resume(student=Depends(current_student), teacher: TeacherProfile = Dep
     f = f or _active_faculty(teacher.id, student["id"])
     info["faculty"] = f.public() if f else None
     if info["type"] == "recent":
-        return info
+        return {**info, **_access(student["id"])}
     row = db.one("SELECT name FROM students WHERE id = ?", (student["id"],))
     use_ai = (institute_status.state(db, teacher.id) == "active" and not switches.ai_paused_for(db, teacher.id)
               and raw_llm.available())   # no AI money while the institute is stopped or the AI is paused
@@ -738,7 +738,7 @@ def class_resume(student=Depends(current_student), teacher: TeacherProfile = Dep
     except Exception:
         g = {"text": resume.template(info["language"], teacher=teacher.name, name="", topic=info["topic"],
                                      follow_up=info["follow_up"], days=info["days_missed"]), "source": "template"}
-    return {**info, "greeting": g["text"], "source": g["source"]}
+    return {**info, "greeting": g["text"], "source": g["source"], **_access(student["id"])}
 
 
 def _ask_question(student, teacher: TeacherProfile, question: str, session_id, voice: bool = False,

@@ -109,11 +109,48 @@ class _LiveScreenState extends State<LiveScreen> {
   int _spoken = -1;          // index into _parts of the sentence being spoken
   List<String> _parts = [];  // the answer + Sir's question, sentence by sentence
   bool _introSaid = false;   // the one-time "I'm your AI teacher" line (first class only)
+  ResumeInfo? _resume;       // Sir's "welcome back — continue, or a new question?" (owner, 20 Nov 2026)
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAccess());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _refreshAccess();
+      await _loadResume();
+    });
+  }
+
+  /// The class opens where the student left it: back within 30 minutes → the last answer is on the screen again;
+  /// later → Sir says what they were studying (and, after a missed day, a kind word about the gap) and asks
+  /// "continue, or a new question?". Nothing here may stop the class from opening.
+  Future<void> _loadResume() async {
+    if (_last != null || _thinking) return;
+    try {
+      final r = await AppScope.of(context).api.resume();
+      if (!mounted || _last != null || _thinking) return;
+      if (r.type == 'recent' && r.last != null) {
+        setState(() {
+          _last = r.last;
+          _lastQuestion = r.lastQuestion;
+          if (r.faculty != null) _teacher = r.faculty;
+        });
+      } else if (r.type == 'resume' && r.greeting.isNotEmpty) {
+        setState(() {
+          _resume = r;
+          if (r.faculty != null) _teacher = r.faculty;
+        });
+        _voice.speak([r.greeting], language: r.language, teacherKey: _teacher?.id ?? 0);
+      }
+    } catch (_) {}
+  }
+
+  /// "New question": Sir's welcome back goes away and the student asks.
+  Future<void> _newQuestion([String message = '']) async {
+    await _voice.stopSpeaking();
+    if (!mounted) return;
+    setState(() => _resume = null);
+    _toast(message.isEmpty ? 'Ask your new question' : message);
+    if (message.isNotEmpty) _voice.speak([message], language: 'hi', teacherKey: _teacher?.id ?? 0);
   }
 
   @override
@@ -222,6 +259,7 @@ class _LiveScreenState extends State<LiveScreen> {
     setState(() {
       _thinking = true;
       _lastQuestion = text;
+      _resume = null;
     });
     try {
       await _showAnswer(await api.ask(text, voice: spoken != null));
@@ -235,6 +273,8 @@ class _LiveScreenState extends State<LiveScreen> {
         if (mounted) openProfile(context);
       } else if (c.command == 'photo') {
         await _askPhoto();
+      } else if (c.command == 'new_question') {
+        await _newQuestion(c.message);
       } else {
         await _offerTest(mode: testModeIn(text));
       }
@@ -709,12 +749,41 @@ class _LiveScreenState extends State<LiveScreen> {
     return SizedBox.expand(key: ValueKey(t?.id ?? 0), child: img);
   }
 
-  Widget _welcome(String teacher) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('SIR IS LISTENING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
-        const SizedBox(height: 8),
-        Text(_access?.aiIntro ?? 'Namaste! Ask $teacher anything — in Hindi, English, Punjabi or any language.',
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
-      ]);
+  Widget _welcome(String teacher) {
+    final back = _resume;
+    if (back != null) return _welcomeBack(back);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('SIR IS LISTENING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
+      const SizedBox(height: 8),
+      Text(_access?.aiIntro ?? 'Namaste! Ask $teacher anything — in Hindi, English, Punjabi or any language.',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
+    ]);
+  }
+
+  /// Sir's welcome back: what they were studying, and two choices (also by voice: "aage badhao" / "naya sawal").
+  Widget _welcomeBack(ResumeInfo r) {
+    final accent = AppScope.of(context).cfg.accent;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('WELCOME BACK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: LT.muted)),
+      const SizedBox(height: 8),
+      _spokenText(r.greeting, 0, const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.4)),
+      const SizedBox(height: 14),
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: accent, foregroundColor: LT.onAccent),
+          onPressed: _thinking ? null : () => _send('आगे बढ़ाइए'),
+          icon: const Icon(Icons.play_arrow_rounded, size: 20),
+          label: Text(r.topic.isEmpty ? 'Continue' : 'Continue: ${r.topic}',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+        OutlinedButton.icon(
+          onPressed: _thinking ? null : () => _newQuestion(),
+          icon: const Icon(Icons.add_comment_outlined, size: 18),
+          label: const Text('New question'),
+        ),
+      ]),
+    ]);
+  }
 
   /// While Sir speaks, the sentence being spoken is bright and highlighted; the rest is dimmer.
   Widget _spokenText(String text, int offset, TextStyle style) {
